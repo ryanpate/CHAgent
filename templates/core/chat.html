@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}AI Assistant{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="font-display text-2xl">AI Assistant</h2>
+        <button hx-post="{% url 'chat_new_session' %}"
+                hx-target="#chat-messages"
+                hx-swap="innerHTML"
+                class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded-lg transition">
+            New Conversation
+        </button>
+    </div>
+
+    <!-- Chat Messages -->
+    <div id="chat-messages" class="bg-ch-dark rounded-lg p-6 h-[500px] overflow-y-auto mb-4 space-y-4">
+        {% for message in messages %}
+        <div class="{% if message.role == 'user' %}ml-12{% else %}mr-12{% endif %}">
+            <div class="{% if message.role == 'user' %}bg-ch-gold text-black{% else %}bg-ch-gray{% endif %} rounded-lg p-4">
+                {{ message.content|linebreaks }}
+            </div>
+            <p class="text-xs text-gray-500 mt-1 {% if message.role == 'user' %}text-right{% endif %}">
+                {{ message.created_at|timesince }} ago
+            </p>
+        </div>
+        {% empty %}
+        <div class="text-center text-gray-400 py-12" id="chat-welcome">
+            <p class="mb-4 text-lg">Welcome! I'm here to help you:</p>
+            <ul class="text-sm space-y-2">
+                <li>&#128221; Log interactions with volunteers</li>
+                <li>&#128269; Find information about volunteers</li>
+                <li>&#128202; Get team insights and summaries</li>
+            </ul>
+            <p class="mt-6 text-gray-500 text-sm">Try typing "Log interaction: Talked with Sarah about..." or ask "What do we know about John?"</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Input Form -->
+    <form hx-post="{% url 'chat_send' %}"
+          hx-target="#chat-messages"
+          hx-swap="beforeend"
+          hx-on::after-request="this.reset(); document.getElementById('chat-welcome')?.remove(); document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;"
+          class="flex gap-4">
+        {% csrf_token %}
+        <input type="text"
+               name="message"
+               placeholder="Log an interaction or ask a question..."
+               class="flex-1 bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold transition"
+               autocomplete="off"
+               required>
+        <button type="submit"
+                class="bg-ch-gold text-black px-6 py-3 rounded-lg font-medium hover:bg-yellow-500 transition flex items-center gap-2">
+            <span>Send</span>
+            <span class="htmx-indicator">
+                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </span>
+        </button>
+    </form>
+
+    <!-- Quick Actions -->
+    <div class="mt-4 flex gap-2 flex-wrap">
+        <button class="quick-action" onclick="setMessage('Log interaction: ')">
+            &#128221; Log Interaction
+        </button>
+        <button class="quick-action" onclick="setMessage('What do we know about ')">
+            &#128269; Find Volunteer
+        </button>
+        <button class="quick-action" onclick="setMessage('Show recent prayer requests')">
+            &#128591; Prayer Requests
+        </button>
+        <button class="quick-action" onclick="setMessage('Team summary for this month')">
+            &#128202; Monthly Summary
+        </button>
+    </div>
+</div>
+
+<script>
+function setMessage(text) {
+    const input = document.querySelector('input[name="message"]');
+    input.value = text;
+    input.focus();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,25 @@
+# Django Framework
+Django>=5.0,<6.0
+
+# Database
+psycopg[binary]>=3.1
+dj-database-url>=2.1.0
+
+# Vector Search (for PostgreSQL with pgvector)
+pgvector>=0.2.4
+
+# AI APIs
+anthropic>=0.18.0
+openai>=1.12.0
+
+# Environment Variables
+python-dotenv>=1.0.0
+
+# Production Server
+gunicorn>=21.2.0
+
+# Static Files
+whitenoise>=6.6.0
+
+# HTMX Integration
+django-htmx>=1.17.0
