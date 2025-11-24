@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <h2 class="font-display text-3xl mb-8">Dashboard</h2>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="bg-ch-dark rounded-lg p-6">
+            <p class="text-gray-400 text-sm mb-1">Total Volunteers</p>
+            <p class="text-3xl font-bold text-ch-gold">{{ total_volunteers }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-6">
+            <p class="text-gray-400 text-sm mb-1">Total Interactions</p>
+            <p class="text-3xl font-bold text-ch-gold">{{ total_interactions }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-6">
+            <p class="text-gray-400 text-sm mb-1">Quick Action</p>
+            <a href="{% url 'chat' %}" class="inline-block mt-2 px-4 py-2 bg-ch-gold text-black rounded-lg text-sm font-medium hover:bg-yellow-500 transition">
+                Start Chat
+            </a>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-6">
+            <p class="text-gray-400 text-sm mb-1">Log Interaction</p>
+            <a href="{% url 'interaction_create' %}" class="inline-block mt-2 px-4 py-2 bg-ch-gray text-white rounded-lg text-sm font-medium hover:bg-ch-gold hover:text-black transition">
+                New Entry
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Recent Interactions -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-display text-xl">Recent Interactions</h3>
+                <a href="{% url 'interaction_list' %}" class="text-ch-gold text-sm hover:underline">View all</a>
+            </div>
+            {% if recent_interactions %}
+            <div class="space-y-4">
+                {% for interaction in recent_interactions %}
+                <a href="{% url 'interaction_detail' interaction.pk %}" class="block bg-ch-gray rounded-lg p-4 hover:bg-gray-700 transition">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-sm text-gray-400">{{ interaction.user.display_name|default:interaction.user.username }}</span>
+                        <span class="text-xs text-gray-500">{{ interaction.created_at|timesince }} ago</span>
+                    </div>
+                    <p class="text-sm text-gray-300 line-clamp-2">{{ interaction.content|truncatewords:20 }}</p>
+                    {% if interaction.volunteers.exists %}
+                    <div class="mt-2 flex flex-wrap gap-1">
+                        {% for volunteer in interaction.volunteers.all|slice:":3" %}
+                        <span class="text-xs bg-ch-gold-muted/30 text-ch-gold px-2 py-0.5 rounded">{{ volunteer.name }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-center py-8">No interactions logged yet. Start by chatting with the AI assistant!</p>
+            {% endif %}
+        </div>
+
+        <!-- Top Volunteers -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-display text-xl">Most Mentioned Volunteers</h3>
+                <a href="{% url 'volunteer_list' %}" class="text-ch-gold text-sm hover:underline">View all</a>
+            </div>
+            {% if top_volunteers %}
+            <div class="space-y-3">
+                {% for volunteer in top_volunteers %}
+                <a href="{% url 'volunteer_detail' volunteer.pk %}" class="flex items-center justify-between bg-ch-gray rounded-lg p-4 hover:bg-gray-700 transition">
+                    <div>
+                        <p class="font-medium">{{ volunteer.name }}</p>
+                        {% if volunteer.team %}
+                        <p class="text-sm text-gray-400">{{ volunteer.team }}</p>
+                        {% endif %}
+                    </div>
+                    <span class="text-ch-gold font-bold">{{ volunteer.interaction_count }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-center py-8">No volunteers in the system yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

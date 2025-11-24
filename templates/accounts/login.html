@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block content_full %}
+<div class="w-full max-w-md">
+    <div class="bg-ch-dark rounded-lg p-8 shadow-xl">
+        <div class="text-center mb-8">
+            <h1 class="font-display text-2xl text-ch-gold mb-2">Cherry Hills</h1>
+            <p class="text-gray-400">Worship Arts Portal</p>
+        </div>
+
+        {% if form.errors %}
+        <div class="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
+            <p>Invalid username or password. Please try again.</p>
+        </div>
+        {% endif %}
+
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+            <div>
+                <label for="id_username" class="block text-sm font-medium text-gray-300 mb-2">Username</label>
+                <input type="text"
+                       name="username"
+                       id="id_username"
+                       autocomplete="username"
+                       required
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-ch-gold transition">
+            </div>
+            <div>
+                <label for="id_password" class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                <input type="password"
+                       name="password"
+                       id="id_password"
+                       autocomplete="current-password"
+                       required
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-ch-gold transition">
+            </div>
+            <button type="submit"
+                    class="w-full bg-ch-gold text-black py-3 rounded-lg font-medium hover:bg-yellow-500 transition">
+                Sign In
+            </button>
+        </form>
+
+        <p class="text-center text-gray-500 text-sm mt-6">
+            Contact your administrator for access.
+        </p>
+    </div>
+</div>
+{% endblock %}

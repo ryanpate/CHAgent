@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block title %}Interaction Detail{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <a href="{% url 'interaction_list' %}" class="text-ch-gold hover:underline mb-4 inline-block">&larr; Back to Interactions</a>
+
+    <div class="bg-ch-dark rounded-lg p-8">
+        <!-- Header -->
+        <div class="flex justify-between items-start mb-6 pb-6 border-b border-gray-800">
+            <div>
+                <p class="text-lg">
+                    <span class="text-gray-400">Logged by</span>
+                    <span class="text-white font-medium">{{ interaction.user.display_name|default:interaction.user.username }}</span>
+                </p>
+                <p class="text-sm text-gray-500">{{ interaction.created_at|date:"F j, Y \a\t g:i A" }}</p>
+            </div>
+        </div>
+
+        <!-- Volunteers -->
+        {% if interaction.volunteers.exists %}
+        <div class="mb-6">
+            <h3 class="text-sm text-gray-400 mb-2">Volunteers Mentioned</h3>
+            <div class="flex flex-wrap gap-2">
+                {% for volunteer in interaction.volunteers.all %}
+                <a href="{% url 'volunteer_detail' volunteer.pk %}"
+                   class="px-3 py-1 bg-ch-gold/20 text-ch-gold rounded-full text-sm hover:bg-ch-gold hover:text-black transition">
+                    {{ volunteer.name }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Content -->
+        <div class="mb-6">
+            <h3 class="text-sm text-gray-400 mb-2">Notes</h3>
+            <div class="bg-ch-gray rounded-lg p-4 text-gray-200 whitespace-pre-wrap">{{ interaction.content }}</div>
+        </div>
+
+        <!-- AI Summary -->
+        {% if interaction.ai_summary %}
+        <div class="mb-6">
+            <h3 class="text-sm text-gray-400 mb-2">AI Summary</h3>
+            <p class="text-gray-300 italic">{{ interaction.ai_summary }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Extracted Data -->
+        {% if interaction.ai_extracted_data %}
+        <div>
+            <h3 class="text-sm text-gray-400 mb-2">Extracted Information</h3>
+            <div class="bg-ch-gray rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for key, value in interaction.ai_extracted_data.items %}
+                {% if value %}
+                <div>
+                    <p class="text-xs text-gray-500 uppercase mb-1">{{ key|title }}</p>
+                    {% if value|slice:":1" == "[" %}
+                    <ul class="text-gray-300 text-sm list-disc list-inside">
+                        {% for item in value %}
+                        <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% elif value|slice:":1" == "{" %}
+                    <ul class="text-gray-300 text-sm">
+                        {% for k, v in value.items %}
+                        {% if v %}
+                        <li><span class="text-gray-500">{{ k }}:</span> {{ v }}</li>
+                        {% endif %}
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-gray-300 text-sm">{{ value }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

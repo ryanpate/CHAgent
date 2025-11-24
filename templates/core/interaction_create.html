@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}New Interaction{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <a href="{% url 'interaction_list' %}" class="text-ch-gold hover:underline mb-4 inline-block">&larr; Back to Interactions</a>
+
+    <div class="bg-ch-dark rounded-lg p-8">
+        <h2 class="font-display text-2xl mb-6">Log New Interaction</h2>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-6">
+                <label for="content" class="block text-sm text-gray-400 mb-2">
+                    Describe your interaction with the volunteer(s)
+                </label>
+                <textarea name="content"
+                          id="content"
+                          rows="8"
+                          placeholder="Example: Talked with Sarah Johnson after service today. She mentioned her daughter Emma is starting kindergarten next month..."
+                          class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold transition resize-none"
+                          required></textarea>
+                <p class="text-xs text-gray-500 mt-2">
+                    Include names, personal details, prayer requests, feedback, or any other relevant information.
+                    The AI will automatically extract and organize this information.
+                </p>
+            </div>
+
+            <div class="flex gap-4">
+                <button type="submit"
+                        class="px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                    Save Interaction
+                </button>
+                <a href="{% url 'interaction_list' %}"
+                   class="px-6 py-3 bg-ch-gray rounded-lg hover:bg-gray-700 transition">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <div class="mt-6 bg-ch-dark/50 rounded-lg p-6">
+        <h3 class="text-sm text-gray-400 mb-3">Tips for effective logging</h3>
+        <ul class="text-sm text-gray-500 space-y-2">
+            <li>&#8226; Include the volunteer's full name when possible</li>
+            <li>&#8226; Mention any personal details shared (hobbies, family, favorites)</li>
+            <li>&#8226; Note any prayer requests or concerns</li>
+            <li>&#8226; Include feedback about services or the team</li>
+            <li>&#8226; Mention scheduling or availability changes</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

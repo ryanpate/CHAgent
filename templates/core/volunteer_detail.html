@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ volunteer.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <a href="{% url 'volunteer_list' %}" class="text-ch-gold hover:underline mb-4 inline-block">&larr; Back to Volunteers</a>
+
+    <!-- Volunteer Header -->
+    <div class="bg-ch-dark rounded-lg p-8 mb-6">
+        <div class="flex justify-between items-start">
+            <div>
+                <h2 class="font-display text-3xl mb-2">{{ volunteer.name }}</h2>
+                {% if volunteer.team %}
+                <p class="text-ch-gold text-lg">{{ volunteer.team }}</p>
+                {% endif %}
+            </div>
+            <div class="text-right">
+                <p class="text-3xl font-bold text-ch-gold-muted">{{ interactions.count }}</p>
+                <p class="text-sm text-gray-500">interactions</p>
+            </div>
+        </div>
+
+        {% if volunteer.planning_center_id %}
+        <p class="text-sm text-gray-500 mt-4">Planning Center ID: {{ volunteer.planning_center_id }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Extracted Information -->
+    {% if extracted_data %}
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <h3 class="font-display text-xl mb-4">What We Know</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for key, values in extracted_data.items %}
+            {% if values %}
+            <div>
+                <h4 class="text-sm text-gray-400 uppercase mb-2">{{ key|title }}</h4>
+                <ul class="text-gray-300 space-y-1">
+                    {% for value in values|slice:":5" %}
+                    <li class="text-sm">
+                        {% if value|slice:":1" == "{" %}
+                        {% for k, v in value.items %}
+                        {% if v %}<span class="text-gray-500">{{ k }}:</span> {{ v }}{% if not forloop.last %}, {% endif %}{% endif %}
+                        {% endfor %}
+                        {% else %}
+                        {{ value }}
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                    {% if values|length > 5 %}
+                    <li class="text-xs text-gray-500">+{{ values|length|add:"-5" }} more</li>
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Interaction History -->
+    <div class="bg-ch-dark rounded-lg p-6">
+        <h3 class="font-display text-xl mb-4">Interaction History</h3>
+        {% if interactions %}
+        <div class="space-y-4">
+            {% for interaction in interactions %}
+            <a href="{% url 'interaction_detail' interaction.pk %}"
+               class="block bg-ch-gray rounded-lg p-4 hover:bg-gray-700 transition">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-sm text-gray-400">
+                        {{ interaction.user.display_name|default:interaction.user.username }}
+                    </span>
+                    <span class="text-xs text-gray-500">{{ interaction.created_at|date:"M j, Y" }}</span>
+                </div>
+                <p class="text-gray-300 text-sm">{{ interaction.content|truncatewords:30 }}</p>
+                {% if interaction.ai_summary %}
+                <p class="text-xs text-gray-500 mt-2 italic">{{ interaction.ai_summary }}</p>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-500 text-center py-8">No interactions logged for this volunteer yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
