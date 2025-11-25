@@ -8,3 +8,151 @@
     </p>
 </div>
 {% endfor %}
+
+{% if pending_matches or unmatched %}
+<!-- Volunteer Match Confirmation Section -->
+<div class="mr-12 mt-4">
+    <div class="bg-ch-dark border border-ch-gold/30 rounded-lg p-4">
+        <h4 class="text-ch-gold font-medium mb-3 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+            </svg>
+            Link Volunteers
+        </h4>
+
+        {% for match in pending_matches %}
+        <div id="match-{{ forloop.counter }}" class="mb-4 pb-4 {% if not forloop.last %}border-b border-gray-700{% endif %}">
+            <p class="text-sm text-gray-300 mb-2">
+                You mentioned "<span class="text-white font-medium">{{ match.name }}</span>"
+            </p>
+
+            {% if match.suggested_name %}
+            <p class="text-sm text-gray-400 mb-3">
+                Did you mean <span class="text-ch-gold">{{ match.suggested_name }}</span>?
+                <span class="text-gray-500">({{ match.score }}% match)</span>
+            </p>
+
+            <div class="flex flex-wrap gap-2">
+                <!-- Confirm suggested match -->
+                <form hx-post="{% url 'volunteer_match_confirm' %}"
+                      hx-target="#match-{{ forloop.counter }}"
+                      hx-swap="outerHTML"
+                      class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="interaction_id" value="{{ interaction_id }}">
+                    <input type="hidden" name="original_name" value="{{ match.name }}">
+                    {% if match.volunteer_id %}
+                    <input type="hidden" name="volunteer_id" value="{{ match.volunteer_id }}">
+                    {% elif match.pco_id %}
+                    <input type="hidden" name="pco_id" value="{{ match.pco_id }}">
+                    {% endif %}
+                    <button type="submit" class="px-3 py-1.5 bg-ch-gold text-black text-sm rounded hover:bg-yellow-500 transition">
+                        Yes, link to {{ match.suggested_name }}
+                    </button>
+                </form>
+
+                <!-- Show alternatives if any -->
+                {% if match.alternatives %}
+                <div class="relative inline-block" x-data="{ open: false }">
+                    <button @click="open = !open" type="button"
+                            class="px-3 py-1.5 bg-ch-gray text-white text-sm rounded hover:bg-gray-600 transition flex items-center gap-1">
+                        Other options
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false"
+                         class="absolute left-0 mt-1 w-48 bg-ch-dark border border-gray-700 rounded-lg shadow-lg z-10">
+                        {% for alt in match.alternatives %}
+                        <form hx-post="{% url 'volunteer_match_confirm' %}"
+                              hx-target="#match-{{ forloop.parentloop.counter }}"
+                              hx-swap="outerHTML"
+                              class="block">
+                            {% csrf_token %}
+                            <input type="hidden" name="interaction_id" value="{{ interaction_id }}">
+                            <input type="hidden" name="original_name" value="{{ match.name }}">
+                            {% if alt.volunteer_id %}
+                            <input type="hidden" name="volunteer_id" value="{{ alt.volunteer_id }}">
+                            {% elif alt.pco_id %}
+                            <input type="hidden" name="pco_id" value="{{ alt.pco_id }}">
+                            {% endif %}
+                            <button type="submit" class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray transition">
+                                {{ alt.name }} <span class="text-gray-500">({{ alt.score|floatformat:0 }}%)</span>
+                            </button>
+                        </form>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Create new option -->
+                <form hx-post="{% url 'volunteer_match_create' %}"
+                      hx-target="#match-{{ forloop.counter }}"
+                      hx-swap="outerHTML"
+                      class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="interaction_id" value="{{ interaction_id }}">
+                    <input type="hidden" name="original_name" value="{{ match.name }}">
+                    <button type="submit" class="px-3 py-1.5 bg-ch-gray text-white text-sm rounded hover:bg-gray-600 transition">
+                        Create new "{{ match.name }}"
+                    </button>
+                </form>
+
+                <!-- Skip -->
+                <form hx-post="{% url 'volunteer_match_skip' %}"
+                      hx-target="#match-{{ forloop.counter }}"
+                      hx-swap="outerHTML"
+                      class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="interaction_id" value="{{ interaction_id }}">
+                    <input type="hidden" name="original_name" value="{{ match.name }}">
+                    <button type="submit" class="px-3 py-1.5 text-gray-500 text-sm hover:text-white transition">
+                        Skip
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        {% for item in unmatched %}
+        <div id="unmatched-{{ forloop.counter }}" class="mb-4 pb-4 {% if not forloop.last %}border-b border-gray-700{% endif %}">
+            <p class="text-sm text-gray-300 mb-2">
+                "<span class="text-white font-medium">{{ item.name }}</span>" - No matching volunteer found in Planning Center
+            </p>
+
+            <div class="flex flex-wrap gap-2">
+                <!-- Create new -->
+                <form hx-post="{% url 'volunteer_match_create' %}"
+                      hx-target="#unmatched-{{ forloop.counter }}"
+                      hx-swap="outerHTML"
+                      class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="interaction_id" value="{{ interaction_id }}">
+                    <input type="hidden" name="original_name" value="{{ item.name }}">
+                    {% if item.team %}
+                    <input type="hidden" name="team" value="{{ item.team }}">
+                    {% endif %}
+                    <button type="submit" class="px-3 py-1.5 bg-ch-gold text-black text-sm rounded hover:bg-yellow-500 transition">
+                        Create volunteer "{{ item.name }}"
+                    </button>
+                </form>
+
+                <!-- Skip -->
+                <form hx-post="{% url 'volunteer_match_skip' %}"
+                      hx-target="#unmatched-{{ forloop.counter }}"
+                      hx-swap="outerHTML"
+                      class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="interaction_id" value="{{ interaction_id }}">
+                    <input type="hidden" name="original_name" value="{{ item.name }}">
+                    <button type="submit" class="px-3 py-1.5 text-gray-500 text-sm hover:text-white transition">
+                        Skip
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}

@@ -11,4 +11,8 @@ urlpatterns = [
     path('interactions/<int:pk>/', views.interaction_detail, name='interaction_detail'),
     path('volunteers/', views.volunteer_list, name='volunteer_list'),
     path('volunteers/<int:pk>/', views.volunteer_detail, name='volunteer_detail'),
+    # Volunteer matching endpoints (HTMX)
+    path('volunteers/match/confirm/', views.volunteer_match_confirm, name='volunteer_match_confirm'),
+    path('volunteers/match/create/', views.volunteer_match_create, name='volunteer_match_create'),
+    path('volunteers/match/skip/', views.volunteer_match_skip, name='volunteer_match_skip'),
 ]
