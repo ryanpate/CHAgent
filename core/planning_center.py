@@ -192,7 +192,10 @@ class PlanningCenterAPI:
             'status': attrs.get('status'),
             'emails': [],
             'phone_numbers': [],
-            'addresses': []
+            'addresses': [],
+            'teams': [],
+            'recent_schedules': [],
+            'last_served': None
         }
 
         # Get emails
@@ -229,7 +232,88 @@ class PlanningCenterAPI:
                 'primary': addr_attrs.get('primary', False)
             })
 
+        # Get team memberships from Services API
+        # First, search for this person in Services
+        services_person = self._find_services_person(person_id)
+        if services_person:
+            services_person_id = services_person.get('id')
+
+            # Get team positions (what teams they're on)
+            team_positions = self._get(f"/services/v2/people/{services_person_id}/team_positions")
+            for position in team_positions.get('data', []):
+                pos_attrs = position.get('attributes', {})
+                # Get the team name from the relationship
+                team_id = position.get('relationships', {}).get('team', {}).get('data', {}).get('id')
+                team_name = pos_attrs.get('name', 'Unknown Position')
+
+                details['teams'].append({
+                    'position': team_name,
+                    'team_id': team_id,
+                    'created_at': pos_attrs.get('created_at')
+                })
+
+            # Get recent schedules (when they served)
+            schedules_result = self._get(
+                f"/services/v2/people/{services_person_id}/schedules",
+                params={'order': '-sort_date', 'per_page': 10}
+            )
+            for schedule in schedules_result.get('data', []):
+                sched_attrs = schedule.get('attributes', {})
+                sort_date = sched_attrs.get('sort_date')
+
+                details['recent_schedules'].append({
+                    'date': sort_date,
+                    'team_name': sched_attrs.get('team_name'),
+                    'team_position_name': sched_attrs.get('team_position_name'),
+                    'plan_title': sched_attrs.get('plan_title', ''),
+                    'status': sched_attrs.get('status'),
+                    'decline_reason': sched_attrs.get('decline_reason')
+                })
+
+                # Track last served date (confirmed schedules only)
+                if sched_attrs.get('status') == 'C' and sort_date:  # C = Confirmed
+                    if not details['last_served'] or sort_date > details['last_served']:
+                        details['last_served'] = sort_date
+
         return details
+
+    def _find_services_person(self, people_person_id: str) -> Optional[dict]:
+        """
+        Find the Services person record that matches a People person ID.
+
+        PCO has separate People and Services databases. This finds the Services
+        person by searching for their name.
+
+        Args:
+            people_person_id: The person ID from the People API.
+
+        Returns:
+            Services person record or None.
+        """
+        # Get the person's name from People API
+        person = self.get_person_by_id(people_person_id)
+        if not person:
+            return None
+
+        attrs = person.get('attributes', {})
+        first_name = attrs.get('first_name', '')
+        last_name = attrs.get('last_name', '')
+
+        if not first_name or not last_name:
+            return None
+
+        # Search in Services for this person
+        # Services API allows searching by name
+        services_people = self._get(
+            "/services/v2/people",
+            params={'where[first_name]': first_name, 'where[last_name]': last_name}
+        )
+
+        data = services_people.get('data', [])
+        if data:
+            return data[0]  # Return first match
+
+        return None
 
     def search_person_with_details(self, name: str) -> Optional[dict]:
         """

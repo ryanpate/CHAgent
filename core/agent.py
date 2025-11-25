@@ -110,6 +110,8 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
         'address': r'address|where\s+(does|do)\s+.+\s+live|location|mailing',
         'birthday': r'birthday|birth\s*date|when\s+(was|is)\s+.+\s+born|how\s+old',
         'anniversary': r'anniversary',
+        'teams': r'what\s+team|which\s+team|team\s+(position|role)|serve\s+on|part\s+of',
+        'service_history': r'when\s+did\s+.+\s+(last\s+)?serve|last\s+(time|served)|service\s+history|schedule|scheduled|serving',
     }
 
     is_pco_query = False
@@ -212,6 +214,41 @@ def format_pco_details(details: dict, query_type: str = None) -> str:
     if details.get('status'):
         parts.append(f"Status: {details.get('status')}")
 
+    # Teams (positions they serve in)
+    if details.get('teams'):
+        team_strs = []
+        for team in details['teams']:
+            team_strs.append(team.get('position', 'Unknown Position'))
+        if team_strs:
+            parts.append(f"Team Position(s): {', '.join(team_strs)}")
+
+    # Last served date
+    if details.get('last_served'):
+        parts.append(f"Last Served: {details.get('last_served')}")
+
+    # Recent service history
+    if details.get('recent_schedules'):
+        parts.append("Recent Service History:")
+        for schedule in details['recent_schedules'][:5]:  # Show up to 5 recent
+            date = schedule.get('date', 'Unknown date')
+            team = schedule.get('team_name', 'Unknown team')
+            position = schedule.get('team_position_name', '')
+            status = schedule.get('status', '')
+
+            # Convert status codes to readable text
+            status_map = {
+                'C': 'Confirmed',
+                'U': 'Unconfirmed',
+                'D': 'Declined',
+                'B': 'Blocked'
+            }
+            status_text = status_map.get(status, status)
+
+            if position:
+                parts.append(f"  - {date}: {team} ({position}) - {status_text}")
+            else:
+                parts.append(f"  - {date}: {team} - {status_text}")
+
     parts.append("[END PLANNING CENTER DATA]\n")
 
     return '\n'.join(parts)
@@ -221,14 +258,18 @@ SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant named Ar
 1. Log interactions with volunteers
 2. Answer questions about volunteers based on logged interactions
 3. Provide aggregate insights about the volunteer team
-4. Look up contact information from Planning Center
+4. Look up volunteer information from Planning Center
 
 ## Your Capabilities:
 - When a user logs an interaction, extract and organize key information (names, preferences, prayer requests, feedback, etc.)
 - When asked questions, search through past interactions to provide accurate answers
 - Identify which volunteers are mentioned and link them appropriately
 - Provide summaries and aggregate data when asked
-- Look up contact details (email, phone, address, birthday) from Planning Center when asked
+- Look up volunteer details from Planning Center including:
+  - Contact info (email, phone, address)
+  - Birthday and anniversary
+  - Team positions they serve in
+  - Recent service history and when they last served
 
 ## Guidelines:
 - Be warm, helpful, and pastoral in tone
