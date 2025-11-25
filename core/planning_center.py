@@ -638,3 +638,384 @@ def clear_pco_cache():
     """Clear the PCO people cache to force fresh data."""
     cache.delete(f"{PCO_PEOPLE_CACHE_KEY}_all")
     logger.info("PCO cache cleared")
+
+
+# ============================================================================
+# Service Plans and Songs API Methods
+# ============================================================================
+
+class PlanningCenterServicesAPI(PlanningCenterAPI):
+    """Extended API client with Services-specific methods for songs and plans."""
+
+    def get_service_types(self) -> list:
+        """
+        Get all service types (e.g., Sunday AM, Wednesday PM).
+
+        Returns:
+            List of service type records.
+        """
+        result = self._get("/services/v2/service_types")
+        return result.get('data', [])
+
+    def get_plans(self, service_type_id: str, future_only: bool = False, past_only: bool = False, limit: int = 10) -> list:
+        """
+        Get plans (services) for a service type.
+
+        Args:
+            service_type_id: The service type ID.
+            future_only: Only return future plans.
+            past_only: Only return past plans.
+            limit: Maximum number of plans to return.
+
+        Returns:
+            List of plan records.
+        """
+        params = {'per_page': limit, 'order': '-sort_date'}
+
+        if future_only:
+            params['filter'] = 'future'
+        elif past_only:
+            params['filter'] = 'past'
+
+        result = self._get(f"/services/v2/service_types/{service_type_id}/plans", params)
+        return result.get('data', [])
+
+    def get_recent_plans(self, limit: int = 10) -> list:
+        """
+        Get recent plans across all service types.
+
+        Args:
+            limit: Maximum number of plans to return.
+
+        Returns:
+            List of plan records with service type info.
+        """
+        service_types = self.get_service_types()
+        all_plans = []
+
+        for st in service_types:
+            st_id = st.get('id')
+            st_name = st.get('attributes', {}).get('name', 'Unknown')
+            plans = self.get_plans(st_id, past_only=True, limit=5)
+
+            for plan in plans:
+                plan['service_type_name'] = st_name
+                plan['service_type_id'] = st_id
+                all_plans.append(plan)
+
+        # Sort by date descending and limit
+        all_plans.sort(key=lambda p: p.get('attributes', {}).get('sort_date', ''), reverse=True)
+        return all_plans[:limit]
+
+    def get_plan_items(self, service_type_id: str, plan_id: str) -> list:
+        """
+        Get all items in a plan (songs, headers, media, etc.).
+
+        Args:
+            service_type_id: The service type ID.
+            plan_id: The plan ID.
+
+        Returns:
+            List of plan items.
+        """
+        result = self._get(
+            f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/items",
+            params={'include': 'song,arrangement', 'per_page': 100}
+        )
+        return result.get('data', []), result.get('included', [])
+
+    def get_plan_details(self, service_type_id: str, plan_id: str) -> dict:
+        """
+        Get detailed plan info including all songs.
+
+        Args:
+            service_type_id: The service type ID.
+            plan_id: The plan ID.
+
+        Returns:
+            Dict with plan details and song list.
+        """
+        # Get plan info
+        plan_result = self._get(f"/services/v2/service_types/{service_type_id}/plans/{plan_id}")
+        plan = plan_result.get('data', {})
+        plan_attrs = plan.get('attributes', {})
+
+        # Get items
+        items_data, included = self.get_plan_items(service_type_id, plan_id)
+
+        # Build lookup for included songs and arrangements
+        songs_lookup = {}
+        arrangements_lookup = {}
+        for inc in included:
+            if inc.get('type') == 'Song':
+                songs_lookup[inc.get('id')] = inc
+            elif inc.get('type') == 'Arrangement':
+                arrangements_lookup[inc.get('id')] = inc
+
+        # Build song list
+        songs = []
+        for item in items_data:
+            item_attrs = item.get('attributes', {})
+            item_type = item_attrs.get('item_type')
+
+            if item_type == 'song':
+                song_rel = item.get('relationships', {}).get('song', {}).get('data', {})
+                arr_rel = item.get('relationships', {}).get('arrangement', {}).get('data', {})
+
+                song_id = song_rel.get('id') if song_rel else None
+                arr_id = arr_rel.get('id') if arr_rel else None
+
+                song_data = songs_lookup.get(song_id, {})
+                arr_data = arrangements_lookup.get(arr_id, {})
+
+                song_attrs = song_data.get('attributes', {})
+                arr_attrs = arr_data.get('attributes', {})
+
+                songs.append({
+                    'title': item_attrs.get('title') or song_attrs.get('title', 'Unknown'),
+                    'song_id': song_id,
+                    'arrangement_id': arr_id,
+                    'key': item_attrs.get('key_name') or arr_attrs.get('name'),
+                    'sequence': item_attrs.get('sequence'),
+                    'length': item_attrs.get('length'),
+                    'author': song_attrs.get('author'),
+                    'ccli_number': song_attrs.get('ccli_number')
+                })
+
+        return {
+            'id': plan_id,
+            'service_type_id': service_type_id,
+            'title': plan_attrs.get('title'),
+            'dates': plan_attrs.get('dates'),
+            'sort_date': plan_attrs.get('sort_date'),
+            'series_title': plan_attrs.get('series_title'),
+            'songs': songs
+        }
+
+    def search_songs(self, query: str, limit: int = 10) -> list:
+        """
+        Search for songs in the library.
+
+        Args:
+            query: Search query (title, author, etc.).
+            limit: Maximum results.
+
+        Returns:
+            List of song records.
+        """
+        # Try title search first
+        result = self._get(
+            "/services/v2/songs",
+            params={'where[title]': query, 'per_page': limit}
+        )
+        songs = result.get('data', [])
+
+        # If no results, try broader search
+        if not songs:
+            result = self._get("/services/v2/songs", params={'per_page': 100})
+            all_songs = result.get('data', [])
+
+            # Filter by query
+            query_lower = query.lower()
+            songs = [
+                s for s in all_songs
+                if query_lower in (s.get('attributes', {}).get('title') or '').lower()
+                or query_lower in (s.get('attributes', {}).get('author') or '').lower()
+            ][:limit]
+
+        return songs
+
+    def get_song_details(self, song_id: str) -> dict:
+        """
+        Get detailed song info including arrangements and attachments.
+
+        Args:
+            song_id: The song ID.
+
+        Returns:
+            Dict with song details, arrangements, and attachments.
+        """
+        # Get song info
+        song_result = self._get(f"/services/v2/songs/{song_id}")
+        song = song_result.get('data', {})
+        song_attrs = song.get('attributes', {})
+
+        # Get arrangements
+        arr_result = self._get(f"/services/v2/songs/{song_id}/arrangements")
+        arrangements = []
+        for arr in arr_result.get('data', []):
+            arr_attrs = arr.get('attributes', {})
+            arrangements.append({
+                'id': arr.get('id'),
+                'name': arr_attrs.get('name'),
+                'key': arr_attrs.get('chord_chart_key'),
+                'bpm': arr_attrs.get('bpm'),
+                'meter': arr_attrs.get('meter'),
+                'length': arr_attrs.get('length'),
+                'sequence': arr_attrs.get('sequence_short')
+            })
+
+        # Get song-level attachments
+        attach_result = self._get(f"/services/v2/songs/{song_id}/attachments")
+        attachments = []
+        for attach in attach_result.get('data', []):
+            attach_attrs = attach.get('attributes', {})
+            attachments.append({
+                'id': attach.get('id'),
+                'filename': attach_attrs.get('filename'),
+                'file_type': attach_attrs.get('filetype'),
+                'url': attach_attrs.get('url'),
+                'streamable': attach_attrs.get('streamable'),
+                'downloadable': attach_attrs.get('downloadable')
+            })
+
+        return {
+            'id': song_id,
+            'title': song_attrs.get('title'),
+            'author': song_attrs.get('author'),
+            'copyright': song_attrs.get('copyright'),
+            'ccli_number': song_attrs.get('ccli_number'),
+            'themes': song_attrs.get('themes'),
+            'created_at': song_attrs.get('created_at'),
+            'arrangements': arrangements,
+            'attachments': attachments
+        }
+
+    def get_arrangement_attachments(self, song_id: str, arrangement_id: str) -> list:
+        """
+        Get attachments for a specific arrangement (chord charts, lyrics, etc.).
+
+        Args:
+            song_id: The song ID.
+            arrangement_id: The arrangement ID.
+
+        Returns:
+            List of attachment records with download URLs.
+        """
+        result = self._get(f"/services/v2/songs/{song_id}/arrangements/{arrangement_id}/attachments")
+        attachments = []
+
+        for attach in result.get('data', []):
+            attach_attrs = attach.get('attributes', {})
+            attachments.append({
+                'id': attach.get('id'),
+                'filename': attach_attrs.get('filename'),
+                'file_type': attach_attrs.get('filetype'),
+                'content_type': attach_attrs.get('content_type'),
+                'url': attach_attrs.get('url'),
+                'streamable': attach_attrs.get('streamable'),
+                'downloadable': attach_attrs.get('downloadable'),
+                'size': attach_attrs.get('size')
+            })
+
+        return attachments
+
+    def get_song_with_attachments(self, song_title: str) -> Optional[dict]:
+        """
+        Search for a song and get all its attachments across arrangements.
+
+        Args:
+            song_title: Title to search for.
+
+        Returns:
+            Dict with song info and all attachments, or None if not found.
+        """
+        songs = self.search_songs(song_title, limit=5)
+        if not songs:
+            return None
+
+        # Find best match
+        best_match = None
+        title_lower = song_title.lower()
+
+        for song in songs:
+            song_attrs = song.get('attributes', {})
+            if (song_attrs.get('title') or '').lower() == title_lower:
+                best_match = song
+                break
+
+        if not best_match:
+            best_match = songs[0]
+
+        song_id = best_match.get('id')
+        details = self.get_song_details(song_id)
+
+        # Get attachments for each arrangement
+        all_attachments = details.get('attachments', [])[:]
+        for arr in details.get('arrangements', []):
+            arr_id = arr.get('id')
+            if arr_id:
+                arr_attachments = self.get_arrangement_attachments(song_id, arr_id)
+                for attach in arr_attachments:
+                    attach['arrangement_name'] = arr.get('name')
+                    attach['arrangement_key'] = arr.get('key')
+                all_attachments.extend(arr_attachments)
+
+        details['all_attachments'] = all_attachments
+        return details
+
+    def find_plan_by_date(self, date_str: str) -> Optional[dict]:
+        """
+        Find a plan by date string.
+
+        Args:
+            date_str: Date string to search for (e.g., "December 1", "last Sunday", "12/1").
+
+        Returns:
+            Plan details or None.
+        """
+        from datetime import datetime, timedelta
+        import re
+
+        # Try to parse the date
+        today = datetime.now().date()
+        target_date = None
+
+        # Handle relative dates
+        date_lower = date_str.lower()
+        if 'last sunday' in date_lower:
+            days_since_sunday = (today.weekday() + 1) % 7
+            if days_since_sunday == 0:
+                days_since_sunday = 7
+            target_date = today - timedelta(days=days_since_sunday)
+        elif 'this sunday' in date_lower or 'next sunday' in date_lower:
+            days_until_sunday = (6 - today.weekday()) % 7
+            if days_until_sunday == 0:
+                days_until_sunday = 7
+            target_date = today + timedelta(days=days_until_sunday)
+        elif 'yesterday' in date_lower:
+            target_date = today - timedelta(days=1)
+        elif 'today' in date_lower:
+            target_date = today
+        else:
+            # Try parsing various formats
+            formats = ['%B %d', '%b %d', '%m/%d', '%m-%d', '%B %d, %Y', '%Y-%m-%d']
+            for fmt in formats:
+                try:
+                    parsed = datetime.strptime(date_str, fmt)
+                    # If no year in format, assume current year
+                    if parsed.year == 1900:
+                        parsed = parsed.replace(year=today.year)
+                    target_date = parsed.date()
+                    break
+                except ValueError:
+                    continue
+
+        if not target_date:
+            logger.warning(f"Could not parse date: {date_str}")
+            return None
+
+        target_str = target_date.isoformat()
+        logger.info(f"Looking for plan on {target_str}")
+
+        # Search through recent plans
+        plans = self.get_recent_plans(limit=30)
+
+        for plan in plans:
+            plan_date = plan.get('attributes', {}).get('sort_date', '')[:10]
+            if plan_date == target_str:
+                service_type_id = plan.get('service_type_id')
+                plan_id = plan.get('id')
+                return self.get_plan_details(service_type_id, plan_id)
+
+        return None

@@ -148,6 +148,181 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
     return is_pco_query, query_type, person_name
 
 
+def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
+    """
+    Detect if a question is asking about songs, setlists, or chord charts.
+
+    Args:
+        message: The user's question.
+
+    Returns:
+        Tuple of (is_song_query, query_type, extracted_value) where:
+        - is_song_query: True if asking about songs/setlists
+        - query_type: Type of query (setlist, song, chord_chart, lyrics)
+        - extracted_value: Song title or date extracted from the question
+    """
+    message_lower = message.lower().strip()
+
+    # Patterns for song/setlist queries
+    song_query_patterns = {
+        'setlist': r'(setlist|song\s*set|what\s+songs?\s+(did|do|are|were|will)|songs?\s+(from|for|on|we\s+(play|sang|did))|(last|this|next)\s+sunday|worship\s+set)',
+        'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
+        'lyrics': r'lyrics?\s+(for|to)|words?\s+(for|to)',
+        'song_search': r'(find|search|look\s*up|get|show)\s+(the\s+)?(song|music)',
+        'song_info': r'(what\s+key|which\s+key|bpm|tempo|how\s+(long|fast))\s+.*(song|play)',
+    }
+
+    is_song_query = False
+    query_type = None
+
+    for qtype, pattern in song_query_patterns.items():
+        if re.search(pattern, message_lower):
+            is_song_query = True
+            query_type = qtype
+            break
+
+    # Extract song title or date from the question
+    extracted_value = None
+
+    if is_song_query:
+        # Try to extract song title (in quotes or after common patterns)
+        title_patterns = [
+            r'"([^"]+)"',  # Quoted title
+            r"'([^']+)'",  # Single-quoted title
+            r'(?:chord\s*chart|chords?|lyrics?|song)\s+(?:for|to)\s+["\']?([^"\'?]+)["\']?',
+            r'(?:find|search|look\s*up|get)\s+(?:the\s+)?(?:song\s+)?["\']?([^"\'?]+)["\']?',
+        ]
+
+        for pattern in title_patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                extracted_value = match.group(1).strip()
+                # Clean up common trailing words
+                extracted_value = re.sub(r'\s+(chord|chart|lyric|song)s?$', '', extracted_value, flags=re.IGNORECASE)
+                break
+
+        # Try to extract date for setlist queries
+        if query_type == 'setlist' and not extracted_value:
+            date_patterns = [
+                r'(last\s+sunday|this\s+sunday|next\s+sunday|yesterday|today)',
+                r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}',
+                r'(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
+                r'(\d{1,2}-\d{1,2}(?:-\d{2,4})?)',
+            ]
+            for pattern in date_patterns:
+                match = re.search(pattern, message_lower)
+                if match:
+                    extracted_value = match.group(1)
+                    break
+
+    return is_song_query, query_type, extracted_value
+
+
+def format_plan_details(plan: dict) -> str:
+    """
+    Format service plan details into a readable string for the AI context.
+
+    Args:
+        plan: Plan details dict from PCO API.
+
+    Returns:
+        Formatted string with plan info and song list.
+    """
+    if not plan:
+        return ""
+
+    parts = [f"\n[SERVICE PLAN DATA]"]
+    parts.append(f"Date: {plan.get('dates') or plan.get('sort_date', 'Unknown')}")
+
+    if plan.get('title'):
+        parts.append(f"Title: {plan.get('title')}")
+    if plan.get('series_title'):
+        parts.append(f"Series: {plan.get('series_title')}")
+
+    songs = plan.get('songs', [])
+    if songs:
+        parts.append(f"\nSong Set ({len(songs)} songs):")
+        for i, song in enumerate(songs, 1):
+            title = song.get('title', 'Unknown')
+            key = song.get('key', '')
+            author = song.get('author', '')
+
+            song_line = f"  {i}. {title}"
+            if key:
+                song_line += f" (Key: {key})"
+            if author:
+                song_line += f" - {author}"
+            parts.append(song_line)
+    else:
+        parts.append("\nNo songs found in this plan.")
+
+    parts.append("[END SERVICE PLAN DATA]\n")
+    return '\n'.join(parts)
+
+
+def format_song_details(song: dict) -> str:
+    """
+    Format song details into a readable string for the AI context.
+
+    Args:
+        song: Song details dict from PCO API.
+
+    Returns:
+        Formatted string with song info and attachments.
+    """
+    if not song:
+        return ""
+
+    parts = [f"\n[SONG DATA]"]
+    parts.append(f"Title: {song.get('title', 'Unknown')}")
+
+    if song.get('author'):
+        parts.append(f"Author: {song.get('author')}")
+    if song.get('ccli_number'):
+        parts.append(f"CCLI#: {song.get('ccli_number')}")
+    if song.get('copyright'):
+        parts.append(f"Copyright: {song.get('copyright')}")
+
+    # Arrangements
+    arrangements = song.get('arrangements', [])
+    if arrangements:
+        parts.append(f"\nArrangements ({len(arrangements)}):")
+        for arr in arrangements:
+            arr_info = f"  - {arr.get('name', 'Default')}"
+            if arr.get('key'):
+                arr_info += f" | Key: {arr.get('key')}"
+            if arr.get('bpm'):
+                arr_info += f" | BPM: {arr.get('bpm')}"
+            if arr.get('sequence'):
+                arr_info += f" | Sequence: {arr.get('sequence')}"
+            parts.append(arr_info)
+
+    # Attachments
+    all_attachments = song.get('all_attachments', []) or song.get('attachments', [])
+    if all_attachments:
+        parts.append(f"\nAvailable Files ({len(all_attachments)}):")
+        for attach in all_attachments:
+            filename = attach.get('filename', 'Unknown file')
+            file_type = attach.get('file_type', '')
+            url = attach.get('url', '')
+            arr_key = attach.get('arrangement_key', '')
+
+            attach_info = f"  - {filename}"
+            if arr_key:
+                attach_info += f" (Key: {arr_key})"
+            if file_type:
+                attach_info += f" [{file_type}]"
+            parts.append(attach_info)
+
+            if url:
+                parts.append(f"    Download: {url}")
+    else:
+        parts.append("\nNo attachments found for this song.")
+
+    parts.append("[END SONG DATA]\n")
+    return '\n'.join(parts)
+
+
 def format_pco_suggestions(search_name: str, suggestions: list, local_suggestions: list = None) -> str:
     """
     Format PCO name suggestions into a readable string for the AI context.
@@ -373,6 +548,7 @@ SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant named Ar
 2. Answer questions about volunteers based on logged interactions
 3. Provide aggregate insights about the volunteer team
 4. Look up volunteer information from Planning Center
+5. Find songs, setlists, and chord charts from Planning Center Services
 
 ## Your Capabilities:
 - When a user logs an interaction, extract and organize key information (names, preferences, prayer requests, feedback, etc.)
@@ -384,6 +560,11 @@ SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant named Ar
   - Birthday and anniversary
   - Team positions they serve in
   - Recent service history and when they last served
+- Look up songs and service plans from Planning Center Services:
+  - Song setlists for specific service dates
+  - Song details (author, key, arrangements)
+  - Chord charts and lyrics files with download links
+  - Search the song library
 
 ## Guidelines:
 - Be warm, helpful, and pastoral in tone
@@ -668,6 +849,52 @@ def query_agent(question: str, user, session_id: str) -> str:
         else:
             logger.warning("PCO query detected but Planning Center is not configured")
 
+    # Check if this is a song/setlist query
+    song_query, song_query_type, song_value = is_song_or_setlist_query(question)
+    song_data_context = ""
+
+    if song_query:
+        logger.info(f"Song query detected: {song_query_type} for '{song_value}'")
+        from .planning_center import PlanningCenterServicesAPI
+        services_api = PlanningCenterServicesAPI()
+
+        if services_api.is_configured:
+            if song_query_type == 'setlist':
+                # Looking for a service plan/setlist
+                if song_value:
+                    plan = services_api.find_plan_by_date(song_value)
+                    if plan:
+                        song_data_context = format_plan_details(plan)
+                        logger.info(f"Found plan for {song_value} with {len(plan.get('songs', []))} songs")
+                    else:
+                        song_data_context = f"\n[SERVICE PLAN: No service plan found for '{song_value}'. Try specifying a different date like 'last Sunday' or 'December 1'.]\n"
+                else:
+                    # No date specified - get recent plans
+                    recent_plans = services_api.get_recent_plans(limit=5)
+                    if recent_plans:
+                        parts = ["\n[RECENT SERVICE PLANS]"]
+                        for plan in recent_plans:
+                            plan_attrs = plan.get('attributes', {})
+                            st_name = plan.get('service_type_name', 'Unknown')
+                            parts.append(f"- {plan_attrs.get('dates', 'Unknown date')} ({st_name})")
+                        parts.append("\nAsk about a specific date to see the song set.")
+                        parts.append("[END RECENT PLANS]\n")
+                        song_data_context = '\n'.join(parts)
+
+            elif song_query_type in ['chord_chart', 'lyrics', 'song_search', 'song_info']:
+                # Looking for song info or attachments
+                if song_value:
+                    song_details = services_api.get_song_with_attachments(song_value)
+                    if song_details:
+                        song_data_context = format_song_details(song_details)
+                        logger.info(f"Found song '{song_details.get('title')}' with {len(song_details.get('all_attachments', []))} attachments")
+                    else:
+                        song_data_context = f"\n[SONG: No song found matching '{song_value}'. Check the spelling or try a different search term.]\n"
+                else:
+                    song_data_context = "\n[SONG: Please specify a song title to search for.]\n"
+        else:
+            logger.warning("Song query detected but Planning Center is not configured")
+
     # Check if this is an aggregate question requiring broader data access
     aggregate, category = is_aggregate_question(question)
 
@@ -751,6 +978,10 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
     # Add PCO data to context if available
     if pco_data_context:
         context = pco_data_context + "\n" + context
+
+    # Add song/setlist data to context if available
+    if song_data_context:
+        context = song_data_context + "\n" + context
 
     # Step 3: Get chat history for this session
     history = ChatMessage.objects.filter(
