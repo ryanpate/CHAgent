@@ -92,15 +92,19 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
-if HAS_DJ_DATABASE_URL:
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
+
+if DATABASE_URL and HAS_DJ_DATABASE_URL:
+    # Use PostgreSQL from DATABASE_URL (Railway provides this)
     DATABASES = {
         'default': dj_database_url.config(
-            default='sqlite:///db.sqlite3',
+            default=DATABASE_URL,
             conn_max_age=600,
             conn_health_checks=True,
         )
     }
 else:
+    # Fallback to SQLite for local development or build phase
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
