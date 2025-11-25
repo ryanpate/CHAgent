@@ -161,6 +161,94 @@ class PlanningCenterAPI:
         result = self._get(endpoint)
         return result.get('data')
 
+    def get_person_details(self, person_id: str) -> Optional[dict]:
+        """
+        Get detailed information about a person including contact info.
+
+        Args:
+            person_id: Planning Center person ID.
+
+        Returns:
+            Dict with person details, emails, phone numbers, and addresses.
+        """
+        if not self.is_configured:
+            return None
+
+        # Get basic person info
+        person = self.get_person_by_id(person_id)
+        if not person:
+            return None
+
+        attrs = person.get('attributes', {})
+        details = {
+            'id': person_id,
+            'name': f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip(),
+            'first_name': attrs.get('first_name', ''),
+            'last_name': attrs.get('last_name', ''),
+            'birthdate': attrs.get('birthdate'),
+            'anniversary': attrs.get('anniversary'),
+            'gender': attrs.get('gender'),
+            'membership': attrs.get('membership'),
+            'status': attrs.get('status'),
+            'emails': [],
+            'phone_numbers': [],
+            'addresses': []
+        }
+
+        # Get emails
+        emails_result = self._get(f"/people/v2/people/{person_id}/emails")
+        for email in emails_result.get('data', []):
+            email_attrs = email.get('attributes', {})
+            details['emails'].append({
+                'address': email_attrs.get('address'),
+                'location': email_attrs.get('location'),
+                'primary': email_attrs.get('primary', False)
+            })
+
+        # Get phone numbers
+        phones_result = self._get(f"/people/v2/people/{person_id}/phone_numbers")
+        for phone in phones_result.get('data', []):
+            phone_attrs = phone.get('attributes', {})
+            details['phone_numbers'].append({
+                'number': phone_attrs.get('number'),
+                'carrier': phone_attrs.get('carrier'),
+                'location': phone_attrs.get('location'),
+                'primary': phone_attrs.get('primary', False)
+            })
+
+        # Get addresses
+        addresses_result = self._get(f"/people/v2/people/{person_id}/addresses")
+        for addr in addresses_result.get('data', []):
+            addr_attrs = addr.get('attributes', {})
+            details['addresses'].append({
+                'street': addr_attrs.get('street'),
+                'city': addr_attrs.get('city'),
+                'state': addr_attrs.get('state'),
+                'zip': addr_attrs.get('zip'),
+                'location': addr_attrs.get('location'),
+                'primary': addr_attrs.get('primary', False)
+            })
+
+        return details
+
+    def search_person_with_details(self, name: str) -> Optional[dict]:
+        """
+        Search for a person by name and return their full details.
+
+        Args:
+            name: Name to search for.
+
+        Returns:
+            Dict with person details or None if not found.
+        """
+        matches = self.find_matches(name, threshold=0.7)
+        if not matches:
+            return None
+
+        # Get the best match
+        best_match = matches[0]
+        return self.get_person_details(best_match['pco_id'])
+
     def find_matches(self, name: str, threshold: float = 0.6) -> list:
         """
         Find PCO people matching a given name using fuzzy matching.
