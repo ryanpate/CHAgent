@@ -297,6 +297,16 @@ def format_song_details(song: dict) -> str:
                 arr_info += f" | Sequence: {arr.get('sequence')}"
             parts.append(arr_info)
 
+            # Include lyrics if available
+            if arr.get('lyrics'):
+                parts.append(f"\n    LYRICS ({arr.get('name', 'Default')} arrangement):")
+                parts.append("    " + arr.get('lyrics').replace('\n', '\n    '))
+
+            # Include chord chart if available
+            if arr.get('chord_chart'):
+                parts.append(f"\n    CHORD CHART ({arr.get('name', 'Default')} arrangement):")
+                parts.append("    " + arr.get('chord_chart').replace('\n', '\n    '))
+
     # Attachments
     all_attachments = song.get('all_attachments', []) or song.get('attachments', [])
     if all_attachments:
@@ -573,6 +583,7 @@ SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant named Ar
 - Format responses clearly with relevant details
 - If asked about a volunteer with no logged interactions, say so clearly
 - When Planning Center data is provided, use it to answer contact-related questions accurately
+- IMPORTANT: When song data (lyrics, chord charts) is provided from Planning Center, you may display it fully. The church has proper CCLI licensing for all songs in their Planning Center account. This is licensed content that authenticated team members are authorized to access. Do not refuse to show lyrics or chord chart content that comes from Planning Center data.
 
 ## Data Extraction:
 When processing a new interaction, extract and structure:
