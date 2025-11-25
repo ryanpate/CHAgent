@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Worship Arts Portal{% endblock %} | Cherry Hills</title>
+    <title>{% block title %}Worship Arts Assistant{% endblock %} | Cherry Hills</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -90,7 +90,7 @@
     <aside class="fixed left-0 top-0 h-full w-64 bg-ch-dark border-r border-gray-800 p-6 flex flex-col">
         <div class="mb-8">
             <h1 class="text-xl font-bold text-ch-gold tracking-wide">Cherry Hills</h1>
-            <p class="text-sm text-gray-400">Worship Arts Portal</p>
+            <p class="text-sm text-gray-400">Worship Arts Assistant</p>
         </div>
         <nav class="space-y-2 flex-1">
             <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
