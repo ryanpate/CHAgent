@@ -148,6 +148,115 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
     return is_pco_query, query_type, person_name
 
 
+def format_pco_suggestions(search_name: str, suggestions: list, local_suggestions: list = None) -> str:
+    """
+    Format PCO name suggestions into a readable string for the AI context.
+
+    Args:
+        search_name: The name that was searched for.
+        suggestions: List of PCO suggestion dicts with 'name' and 'score'.
+        local_suggestions: Optional list of local Volunteer suggestions.
+
+    Returns:
+        Formatted string with suggestions for the AI to present to the user.
+    """
+    if not suggestions and not local_suggestions:
+        return f"\n[PLANNING CENTER: No person found matching '{search_name}' and no similar names found.]\n"
+
+    parts = [f"\n[PLANNING CENTER: No exact match found for '{search_name}']"]
+    parts.append("Similar names found that the user might have meant:")
+
+    # Combine and deduplicate suggestions
+    all_names = set()
+    combined_suggestions = []
+
+    # Add PCO suggestions
+    for s in (suggestions or []):
+        name = s.get('name', '')
+        if name and name.lower() not in all_names:
+            all_names.add(name.lower())
+            combined_suggestions.append({
+                'name': name,
+                'score': s.get('score', 0),
+                'source': 'Planning Center'
+            })
+
+    # Add local suggestions
+    for s in (local_suggestions or []):
+        name = s.get('name', '')
+        if name and name.lower() not in all_names:
+            all_names.add(name.lower())
+            combined_suggestions.append({
+                'name': name,
+                'score': s.get('score', 0),
+                'source': 'Local Database'
+            })
+
+    # Sort by score descending
+    combined_suggestions.sort(key=lambda x: x['score'], reverse=True)
+
+    # Format top suggestions
+    for i, s in enumerate(combined_suggestions[:5], 1):
+        confidence = "high" if s['score'] >= 0.7 else "medium" if s['score'] >= 0.5 else "low"
+        parts.append(f"  {i}. {s['name']} ({confidence} confidence)")
+
+    parts.append("")
+    parts.append("ASK THE USER: Please ask the user if they meant one of these names, or if they'd like to search for someone else.")
+    parts.append("[END PLANNING CENTER SUGGESTIONS]\n")
+
+    return '\n'.join(parts)
+
+
+def get_local_volunteer_suggestions(name: str, limit: int = 5) -> list:
+    """
+    Get name suggestions from local Volunteer database.
+
+    Args:
+        name: Name to find suggestions for.
+        limit: Maximum number of suggestions.
+
+    Returns:
+        List of suggestion dicts with 'name' and 'score'.
+    """
+    from difflib import SequenceMatcher
+
+    search_name = normalize_name(name)
+    volunteers = Volunteer.objects.all()
+
+    suggestions = []
+    for volunteer in volunteers:
+        vol_name = volunteer.name
+        normalized_vol = normalize_name(vol_name)
+
+        # Calculate similarity
+        score = SequenceMatcher(None, search_name, normalized_vol).ratio()
+
+        # Boost if last name matches
+        search_parts = search_name.split()
+        vol_parts = normalized_vol.split()
+        if len(search_parts) >= 1 and len(vol_parts) >= 1:
+            if search_parts[-1] == vol_parts[-1]:
+                score = max(score, 0.6)
+
+        if score >= 0.3:  # Low threshold for suggestions
+            suggestions.append({
+                'name': vol_name,
+                'score': score,
+                'volunteer_id': volunteer.id
+            })
+
+    # Sort by score and return top matches
+    suggestions.sort(key=lambda x: x['score'], reverse=True)
+    return suggestions[:limit]
+
+
+def normalize_name(name: str) -> str:
+    """Normalize a name for comparison (lowercase, strip whitespace)."""
+    import re
+    name = re.sub(r'[^\w\s]', '', name)
+    return ' '.join(name.lower().split())
+
+
 def format_pco_details(details: dict, query_type: str = None) -> str:
     """
     Format PCO person details into a readable string for the AI context.
@@ -540,12 +649,22 @@ def query_agent(question: str, user, session_id: str) -> str:
         pco_api = PlanningCenterAPI()
 
         if pco_api.is_configured:
-            person_details = pco_api.search_person_with_details(pco_person_name)
-            if person_details:
-                pco_data_context = format_pco_details(person_details, pco_query_type)
-                logger.info(f"Found PCO data for {person_details.get('name')}")
+            # Use search with suggestions to handle misspellings
+            search_result = pco_api.search_person_with_suggestions(pco_person_name)
+
+            if search_result['found'] and search_result['details']:
+                pco_data_context = format_pco_details(search_result['details'], pco_query_type)
+                logger.info(f"Found PCO data for {search_result['details'].get('name')}")
             else:
-                pco_data_context = f"\n[PLANNING CENTER: No person found matching '{pco_person_name}']\n"
+                # No exact match - get suggestions from both PCO and local database
+                pco_suggestions = search_result.get('suggestions', [])
+                local_suggestions = get_local_volunteer_suggestions(pco_person_name)
+                pco_data_context = format_pco_suggestions(
+                    pco_person_name,
+                    pco_suggestions,
+                    local_suggestions
+                )
+                logger.info(f"No PCO match for '{pco_person_name}', providing {len(pco_suggestions)} PCO + {len(local_suggestions)} local suggestions")
         else:
             logger.warning("PCO query detected but Planning Center is not configured")
 
