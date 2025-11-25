@@ -4,8 +4,9 @@ Uses Anthropic Claude API for natural language understanding.
 """
 import json
 import logging
+import re
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
 
 from django.conf import settings
 
@@ -22,6 +23,68 @@ try:
 except ImportError:
     HAS_ANTHROPIC = False
     anthropic = None
+
+
+def is_aggregate_question(message: str) -> Tuple[bool, str]:
+    """
+    Detect if a question is asking for aggregate/team-wide information.
+
+    Args:
+        message: The user's question.
+
+    Returns:
+        Tuple of (is_aggregate, category) where category indicates what type
+        of aggregate data is being requested (e.g., 'food', 'hobbies', 'prayer', etc.)
+    """
+    message_lower = message.lower().strip()
+
+    # Patterns that indicate aggregate/team-wide questions
+    aggregate_indicators = [
+        r'entire\s+team',
+        r'all\s+(the\s+)?volunteers?',
+        r'everyone',
+        r'whole\s+team',
+        r'team[\s-]?wide',
+        r'most\s+common',
+        r'most\s+popular',
+        r'most\s+frequent',
+        r'how\s+many\s+(volunteers?|people)',
+        r'what\s+are\s+the\s+top',
+        r'list\s+all',
+        r'show\s+all',
+        r'across\s+(the\s+)?team',
+        r'among\s+(all\s+)?(the\s+)?volunteers?',
+        r'summary\s+of\s+(all|the)',
+        r'overall',
+        r'in\s+total',
+        r'aggregate',
+        r'collectively',
+    ]
+
+    is_aggregate = False
+    for pattern in aggregate_indicators:
+        if re.search(pattern, message_lower):
+            is_aggregate = True
+            break
+
+    # Detect category of aggregate data requested
+    category = 'general'
+    category_patterns = {
+        'food': r'food|eat|favorite\s+(food|meal|restaurant)|diet',
+        'hobbies': r'hobb(y|ies)|interest|activities|free\s+time',
+        'prayer': r'prayer|pray|request',
+        'family': r'family|kid|children|spouse|married|wife|husband',
+        'birthday': r'birthday|birth\s+date|born',
+        'availability': r'availab|schedule|when\s+can',
+        'feedback': r'feedback|suggestion|comment|opinion',
+    }
+
+    for cat, pattern in category_patterns.items():
+        if re.search(pattern, message_lower):
+            category = cat
+            break
+
+    return is_aggregate, category
 
 
 SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant. You help team members:
@@ -288,15 +351,65 @@ def query_agent(question: str, user, session_id: str) -> str:
     if not client:
         return "I'm sorry, but the AI service is not currently available. Please check that the ANTHROPIC_API_KEY is configured."
 
-    # Step 1: Get question embedding and find relevant interactions
-    question_embedding = get_embedding(question)
+    # Check if this is an aggregate question requiring broader data access
+    aggregate, category = is_aggregate_question(question)
 
+    # Step 1: Get relevant interactions
     relevant_interactions = []
-    if question_embedding:
-        relevant_interactions = search_similar(question_embedding, limit=20)
+
+    if aggregate:
+        # For aggregate questions, get ALL interactions to ensure comprehensive answers
+        logger.info(f"Aggregate question detected (category: {category}). Fetching all interactions.")
+        all_interactions = Interaction.objects.select_related('user').prefetch_related('volunteers').all()
+
+        # For category-specific queries, prioritize interactions with relevant extracted data
+        if category != 'general':
+            # Map categories to extracted_data fields
+            category_fields = {
+                'food': ['favorites'],
+                'hobbies': ['hobbies'],
+                'prayer': ['prayer_requests'],
+                'family': ['family'],
+                'birthday': ['birthday'],
+                'availability': ['availability'],
+                'feedback': ['feedback'],
+            }
+
+            fields = category_fields.get(category, [])
+            prioritized = []
+            other = []
+
+            for interaction in all_interactions:
+                has_relevant_data = False
+                if interaction.ai_extracted_data:
+                    for field in fields:
+                        value = interaction.ai_extracted_data.get(field)
+                        if value and (isinstance(value, list) and len(value) > 0 or
+                                      isinstance(value, dict) and any(v for v in value.values()) or
+                                      isinstance(value, str) and value):
+                            has_relevant_data = True
+                            break
+
+                if has_relevant_data:
+                    prioritized.append(interaction)
+                else:
+                    other.append(interaction)
+
+            # Combine prioritized first, then others (limit to prevent token overflow)
+            relevant_interactions = prioritized[:100] + other[:50]
+            logger.info(f"Found {len(prioritized)} interactions with {category} data, {len(other)} others")
+        else:
+            # General aggregate - get all (up to 150 to prevent token overflow)
+            relevant_interactions = list(all_interactions[:150])
     else:
-        # Fallback: get recent interactions if embeddings unavailable
-        relevant_interactions = list(Interaction.objects.all()[:20])
+        # Standard semantic search for non-aggregate questions
+        question_embedding = get_embedding(question)
+
+        if question_embedding:
+            relevant_interactions = search_similar(question_embedding, limit=20)
+        else:
+            # Fallback: get recent interactions if embeddings unavailable
+            relevant_interactions = list(Interaction.objects.all()[:20])
 
     # Step 2: Build context from relevant interactions
     context_parts = []
@@ -311,7 +424,12 @@ Summary: {interaction.ai_summary or 'No summary'}
 Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_extracted_data else 'None'}
 """)
 
-    context = "\n".join(context_parts) if context_parts else "No relevant interactions found in the database."
+    if context_parts:
+        context = "\n".join(context_parts)
+        if aggregate:
+            context = f"[AGGREGATE QUERY - You have access to {len(relevant_interactions)} interactions covering the full team. Analyze ALL the data below to provide comprehensive team-wide insights.]\n\n" + context
+    else:
+        context = "No relevant interactions found in the database."
 
     # Step 3: Get chat history for this session
     history = ChatMessage.objects.filter(
