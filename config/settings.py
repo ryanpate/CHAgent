@@ -102,20 +102,16 @@ DATABASES = {
     }
 }
 
-# Try to use PostgreSQL if DATABASE_URL is set and valid
-if DATABASE_URL and HAS_DJ_DATABASE_URL:
+# Only use PostgreSQL if DATABASE_URL looks like a valid postgres URL
+if HAS_DJ_DATABASE_URL and DATABASE_URL.startswith(('postgres://', 'postgresql://')):
     try:
-        DATABASES = {
-            'default': dj_database_url.config(
-                default=DATABASE_URL,
-                conn_max_age=600,
-                conn_health_checks=True,
-            )
-        }
+        DATABASES['default'] = dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     except Exception:
-        # Invalid DATABASE_URL (e.g., during Railway build phase)
-        # Keep SQLite fallback
-        pass
+        pass  # Keep SQLite fallback
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
