@@ -200,11 +200,16 @@ def format_pco_details(details: dict, query_type: str = None) -> str:
         for addr in details['addresses']:
             primary = " (primary)" if addr.get('primary') else ""
             location = f" [{addr.get('location')}]" if addr.get('location') else ""
+            # Handle None values by converting to empty strings
+            street = addr.get('street') or ''
+            city = addr.get('city') or ''
+            state = addr.get('state') or ''
+            zip_code = addr.get('zip') or ''
             addr_parts = [
-                addr.get('street', ''),
-                f"{addr.get('city', '')}, {addr.get('state', '')} {addr.get('zip', '')}"
+                street,
+                f"{city}, {state} {zip_code}".strip()
             ]
-            addr_str = ', '.join(p for p in addr_parts if p.strip())
+            addr_str = ', '.join(p for p in addr_parts if p and p.strip())
             if addr_str:
                 parts.append(f"Address{location}{primary}: {addr_str}")
 

@@ -239,41 +239,45 @@ class PlanningCenterAPI:
             services_person_id = services_person.get('id')
 
             # Get team positions (what teams they're on)
+            # Note: This endpoint may return 404 if person has no team assignments
             team_positions = self._get(f"/services/v2/people/{services_person_id}/team_positions")
-            for position in team_positions.get('data', []):
-                pos_attrs = position.get('attributes', {})
-                # Get the team name from the relationship
-                team_id = position.get('relationships', {}).get('team', {}).get('data', {}).get('id')
-                team_name = pos_attrs.get('name', 'Unknown Position')
+            if team_positions:
+                for position in team_positions.get('data', []):
+                    pos_attrs = position.get('attributes', {})
+                    # Get the team name from the relationship
+                    team_id = position.get('relationships', {}).get('team', {}).get('data', {}).get('id')
+                    team_name = pos_attrs.get('name', 'Unknown Position')
 
-                details['teams'].append({
-                    'position': team_name,
-                    'team_id': team_id,
-                    'created_at': pos_attrs.get('created_at')
-                })
+                    details['teams'].append({
+                        'position': team_name,
+                        'team_id': team_id,
+                        'created_at': pos_attrs.get('created_at')
+                    })
 
             # Get recent schedules (when they served)
+            # Note: This endpoint may return 404 if person has no schedule history
             schedules_result = self._get(
                 f"/services/v2/people/{services_person_id}/schedules",
                 params={'order': '-sort_date', 'per_page': 10}
             )
-            for schedule in schedules_result.get('data', []):
-                sched_attrs = schedule.get('attributes', {})
-                sort_date = sched_attrs.get('sort_date')
+            if schedules_result:
+                for schedule in schedules_result.get('data', []):
+                    sched_attrs = schedule.get('attributes', {})
+                    sort_date = sched_attrs.get('sort_date')
 
-                details['recent_schedules'].append({
-                    'date': sort_date,
-                    'team_name': sched_attrs.get('team_name'),
-                    'team_position_name': sched_attrs.get('team_position_name'),
-                    'plan_title': sched_attrs.get('plan_title', ''),
-                    'status': sched_attrs.get('status'),
-                    'decline_reason': sched_attrs.get('decline_reason')
-                })
+                    details['recent_schedules'].append({
+                        'date': sort_date,
+                        'team_name': sched_attrs.get('team_name'),
+                        'team_position_name': sched_attrs.get('team_position_name'),
+                        'plan_title': sched_attrs.get('plan_title', ''),
+                        'status': sched_attrs.get('status'),
+                        'decline_reason': sched_attrs.get('decline_reason')
+                    })
 
-                # Track last served date (confirmed schedules only)
-                if sched_attrs.get('status') == 'C' and sort_date:  # C = Confirmed
-                    if not details['last_served'] or sort_date > details['last_served']:
-                        details['last_served'] = sort_date
+                    # Track last served date (confirmed schedules only)
+                    if sched_attrs.get('status') == 'C' and sort_date:  # C = Confirmed
+                        if not details['last_served'] or sort_date > details['last_served']:
+                            details['last_served'] = sort_date
 
         return details
 
