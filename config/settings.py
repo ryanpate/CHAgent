@@ -183,6 +183,8 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    # Exempt health check from SSL redirect (Railway makes HTTP healthcheck requests)
+    SECURE_REDIRECT_EXEMPT = [r'^health/$']
 
 # Logging
 LOGGING = {
