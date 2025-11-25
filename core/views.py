@@ -44,13 +44,14 @@ def chat(request):
         session_id = str(uuid.uuid4())
 
     # Get chat messages for this session
-    messages = ChatMessage.objects.filter(
+    # Note: Using 'chat_messages' to avoid conflict with Django's messages framework
+    chat_messages = ChatMessage.objects.filter(
         user=request.user,
         session_id=session_id
     ).order_by('created_at')
 
     response = render(request, 'core/chat.html', {
-        'messages': messages,
+        'chat_messages': chat_messages,
         'session_id': session_id,
     })
 
@@ -143,7 +144,7 @@ def chat_send(request):
         pending_match_data.append(match_data)
 
     return render(request, 'core/chat_message.html', {
-        'messages': recent_messages,
+        'chat_messages': recent_messages,
         'pending_matches': pending_match_data,
         'unmatched': unmatched,
         'interaction_id': interaction_id,
