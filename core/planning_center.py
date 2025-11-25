@@ -840,7 +840,7 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         song = song_result.get('data', {})
         song_attrs = song.get('attributes', {})
 
-        # Get arrangements
+        # Get arrangements (including lyrics and chord chart content)
         arr_result = self._get(f"/services/v2/songs/{song_id}/arrangements")
         arrangements = []
         for arr in arr_result.get('data', []):
@@ -852,7 +852,10 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 'bpm': arr_attrs.get('bpm'),
                 'meter': arr_attrs.get('meter'),
                 'length': arr_attrs.get('length'),
-                'sequence': arr_attrs.get('sequence_short')
+                'sequence': arr_attrs.get('sequence_short'),
+                'lyrics': arr_attrs.get('lyrics'),  # Full lyrics text
+                'chord_chart': arr_attrs.get('chord_chart'),  # Chord chart content
+                'notes': arr_attrs.get('notes')
             })
 
         # Get song-level attachments
