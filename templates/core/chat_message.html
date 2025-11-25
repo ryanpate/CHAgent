@@ -1,7 +1,7 @@
 {% for message in chat_messages %}
 <div class="{% if message.role == 'user' %}ml-12{% else %}mr-12{% endif %}">
-    <div class="{% if message.role == 'user' %}bg-ch-gold text-black{% else %}bg-ch-gray{% endif %} rounded-lg p-4">
-        {{ message.content|linebreaks }}
+    <div class="{% if message.role == 'user' %}bg-ch-gold text-black{% else %}bg-ch-gray markdown-content{% endif %} rounded-lg p-4">
+        {% if message.role == 'user' %}{{ message.content|linebreaks }}{% else %}{{ message.content }}{% endif %}
     </div>
     <p class="text-xs text-gray-500 mt-1 {% if message.role == 'user' %}text-right{% endif %}">
         {{ message.created_at|timesince }} ago
