@@ -94,23 +94,28 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
+# Default to SQLite
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+
+# Try to use PostgreSQL if DATABASE_URL is set and valid
 if DATABASE_URL and HAS_DJ_DATABASE_URL:
-    # Use PostgreSQL from DATABASE_URL (Railway provides this)
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=DATABASE_URL,
-            conn_max_age=600,
-            conn_health_checks=True,
-        )
-    }
-else:
-    # Fallback to SQLite for local development or build phase
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+    try:
+        DATABASES = {
+            'default': dj_database_url.config(
+                default=DATABASE_URL,
+                conn_max_age=600,
+                conn_health_checks=True,
+            )
         }
-    }
+    except Exception:
+        # Invalid DATABASE_URL (e.g., during Railway build phase)
+        # Keep SQLite fallback
+        pass
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
