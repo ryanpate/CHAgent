@@ -337,6 +337,67 @@ class PlanningCenterAPI:
         best_match = matches[0]
         return self.get_person_details(best_match['pco_id'])
 
+    def search_person_with_suggestions(self, name: str) -> dict:
+        """
+        Search for a person by name, returning details if found or suggestions if not.
+
+        Args:
+            name: Name to search for.
+
+        Returns:
+            Dict with:
+            - 'found': True/False
+            - 'details': Person details if found
+            - 'suggestions': List of similar names if not found
+            - 'search_name': The original search name
+        """
+        result = {
+            'found': False,
+            'details': None,
+            'suggestions': [],
+            'search_name': name
+        }
+
+        # Try to find good matches (threshold 0.7)
+        good_matches = self.find_matches(name, threshold=0.7)
+        if good_matches:
+            # Found a good match
+            best_match = good_matches[0]
+            result['found'] = True
+            result['details'] = self.get_person_details(best_match['pco_id'])
+            return result
+
+        # No good match - look for suggestions with lower threshold
+        suggestions = self.find_matches(name, threshold=0.4)
+        if suggestions:
+            result['suggestions'] = [
+                {
+                    'name': s['name'],
+                    'score': s['score'],
+                    'pco_id': s['pco_id']
+                }
+                for s in suggestions[:5]  # Top 5 suggestions
+            ]
+
+        return result
+
+    def get_name_suggestions(self, name: str, limit: int = 5) -> list:
+        """
+        Get name suggestions from PCO for a given search name.
+
+        Args:
+            name: Name to find suggestions for.
+            limit: Maximum number of suggestions to return.
+
+        Returns:
+            List of suggestion dicts with name and score.
+        """
+        matches = self.find_matches(name, threshold=0.3)
+        return [
+            {'name': m['name'], 'score': m['score']}
+            for m in matches[:limit]
+        ]
+
     def find_matches(self, name: str, threshold: float = 0.6) -> list:
         """
         Find PCO people matching a given name using fuzzy matching.
