@@ -18,9 +18,29 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-key-change-me-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
+# Allowed hosts - Railway sets RAILWAY_PUBLIC_DOMAIN
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+
+# Add Railway domain if available
+RAILWAY_PUBLIC_DOMAIN = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
+if RAILWAY_PUBLIC_DOMAIN:
+    ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
+
+# Allow all .railway.app domains in production
+if not DEBUG:
+    ALLOWED_HOSTS.append('.railway.app')
+
+# CSRF trusted origins for Railway
+CSRF_TRUSTED_ORIGINS = []
+if RAILWAY_PUBLIC_DOMAIN:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{RAILWAY_PUBLIC_DOMAIN}')
+CSRF_TRUSTED_ORIGINS.extend([
+    origin.strip() for origin in
+    os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if origin.strip()
+])
 
 # Application definition
 INSTALLED_APPS = [
