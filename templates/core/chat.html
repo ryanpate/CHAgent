@@ -16,7 +16,7 @@
 
     <!-- Chat Messages -->
     <div id="chat-messages" class="bg-ch-dark rounded-lg p-6 h-[500px] overflow-y-auto mb-4 space-y-4">
-        {% for message in messages %}
+        {% for message in chat_messages %}
         <div class="{% if message.role == 'user' %}ml-12{% else %}mr-12{% endif %}">
             <div class="{% if message.role == 'user' %}bg-ch-gold text-black{% else %}bg-ch-gray{% endif %} rounded-lg p-4">
                 {{ message.content|linebreaks }}
