@@ -87,16 +87,148 @@ def is_aggregate_question(message: str) -> Tuple[bool, str]:
     return is_aggregate, category
 
 
-SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant. You help team members:
+def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
+    """
+    Detect if a question is asking for data that resides in Planning Center.
+
+    Args:
+        message: The user's question.
+
+    Returns:
+        Tuple of (is_pco_query, query_type, person_name) where:
+        - is_pco_query: True if asking for PCO data
+        - query_type: Type of data requested (contact, email, phone, address, birthday, etc.)
+        - person_name: Extracted person name if found
+    """
+    message_lower = message.lower().strip()
+
+    # Patterns that indicate PCO data queries
+    pco_query_patterns = {
+        'contact': r'contact\s+(info|information|details?)|how\s+(can\s+i|do\s+i|to)\s+(reach|contact|get\s+(in\s+)?touch)',
+        'email': r'email(\s+address)?|e-mail',
+        'phone': r'phone(\s+number)?|call|cell(\s+number)?|mobile(\s+number)?|telephone',
+        'address': r'address|where\s+(does|do)\s+.+\s+live|location|mailing',
+        'birthday': r'birthday|birth\s*date|when\s+(was|is)\s+.+\s+born|how\s+old',
+        'anniversary': r'anniversary',
+    }
+
+    is_pco_query = False
+    query_type = None
+
+    for qtype, pattern in pco_query_patterns.items():
+        if re.search(pattern, message_lower):
+            is_pco_query = True
+            query_type = qtype
+            break
+
+    # Extract person name from the question
+    person_name = None
+    if is_pco_query:
+        # Common patterns for extracting names
+        name_patterns = [
+            r"(?:for|of|about|contact|reach|call|email)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
+            r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)'s\s+(?:contact|email|phone|address|birthday)",
+            r"what\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)'s",
+            r"(?:where\s+does|when\s+(?:was|is))\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
+        ]
+
+        for pattern in name_patterns:
+            match = re.search(pattern, message)
+            if match:
+                person_name = match.group(1).strip()
+                # Filter out common false positives
+                false_positives = ['I', 'What', 'Where', 'When', 'How', 'Can', 'Do', 'Does', 'Is', 'Are', 'The']
+                if person_name not in false_positives:
+                    break
+                else:
+                    person_name = None
+
+    return is_pco_query, query_type, person_name
+
+
+def format_pco_details(details: dict, query_type: str = None) -> str:
+    """
+    Format PCO person details into a readable string for the AI context.
+
+    Args:
+        details: Person details dict from PCO API.
+        query_type: Optional specific type of data requested.
+
+    Returns:
+        Formatted string with person details.
+    """
+    if not details:
+        return ""
+
+    parts = [f"\n[PLANNING CENTER DATA for {details.get('name', 'Unknown')}]"]
+
+    # Always include name
+    parts.append(f"Name: {details.get('name', 'Unknown')}")
+
+    # Birthday
+    if details.get('birthdate') and query_type in [None, 'birthday', 'contact']:
+        parts.append(f"Birthday: {details.get('birthdate')}")
+
+    # Anniversary
+    if details.get('anniversary') and query_type in [None, 'anniversary', 'contact']:
+        parts.append(f"Anniversary: {details.get('anniversary')}")
+
+    # Emails
+    if details.get('emails') and query_type in [None, 'email', 'contact']:
+        email_strs = []
+        for email in details['emails']:
+            primary = " (primary)" if email.get('primary') else ""
+            location = f" [{email.get('location')}]" if email.get('location') else ""
+            email_strs.append(f"{email.get('address')}{location}{primary}")
+        if email_strs:
+            parts.append(f"Email(s): {', '.join(email_strs)}")
+
+    # Phone numbers
+    if details.get('phone_numbers') and query_type in [None, 'phone', 'contact']:
+        phone_strs = []
+        for phone in details['phone_numbers']:
+            primary = " (primary)" if phone.get('primary') else ""
+            location = f" [{phone.get('location')}]" if phone.get('location') else ""
+            phone_strs.append(f"{phone.get('number')}{location}{primary}")
+        if phone_strs:
+            parts.append(f"Phone(s): {', '.join(phone_strs)}")
+
+    # Addresses
+    if details.get('addresses') and query_type in [None, 'address', 'contact']:
+        for addr in details['addresses']:
+            primary = " (primary)" if addr.get('primary') else ""
+            location = f" [{addr.get('location')}]" if addr.get('location') else ""
+            addr_parts = [
+                addr.get('street', ''),
+                f"{addr.get('city', '')}, {addr.get('state', '')} {addr.get('zip', '')}"
+            ]
+            addr_str = ', '.join(p for p in addr_parts if p.strip())
+            if addr_str:
+                parts.append(f"Address{location}{primary}: {addr_str}")
+
+    # Membership/Status
+    if details.get('membership'):
+        parts.append(f"Membership: {details.get('membership')}")
+    if details.get('status'):
+        parts.append(f"Status: {details.get('status')}")
+
+    parts.append("[END PLANNING CENTER DATA]\n")
+
+    return '\n'.join(parts)
+
+
+SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant named Aria. You help team members:
 1. Log interactions with volunteers
 2. Answer questions about volunteers based on logged interactions
 3. Provide aggregate insights about the volunteer team
+4. Look up contact information from Planning Center
 
 ## Your Capabilities:
 - When a user logs an interaction, extract and organize key information (names, preferences, prayer requests, feedback, etc.)
 - When asked questions, search through past interactions to provide accurate answers
 - Identify which volunteers are mentioned and link them appropriately
 - Provide summaries and aggregate data when asked
+- Look up contact details (email, phone, address, birthday) from Planning Center when asked
 
 ## Guidelines:
 - Be warm, helpful, and pastoral in tone
@@ -104,6 +236,7 @@ SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant. You hel
 - When uncertain, say so rather than guessing
 - Format responses clearly with relevant details
 - If asked about a volunteer with no logged interactions, say so clearly
+- When Planning Center data is provided, use it to answer contact-related questions accurately
 
 ## Data Extraction:
 When processing a new interaction, extract and structure:
@@ -351,6 +484,25 @@ def query_agent(question: str, user, session_id: str) -> str:
     if not client:
         return "I'm sorry, but the AI service is not currently available. Please check that the ANTHROPIC_API_KEY is configured."
 
+    # Check if this is a PCO data query (contact info, email, phone, etc.)
+    pco_query, pco_query_type, pco_person_name = is_pco_data_query(question)
+    pco_data_context = ""
+
+    if pco_query and pco_person_name:
+        logger.info(f"PCO data query detected: {pco_query_type} for '{pco_person_name}'")
+        from .planning_center import PlanningCenterAPI
+        pco_api = PlanningCenterAPI()
+
+        if pco_api.is_configured:
+            person_details = pco_api.search_person_with_details(pco_person_name)
+            if person_details:
+                pco_data_context = format_pco_details(person_details, pco_query_type)
+                logger.info(f"Found PCO data for {person_details.get('name')}")
+            else:
+                pco_data_context = f"\n[PLANNING CENTER: No person found matching '{pco_person_name}']\n"
+        else:
+            logger.warning("PCO query detected but Planning Center is not configured")
+
     # Check if this is an aggregate question requiring broader data access
     aggregate, category = is_aggregate_question(question)
 
@@ -430,6 +582,10 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
             context = f"[AGGREGATE QUERY - You have access to {len(relevant_interactions)} interactions covering the full team. Analyze ALL the data below to provide comprehensive team-wide insights.]\n\n" + context
     else:
         context = "No relevant interactions found in the database."
+
+    # Add PCO data to context if available
+    if pco_data_context:
+        context = pco_data_context + "\n" + context
 
     # Step 3: Get chat history for this session
     history = ChatMessage.objects.filter(
