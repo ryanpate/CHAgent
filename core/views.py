@@ -20,6 +20,45 @@ from .agent import (
 )
 from .volunteer_matching import VolunteerMatcher, MatchType
 
+import re
+
+
+def should_start_new_conversation(message: str) -> bool:
+    """
+    Determine if this message should start a fresh conversation.
+
+    Returns True for:
+    - New interactions being logged
+    - Prayer request queries
+    - Monthly/weekly summary requests
+    - Questions about volunteers (what do we know about...)
+    """
+    message_lower = message.lower().strip()
+
+    # Patterns that indicate a new topic/conversation
+    new_topic_patterns = [
+        r'^log\s+interaction',           # "Log interaction: ..."
+        r'^talked\s+(to|with)',           # "Talked to/with John..."
+        r'^met\s+with',                   # "Met with Sarah..."
+        r'^had\s+a\s+(conversation|chat|talk)', # "Had a conversation with..."
+        r'prayer\s+request',              # Prayer requests
+        r'monthly\s+summary',             # Monthly summary
+        r'weekly\s+summary',              # Weekly summary
+        r'team\s+summary',                # Team summary
+        r'^what\s+do\s+we\s+know\s+about', # "What do we know about..."
+        r'^tell\s+me\s+about',            # "Tell me about..."
+        r'^who\s+is',                     # "Who is..."
+        r'^find\s+volunteer',             # "Find volunteer..."
+        r'^show\s+(me\s+)?recent',        # "Show recent..."
+        r'^list\s+(all\s+)?',             # "List all..."
+    ]
+
+    for pattern in new_topic_patterns:
+        if re.search(pattern, message_lower):
+            return True
+
+    return False
+
 
 @login_required
 def dashboard(request):
@@ -70,6 +109,12 @@ def chat_send(request):
 
     if not message:
         return HttpResponse('')
+
+    # Check if this message should start a new conversation
+    # This keeps the chat window clean and focused on one topic at a time
+    start_new_session = should_start_new_conversation(message)
+    if start_new_session:
+        session_id = str(uuid.uuid4())
 
     # Detect if this is logging an interaction or asking a question
     is_interaction = detect_interaction_intent(message)
@@ -142,12 +187,21 @@ def chat_send(request):
         }
         pending_match_data.append(match_data)
 
-    return render(request, 'core/chat_message.html', {
+    response = render(request, 'core/chat_message.html', {
         'chat_messages': recent_messages,
         'pending_matches': pending_match_data,
         'unmatched': unmatched,
         'interaction_id': interaction_id,
+        'new_session': start_new_session,
     })
+
+    # Update session cookie and swap behavior if we started a new conversation
+    if start_new_session:
+        response.set_cookie('chat_session_id', session_id, max_age=86400 * 7)
+        # Tell HTMX to replace content instead of appending
+        response['HX-Reswap'] = 'innerHTML'
+
+    return response
 
 
 @login_required
