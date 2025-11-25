@@ -30,10 +30,13 @@ if RAILWAY_PUBLIC_DOMAIN:
 
 # Allow all .railway.app domains in production
 if not DEBUG:
-    ALLOWED_HOSTS.append('.railway.app')
+    ALLOWED_HOSTS.extend(['.railway.app', '.up.railway.app'])
 
 # CSRF trusted origins for Railway
-CSRF_TRUSTED_ORIGINS = []
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.railway.app',
+    'https://*.up.railway.app',
+]
 if RAILWAY_PUBLIC_DOMAIN:
     CSRF_TRUSTED_ORIGINS.append(f'https://{RAILWAY_PUBLIC_DOMAIN}')
 CSRF_TRUSTED_ORIGINS.extend([
