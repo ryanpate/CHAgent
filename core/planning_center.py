@@ -237,47 +237,55 @@ class PlanningCenterAPI:
         services_person = self._find_services_person(person_id)
         if services_person:
             services_person_id = services_person.get('id')
+            logger.info(f"Found Services person ID: {services_person_id}")
 
             # Get team positions (what teams they're on)
-            # Note: This endpoint may return 404 if person has no team assignments
+            # Note: This endpoint may return empty if person has no team assignments
             team_positions = self._get(f"/services/v2/people/{services_person_id}/team_positions")
-            if team_positions:
-                for position in team_positions.get('data', []):
-                    pos_attrs = position.get('attributes', {})
-                    # Get the team name from the relationship
-                    team_id = position.get('relationships', {}).get('team', {}).get('data', {}).get('id')
-                    team_name = pos_attrs.get('name', 'Unknown Position')
+            logger.info(f"Team positions response: {len(team_positions.get('data', []))} positions found")
 
-                    details['teams'].append({
-                        'position': team_name,
-                        'team_id': team_id,
-                        'created_at': pos_attrs.get('created_at')
-                    })
+            for position in team_positions.get('data', []):
+                pos_attrs = position.get('attributes', {})
+                # Get the team name from the relationship
+                team_id = position.get('relationships', {}).get('team', {}).get('data', {}).get('id')
+                team_name = pos_attrs.get('name', 'Unknown Position')
+
+                details['teams'].append({
+                    'position': team_name,
+                    'team_id': team_id,
+                    'created_at': pos_attrs.get('created_at')
+                })
 
             # Get recent schedules (when they served)
-            # Note: This endpoint may return 404 if person has no schedule history
+            # Use plan_person endpoint which is more reliable
             schedules_result = self._get(
                 f"/services/v2/people/{services_person_id}/schedules",
-                params={'order': '-sort_date', 'per_page': 10}
+                params={'order': '-sort_date', 'per_page': 20}
             )
-            if schedules_result:
-                for schedule in schedules_result.get('data', []):
-                    sched_attrs = schedule.get('attributes', {})
-                    sort_date = sched_attrs.get('sort_date')
+            logger.info(f"Schedules response: {len(schedules_result.get('data', []))} schedules found")
 
-                    details['recent_schedules'].append({
-                        'date': sort_date,
-                        'team_name': sched_attrs.get('team_name'),
-                        'team_position_name': sched_attrs.get('team_position_name'),
-                        'plan_title': sched_attrs.get('plan_title', ''),
-                        'status': sched_attrs.get('status'),
-                        'decline_reason': sched_attrs.get('decline_reason')
-                    })
+            for schedule in schedules_result.get('data', []):
+                sched_attrs = schedule.get('attributes', {})
+                sort_date = sched_attrs.get('sort_date')
 
-                    # Track last served date (confirmed schedules only)
-                    if sched_attrs.get('status') == 'C' and sort_date:  # C = Confirmed
-                        if not details['last_served'] or sort_date > details['last_served']:
-                            details['last_served'] = sort_date
+                details['recent_schedules'].append({
+                    'date': sort_date,
+                    'team_name': sched_attrs.get('team_name'),
+                    'team_position_name': sched_attrs.get('team_position_name'),
+                    'plan_title': sched_attrs.get('plan_title', ''),
+                    'status': sched_attrs.get('status'),
+                    'decline_reason': sched_attrs.get('decline_reason')
+                })
+
+                # Track last served date (confirmed schedules only)
+                if sched_attrs.get('status') == 'C' and sort_date:  # C = Confirmed
+                    if not details['last_served'] or sort_date > details['last_served']:
+                        details['last_served'] = sort_date
+
+            if not details['recent_schedules']:
+                logger.info(f"No schedules found for Services person {services_person_id}")
+        else:
+            logger.info(f"Person {person_id} ({details.get('name')}) not found in Services - they may not be a scheduled volunteer")
 
         return details
 
@@ -286,7 +294,7 @@ class PlanningCenterAPI:
         Find the Services person record that matches a People person ID.
 
         PCO has separate People and Services databases. This finds the Services
-        person by searching for their name.
+        person by searching for their name or using the search endpoint.
 
         Args:
             people_person_id: The person ID from the People API.
@@ -297,6 +305,7 @@ class PlanningCenterAPI:
         # Get the person's name from People API
         person = self.get_person_by_id(people_person_id)
         if not person:
+            logger.warning(f"Could not find People record for ID {people_person_id}")
             return None
 
         attrs = person.get('attributes', {})
@@ -304,19 +313,48 @@ class PlanningCenterAPI:
         last_name = attrs.get('last_name', '')
 
         if not first_name or not last_name:
+            logger.warning(f"Person {people_person_id} missing first or last name")
             return None
 
-        # Search in Services for this person
-        # Services API allows searching by name
-        services_people = self._get(
+        # Try the Services API search endpoint
+        search_name = f"{first_name} {last_name}"
+        logger.info(f"Searching Services for '{search_name}'")
+
+        # Method 1: Try the search endpoint with 'q' parameter
+        services_search = self._get(
             "/services/v2/people",
-            params={'where[first_name]': first_name, 'where[last_name]': last_name}
+            params={'where[name]': search_name, 'per_page': 25}
         )
 
-        data = services_people.get('data', [])
+        data = services_search.get('data', [])
         if data:
-            return data[0]  # Return first match
+            # Find best match by name
+            for services_person in data:
+                sp_attrs = services_person.get('attributes', {})
+                sp_first = sp_attrs.get('first_name', '').lower()
+                sp_last = sp_attrs.get('last_name', '').lower()
+                if sp_first == first_name.lower() and sp_last == last_name.lower():
+                    logger.info(f"Found Services person: {sp_attrs.get('first_name')} {sp_attrs.get('last_name')} (ID: {services_person.get('id')})")
+                    return services_person
+            # Return first result if no exact match
+            logger.info(f"Using first Services result: {data[0].get('attributes', {}).get('first_name')} {data[0].get('attributes', {}).get('last_name')}")
+            return data[0]
 
+        # Method 2: Try searching all services people (paginated) as fallback
+        # This is slower but more thorough
+        logger.info(f"No results from name search, trying broader search...")
+        all_services = self._get("/services/v2/people", params={'per_page': 100})
+
+        all_data = all_services.get('data', [])
+        for services_person in all_data:
+            sp_attrs = services_person.get('attributes', {})
+            sp_first = (sp_attrs.get('first_name') or '').lower()
+            sp_last = (sp_attrs.get('last_name') or '').lower()
+            if sp_first == first_name.lower() and sp_last == last_name.lower():
+                logger.info(f"Found Services person via scan: {sp_attrs.get('first_name')} {sp_attrs.get('last_name')} (ID: {services_person.get('id')})")
+                return services_person
+
+        logger.info(f"No Services person found for {first_name} {last_name}")
         return None
 
     def search_person_with_details(self, name: str) -> Optional[dict]:
