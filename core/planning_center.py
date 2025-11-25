@@ -294,7 +294,7 @@ class PlanningCenterAPI:
         Find the Services person record that matches a People person ID.
 
         PCO has separate People and Services databases. This finds the Services
-        person by searching for their name or using the search endpoint.
+        person by matching on email (most reliable) or exact full name match.
 
         Args:
             people_person_id: The person ID from the People API.
@@ -302,7 +302,7 @@ class PlanningCenterAPI:
         Returns:
             Services person record or None.
         """
-        # Get the person's name from People API
+        # Get the person's details from People API
         person = self.get_person_by_id(people_person_id)
         if not person:
             logger.warning(f"Could not find People record for ID {people_person_id}")
@@ -316,42 +316,43 @@ class PlanningCenterAPI:
             logger.warning(f"Person {people_person_id} missing first or last name")
             return None
 
-        # Try the Services API search endpoint
+        # Get the person's emails from People API for matching
+        emails_result = self._get(f"/people/v2/people/{people_person_id}/emails")
+        person_emails = set()
+        for email_data in emails_result.get('data', []):
+            email_addr = email_data.get('attributes', {}).get('address', '').lower().strip()
+            if email_addr:
+                person_emails.add(email_addr)
+
         search_name = f"{first_name} {last_name}"
-        logger.info(f"Searching Services for '{search_name}'")
+        logger.info(f"Searching Services for '{search_name}' (has {len(person_emails)} emails)")
 
-        # Method 1: Try the search endpoint with 'q' parameter
-        services_search = self._get(
-            "/services/v2/people",
-            params={'where[name]': search_name, 'per_page': 25}
-        )
-
-        data = services_search.get('data', [])
-        if data:
-            # Find best match by name
-            for services_person in data:
-                sp_attrs = services_person.get('attributes', {})
-                sp_first = sp_attrs.get('first_name', '').lower()
-                sp_last = sp_attrs.get('last_name', '').lower()
-                if sp_first == first_name.lower() and sp_last == last_name.lower():
-                    logger.info(f"Found Services person: {sp_attrs.get('first_name')} {sp_attrs.get('last_name')} (ID: {services_person.get('id')})")
-                    return services_person
-            # Return first result if no exact match
-            logger.info(f"Using first Services result: {data[0].get('attributes', {}).get('first_name')} {data[0].get('attributes', {}).get('last_name')}")
-            return data[0]
-
-        # Method 2: Try searching all services people (paginated) as fallback
-        # This is slower but more thorough
-        logger.info(f"No results from name search, trying broader search...")
+        # Get services people - need to search through them
         all_services = self._get("/services/v2/people", params={'per_page': 100})
-
         all_data = all_services.get('data', [])
+
+        # Method 1: Match by email (most reliable - emails are unique)
+        if person_emails:
+            for services_person in all_data:
+                sp_attrs = services_person.get('attributes', {})
+                # Services person records have email directly in attributes
+                sp_email = (sp_attrs.get('email') or '').lower().strip()
+                if sp_email and sp_email in person_emails:
+                    logger.info(f"Found Services person by email ({sp_email}): {sp_attrs.get('first_name')} {sp_attrs.get('last_name')} (ID: {services_person.get('id')})")
+                    return services_person
+
+        # Method 2: Exact first AND last name match
+        # Only match if BOTH first and last name match exactly (case-insensitive)
+        target_first = first_name.lower().strip()
+        target_last = last_name.lower().strip()
+
         for services_person in all_data:
             sp_attrs = services_person.get('attributes', {})
-            sp_first = (sp_attrs.get('first_name') or '').lower()
-            sp_last = (sp_attrs.get('last_name') or '').lower()
-            if sp_first == first_name.lower() and sp_last == last_name.lower():
-                logger.info(f"Found Services person via scan: {sp_attrs.get('first_name')} {sp_attrs.get('last_name')} (ID: {services_person.get('id')})")
+            sp_first = (sp_attrs.get('first_name') or '').lower().strip()
+            sp_last = (sp_attrs.get('last_name') or '').lower().strip()
+
+            if sp_first == target_first and sp_last == target_last:
+                logger.info(f"Found Services person by exact name: {sp_attrs.get('first_name')} {sp_attrs.get('last_name')} (ID: {services_person.get('id')})")
                 return services_person
 
         logger.info(f"No Services person found for {first_name} {last_name}")
