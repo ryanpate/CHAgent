@@ -11,6 +11,7 @@ from django.conf import settings
 
 from .models import Interaction, Volunteer, ChatMessage
 from .embeddings import get_embedding, search_similar
+from .volunteer_matching import match_volunteers_for_interaction, VolunteerMatcher, MatchType
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ def process_interaction(content: str, user) -> dict:
     Process a new interaction entry:
     1. Generate embedding
     2. Extract structured data via Claude
-    3. Identify/create volunteer records
+    3. Match volunteers against PCO and local database
     4. Save interaction with metadata
 
     Args:
@@ -127,11 +128,15 @@ def process_interaction(content: str, user) -> dict:
         user: The user who logged the interaction.
 
     Returns:
-        Dictionary with interaction, extracted data, and volunteers.
+        Dictionary with:
+        - interaction: The created Interaction object
+        - extracted: Data extracted by AI
+        - volunteers: List of confirmed Volunteer objects
+        - pending_matches: List of VolunteerMatch objects needing confirmation
+        - unmatched: List of names with no matches found
     """
     client = get_anthropic_client()
     extracted = {}
-    volunteers = []
 
     # Step 1: Extract data with Claude (if available)
     if client:
@@ -149,25 +154,13 @@ def process_interaction(content: str, user) -> dict:
     # Step 2: Generate embedding for semantic search
     embedding = get_embedding(content)
 
-    # Step 3: Find or create volunteers
-    for vol_data in extracted.get('volunteers', []):
-        name = vol_data.get('name', '').strip()
-        if not name:
-            continue
+    # Step 3: Match volunteers against PCO and local database
+    volunteer_names = extracted.get('volunteers', [])
+    match_result = match_volunteers_for_interaction(volunteer_names)
 
-        volunteer, created = Volunteer.objects.get_or_create(
-            normalized_name=name.lower().strip(),
-            defaults={
-                'name': name,
-                'team': vol_data.get('team', '')
-            }
-        )
-        # Update team if provided and not already set
-        if not volunteer.team and vol_data.get('team'):
-            volunteer.team = vol_data.get('team')
-            volunteer.save()
-
-        volunteers.append(volunteer)
+    confirmed_volunteers = match_result['confirmed']
+    pending_matches = match_result['pending']
+    unmatched = match_result['unmatched']
 
     # Step 4: Create interaction
     interaction = Interaction.objects.create(
@@ -177,13 +170,103 @@ def process_interaction(content: str, user) -> dict:
         ai_extracted_data=extracted.get('extracted_data', {}),
         embedding_json=embedding
     )
-    interaction.volunteers.set(volunteers)
+    # Link confirmed volunteers
+    interaction.volunteers.set(confirmed_volunteers)
 
     return {
         'interaction': interaction,
         'extracted': extracted,
-        'volunteers': volunteers
+        'volunteers': confirmed_volunteers,
+        'pending_matches': pending_matches,
+        'unmatched': unmatched
     }
+
+
+def confirm_volunteer_match(
+    interaction_id: int,
+    original_name: str,
+    volunteer_id: Optional[int] = None,
+    pco_id: Optional[str] = None,
+    create_new: bool = False
+) -> Optional[Volunteer]:
+    """
+    Confirm a pending volunteer match for an interaction.
+
+    Args:
+        interaction_id: ID of the interaction to update.
+        original_name: The original extracted name.
+        volunteer_id: ID of existing volunteer to link (if selected).
+        pco_id: PCO person ID to create/link from (if selected).
+        create_new: If True, create a new volunteer with original_name.
+
+    Returns:
+        The linked Volunteer, or None if interaction not found.
+    """
+    try:
+        interaction = Interaction.objects.get(id=interaction_id)
+    except Interaction.DoesNotExist:
+        logger.error(f"Interaction {interaction_id} not found")
+        return None
+
+    matcher = VolunteerMatcher()
+
+    if volunteer_id:
+        # Link to existing volunteer
+        try:
+            volunteer = Volunteer.objects.get(id=volunteer_id)
+            interaction.volunteers.add(volunteer)
+            logger.info(f"Linked interaction {interaction_id} to volunteer {volunteer.name}")
+            return volunteer
+        except Volunteer.DoesNotExist:
+            logger.error(f"Volunteer {volunteer_id} not found")
+            return None
+
+    elif pco_id:
+        # Create/get volunteer from PCO
+        from .planning_center import PlanningCenterAPI
+        pco_api = PlanningCenterAPI()
+        person = pco_api.get_person_by_id(pco_id)
+
+        if person:
+            attrs = person.get('attributes', {})
+            pco_name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
+            volunteer = matcher.get_or_create_volunteer(
+                name=pco_name or original_name,
+                pco_id=pco_id
+            )
+            interaction.volunteers.add(volunteer)
+            logger.info(f"Linked interaction {interaction_id} to PCO volunteer {volunteer.name}")
+            return volunteer
+        else:
+            logger.error(f"PCO person {pco_id} not found")
+            return None
+
+    elif create_new:
+        # Create new volunteer with original name
+        volunteer = matcher.get_or_create_volunteer(name=original_name)
+        interaction.volunteers.add(volunteer)
+        logger.info(f"Created and linked new volunteer {volunteer.name} to interaction {interaction_id}")
+        return volunteer
+
+    return None
+
+
+def skip_volunteer_match(interaction_id: int, original_name: str) -> bool:
+    """
+    Skip linking a volunteer for an interaction.
+
+    This is used when the user doesn't want to link any volunteer
+    for a particular mentioned name.
+
+    Args:
+        interaction_id: ID of the interaction.
+        original_name: The name that was skipped.
+
+    Returns:
+        True if successful.
+    """
+    logger.info(f"Skipped volunteer match for '{original_name}' in interaction {interaction_id}")
+    return True
 
 
 def query_agent(question: str, user, session_id: str) -> str:

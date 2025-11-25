@@ -1,0 +1,10 @@
+<div class="flex items-center gap-2 py-2 text-sm text-green-400">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+    </svg>
+    {% if created %}
+    <span>Created and linked <a href="{% url 'volunteer_detail' volunteer.pk %}" class="text-ch-gold hover:underline">{{ volunteer.name }}</a></span>
+    {% else %}
+    <span>Linked to <a href="{% url 'volunteer_detail' volunteer.pk %}" class="text-ch-gold hover:underline">{{ volunteer.name }}</a></span>
+    {% endif %}
+</div>
