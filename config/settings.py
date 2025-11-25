@@ -94,7 +94,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
-# Default to SQLite
+# Also check for Railway's PostgreSQL-specific variable
+if not DATABASE_URL:
+    DATABASE_URL = os.environ.get('DATABASE_PUBLIC_URL', '')
+
+# Default to SQLite for local development only
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -102,16 +106,35 @@ DATABASES = {
     }
 }
 
-# Only use PostgreSQL if DATABASE_URL looks like a valid postgres URL
-if HAS_DJ_DATABASE_URL and DATABASE_URL.startswith(('postgres://', 'postgresql://')):
+# Use PostgreSQL if DATABASE_URL is set
+if DATABASE_URL and HAS_DJ_DATABASE_URL:
+    # Handle Railway's postgres:// vs postgresql:// URL schemes
+    db_url = DATABASE_URL
+    if db_url.startswith('postgres://'):
+        # dj_database_url handles both formats, but let's be explicit
+        pass
+
     try:
         DATABASES['default'] = dj_database_url.config(
-            default=DATABASE_URL,
+            default=db_url,
             conn_max_age=600,
             conn_health_checks=True,
         )
-    except Exception:
-        pass  # Keep SQLite fallback
+        # Log success (will show in Railway logs)
+        print(f"[DATABASE] Using PostgreSQL database")
+    except Exception as e:
+        print(f"[DATABASE] ERROR: Failed to configure PostgreSQL: {e}")
+        print(f"[DATABASE] WARNING: Falling back to SQLite - DATA WILL NOT PERSIST!")
+elif DATABASE_URL and not HAS_DJ_DATABASE_URL:
+    print("[DATABASE] ERROR: DATABASE_URL is set but dj-database-url is not installed!")
+    print("[DATABASE] WARNING: Falling back to SQLite - DATA WILL NOT PERSIST!")
+elif not DATABASE_URL:
+    # Only acceptable for local development
+    if not DEBUG:
+        print("[DATABASE] WARNING: No DATABASE_URL set in production!")
+        print("[DATABASE] WARNING: Using SQLite - DATA WILL NOT PERSIST ACROSS DEPLOYS!")
+    else:
+        print("[DATABASE] Using SQLite for local development")
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
