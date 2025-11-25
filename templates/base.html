@@ -18,7 +18,7 @@
                         'ch-gold-muted': '#8b7355',
                     },
                     fontFamily: {
-                        'display': ['Playfair Display', 'serif'],
+                        'brandon': ['"Brandon Grotesque"', 'system-ui', 'sans-serif'],
                     }
                 }
             }
@@ -26,16 +26,15 @@
     </script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/fonts.css">
     <style>
         body {
-            font-family: 'Inter', system-ui, sans-serif;
-        }
-        .font-display {
-            font-family: 'Playfair Display', serif;
+            font-family: 'Brandon Grotesque', system-ui, sans-serif;
         }
         .nav-link {
-            display: block;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
             padding: 0.75rem 1rem;
             border-radius: 0.5rem;
             color: #a0a0a0;
@@ -49,7 +48,13 @@
             background-color: #c9a227;
             color: #000000;
         }
+        .nav-link.active svg {
+            stroke: #000000;
+        }
         .quick-action {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
             padding: 0.5rem 1rem;
             background-color: #252525;
             border-radius: 0.5rem;
@@ -84,21 +89,27 @@
     <!-- Sidebar Navigation -->
     <aside class="fixed left-0 top-0 h-full w-64 bg-ch-dark border-r border-gray-800 p-6 flex flex-col">
         <div class="mb-8">
-            <h1 class="font-display text-xl text-ch-gold">Cherry Hills</h1>
+            <h1 class="text-xl font-bold text-ch-gold tracking-wide">Cherry Hills</h1>
             <p class="text-sm text-gray-400">Worship Arts Portal</p>
         </div>
         <nav class="space-y-2 flex-1">
             <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                <span class="mr-2">&#127968;</span> Dashboard
-            </a>
-            <a href="{% url 'chat' %}" class="nav-link {% if 'chat' in request.resolver_match.url_name %}active{% endif %}">
-                <span class="mr-2">&#128172;</span> AI Assistant
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                </svg>
+                Dashboard
             </a>
             <a href="{% url 'interaction_list' %}" class="nav-link {% if 'interaction' in request.resolver_match.url_name %}active{% endif %}">
-                <span class="mr-2">&#128221;</span> Interactions
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Interactions
             </a>
             <a href="{% url 'volunteer_list' %}" class="nav-link {% if 'volunteer' in request.resolver_match.url_name %}active{% endif %}">
-                <span class="mr-2">&#128101;</span> Volunteers
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                Volunteers
             </a>
         </nav>
         <div class="pt-4 border-t border-gray-800">

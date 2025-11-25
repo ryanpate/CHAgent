@@ -23,7 +23,18 @@ from .volunteer_matching import VolunteerMatcher, MatchType
 
 @login_required
 def dashboard(request):
-    """Dashboard view with overview statistics."""
+    """Dashboard view with overview statistics and AI chat interface."""
+    # Get or create session ID from cookie for chat
+    session_id = request.COOKIES.get('chat_session_id')
+    if not session_id:
+        session_id = str(uuid.uuid4())
+
+    # Get chat messages for this session
+    chat_messages = ChatMessage.objects.filter(
+        user=request.user,
+        session_id=session_id
+    ).order_by('created_at')
+
     context = {
         'total_volunteers': Volunteer.objects.count(),
         'total_interactions': Interaction.objects.count(),
@@ -31,35 +42,23 @@ def dashboard(request):
         'top_volunteers': Volunteer.objects.annotate(
             interaction_count=Count('interactions')
         ).order_by('-interaction_count')[:5],
-    }
-    return render(request, 'core/dashboard.html', context)
-
-
-@login_required
-def chat(request):
-    """Main chat interface view."""
-    # Get or create session ID from cookie
-    session_id = request.COOKIES.get('chat_session_id')
-    if not session_id:
-        session_id = str(uuid.uuid4())
-
-    # Get chat messages for this session
-    # Note: Using 'chat_messages' to avoid conflict with Django's messages framework
-    chat_messages = ChatMessage.objects.filter(
-        user=request.user,
-        session_id=session_id
-    ).order_by('created_at')
-
-    response = render(request, 'core/chat.html', {
         'chat_messages': chat_messages,
         'session_id': session_id,
-    })
+    }
+
+    response = render(request, 'core/dashboard.html', context)
 
     # Set session ID cookie if new
     if not request.COOKIES.get('chat_session_id'):
         response.set_cookie('chat_session_id', session_id, max_age=86400 * 7)  # 7 days
 
     return response
+
+
+@login_required
+def chat(request):
+    """Redirect to dashboard where chat is now integrated."""
+    return redirect('dashboard')
 
 
 @login_required
