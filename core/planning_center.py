@@ -918,6 +918,120 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         return result
 
+    def get_song_usage_history(self, song_title: str, limit: int = 10) -> Optional[dict]:
+        """
+        Get the usage history of a song - when it was last played in services.
+
+        Args:
+            song_title: Title of the song to look up.
+            limit: Maximum number of past usages to return.
+
+        Returns:
+            Dict with song info and list of past service dates, or None if not found.
+        """
+        # First find the song
+        search_result = self.search_song_with_suggestions(song_title)
+
+        if not search_result['found'] or not search_result['song']:
+            # Return suggestions if we have them
+            if search_result['suggestions']:
+                return {
+                    'found': False,
+                    'song_title': song_title,
+                    'suggestions': search_result['suggestions'],
+                    'usages': []
+                }
+            return None
+
+        song = search_result['song']
+        song_id = song.get('id')
+        actual_title = song.get('title', song_title)
+
+        # Get song schedule items (past usages)
+        try:
+            # The song_schedules endpoint returns when a song was scheduled
+            schedules_result = self._get(
+                f"/services/v2/songs/{song_id}/song_schedules",
+                params={'order': '-sort_date', 'per_page': limit}
+            )
+            schedules = schedules_result.get('data', [])
+
+            usages = []
+            for sched in schedules:
+                sched_attrs = sched.get('attributes', {})
+                plan_id = sched.get('relationships', {}).get('plan', {}).get('data', {}).get('id')
+                service_type_id = sched.get('relationships', {}).get('service_type', {}).get('data', {}).get('id')
+
+                usage = {
+                    'date': sched_attrs.get('plan_dates') or sched_attrs.get('sort_date', '')[:10],
+                    'plan_id': plan_id,
+                    'service_type_id': service_type_id,
+                    'arrangement_name': sched_attrs.get('arrangement_name'),
+                    'key': sched_attrs.get('key_name')
+                }
+                usages.append(usage)
+
+            return {
+                'found': True,
+                'song_title': actual_title,
+                'song_id': song_id,
+                'author': song.get('author', ''),
+                'usages': usages,
+                'total_times_used': len(usages)
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting song usage history: {e}")
+            # Fall back to searching through recent plans
+            return self._get_song_usage_from_plans(song_id, actual_title, limit)
+
+    def _get_song_usage_from_plans(self, song_id: str, song_title: str, limit: int = 10) -> dict:
+        """
+        Fallback method to find song usage by searching through recent plans.
+
+        Args:
+            song_id: The song ID.
+            song_title: The song title.
+            limit: Maximum results.
+
+        Returns:
+            Dict with usage history.
+        """
+        usages = []
+        plans = self.get_recent_plans(limit=60)
+
+        for plan in plans:
+            service_type_id = plan.get('service_type_id')
+            plan_id = plan.get('id')
+            plan_attrs = plan.get('attributes', {})
+
+            # Get plan items to check for this song
+            items_data, included = self.get_plan_items(service_type_id, plan_id)
+
+            for item in items_data:
+                item_attrs = item.get('attributes', {})
+                if item_attrs.get('item_type') == 'song':
+                    item_title = item_attrs.get('title', '').lower()
+                    if song_title.lower() in item_title or item_title in song_title.lower():
+                        usages.append({
+                            'date': plan_attrs.get('dates') or plan_attrs.get('sort_date', '')[:10],
+                            'plan_id': plan_id,
+                            'service_type_id': service_type_id,
+                            'key': item_attrs.get('key_name')
+                        })
+                        break
+
+            if len(usages) >= limit:
+                break
+
+        return {
+            'found': True,
+            'song_title': song_title,
+            'song_id': song_id,
+            'usages': usages,
+            'total_times_used': len(usages)
+        }
+
     def get_song_details(self, song_id: str) -> dict:
         """
         Get detailed song info including arrangements and attachments.

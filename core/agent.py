@@ -166,6 +166,7 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
     # Patterns for song/setlist queries
     song_query_patterns = {
         'setlist': r'(setlist|song\s*set|what\s+songs?\s+(did|do|are|were|will)|songs?\s+(from|for|on|we\s+(play|sang|did))|(last|this|next)\s+sunday|worship\s+set|played\s+on|was\s+played|last\s+played|(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2})',
+        'song_history': r'when\s+(was|did)\s+(this\s+)?song\s+(last\s+)?(used|played|performed|scheduled)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|played)',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
         'lyrics': r'lyrics?\s+(for|to)|words?\s+(for|to)',
         'song_search': r'(find|search|look\s*up|get|show)\s+(the\s+)?(song|music)',
@@ -191,6 +192,9 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
             r"'([^']+)'",  # Single-quoted title
             r'(?:chord\s*chart|chords?|lyrics?|song)\s+(?:for|to)\s+["\']?([^"\'?]+)["\']?',
             r'(?:find|search|look\s*up|get)\s+(?:the\s+)?(?:song\s+)?["\']?([^"\'?]+)["\']?',
+            # Song history patterns
+            r'when\s+(?:was|did)\s+["\']?([^"\'?]+?)["\']?\s+(?:last\s+)?(?:used|played|performed|scheduled)',
+            r'(?:history|usage)\s+(?:for|of)\s+["\']?([^"\'?]+)["\']?',
         ]
 
         for pattern in title_patterns:
@@ -395,6 +399,57 @@ def format_song_suggestions(search_query: str, suggestions: list) -> str:
     parts.append("ASK THE USER: Please ask the user if they meant one of these songs, or provide more details about the song they're looking for.")
     parts.append("[END SONG SUGGESTIONS]\n")
 
+    return '\n'.join(parts)
+
+
+def format_song_usage_history(usage_data: dict) -> str:
+    """
+    Format song usage history into a readable string for the AI context.
+
+    Args:
+        usage_data: Dict with song info and usage history.
+
+    Returns:
+        Formatted string with song usage history.
+    """
+    if not usage_data:
+        return "\n[SONG HISTORY: Unable to retrieve song usage history.]\n"
+
+    if not usage_data.get('found'):
+        # Song not found - show suggestions
+        suggestions = usage_data.get('suggestions', [])
+        if suggestions:
+            return format_song_suggestions(usage_data.get('song_title', 'Unknown'), suggestions)
+        return f"\n[SONG HISTORY: No song found matching '{usage_data.get('song_title', 'Unknown')}'.]\n"
+
+    parts = [f"\n[SONG USAGE HISTORY]"]
+    parts.append(f"Song: {usage_data.get('song_title', 'Unknown')}")
+
+    if usage_data.get('author'):
+        parts.append(f"Author: {usage_data.get('author')}")
+
+    usages = usage_data.get('usages', [])
+    if usages:
+        parts.append(f"\nService History ({len(usages)} recent uses):")
+        for i, usage in enumerate(usages, 1):
+            date = usage.get('date', 'Unknown date')
+            key = usage.get('key', '')
+            arr_name = usage.get('arrangement_name', '')
+
+            usage_info = f"  {i}. {date}"
+            if key:
+                usage_info += f" (Key: {key})"
+            if arr_name:
+                usage_info += f" - {arr_name}"
+            parts.append(usage_info)
+
+        # Highlight most recent
+        most_recent = usages[0].get('date', 'Unknown')
+        parts.append(f"\nMost recently used: {most_recent}")
+    else:
+        parts.append("\nNo recent service history found for this song.")
+
+    parts.append("[END SONG HISTORY]\n")
     return '\n'.join(parts)
 
 
@@ -972,6 +1027,23 @@ def query_agent(question: str, user, session_id: str) -> str:
                         parts.append("\nAsk about a specific date to see the song set.")
                         parts.append("[END RECENT PLANS]\n")
                         song_data_context = '\n'.join(parts)
+
+            elif song_query_type == 'song_history':
+                # Looking for when a song was last used in services
+                # Try to get the song title from context or previous messages
+                song_title = song_value
+                if not song_title:
+                    # Check if we can extract a song name from the question
+                    # This handles cases like "when was this song last used"
+                    # where "this song" refers to a previous song in the conversation
+                    song_data_context = "\n[SONG HISTORY: Please specify which song you want to look up the service history for.]\n"
+                else:
+                    usage_history = services_api.get_song_usage_history(song_title)
+                    if usage_history:
+                        song_data_context = format_song_usage_history(usage_history)
+                        logger.info(f"Got usage history for '{song_title}': {usage_history.get('total_times_used', 0)} uses")
+                    else:
+                        song_data_context = f"\n[SONG HISTORY: Could not find song '{song_title}' in the Planning Center library.]\n"
 
             elif song_query_type in ['chord_chart', 'lyrics', 'song_search', 'song_info']:
                 # Looking for song info or attachments - use fuzzy search with suggestions
