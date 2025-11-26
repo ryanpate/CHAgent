@@ -26,3 +26,6 @@ whitenoise>=6.6.0
 
 # HTMX Integration
 django-htmx>=1.17.0
+
+# PDF Parsing (for chord chart extraction)
+pypdf>=4.0.0

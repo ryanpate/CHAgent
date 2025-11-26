@@ -913,16 +913,17 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         return attachments
 
-    def fetch_attachment_content(self, attachment_url: str, content_type: str = None, max_size: int = 500000) -> Optional[str]:
+    def fetch_attachment_content(self, attachment_url: str, content_type: str = None, filename: str = None, max_size: int = 2000000) -> Optional[str]:
         """
         Fetch the text content of an attachment from its URL.
 
-        Only fetches text-based content types to avoid downloading large binary files.
+        Supports text files and PDF extraction.
 
         Args:
             attachment_url: The URL to download from.
             content_type: The content type of the file.
-            max_size: Maximum file size to download (default 500KB).
+            filename: The filename (used to detect file type).
+            max_size: Maximum file size to download (default 2MB for PDFs).
 
         Returns:
             Text content of the file, or None if not fetchable.
@@ -942,25 +943,35 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         # File extensions we can read as text (for chord charts, lyrics)
         text_extensions = ['.txt', '.cho', '.chopro', '.chordpro', '.onsong', '.pro']
 
-        # Check if this is a text file we can read
+        # Check file type
+        url_lower = attachment_url.lower()
+        filename_lower = (filename or '').lower()
+
+        is_pdf = (
+            (content_type and 'pdf' in content_type.lower()) or
+            filename_lower.endswith('.pdf') or
+            url_lower.endswith('.pdf') or
+            '.pdf?' in url_lower
+        )
+
         is_text = False
-        if content_type and any(ct in content_type.lower() for ct in text_content_types):
-            is_text = True
-        elif attachment_url:
-            url_lower = attachment_url.lower()
-            if any(url_lower.endswith(ext) or f'{ext}?' in url_lower for ext in text_extensions):
+        if not is_pdf:
+            if content_type and any(ct in content_type.lower() for ct in text_content_types):
+                is_text = True
+            elif any(url_lower.endswith(ext) or f'{ext}?' in url_lower for ext in text_extensions):
+                is_text = True
+            elif any(filename_lower.endswith(ext) for ext in text_extensions):
                 is_text = True
 
-        if not is_text:
-            logger.debug(f"Skipping non-text attachment: {content_type}")
+        if not is_text and not is_pdf:
+            logger.debug(f"Skipping unsupported attachment type: {content_type} / {filename}")
             return None
 
         try:
             response = requests.get(
                 attachment_url,
                 auth=(self.app_id, self.secret),
-                timeout=30,
-                stream=True
+                timeout=30
             )
             response.raise_for_status()
 
@@ -970,12 +981,50 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 logger.warning(f"Attachment too large: {content_length} bytes")
                 return None
 
-            # Read content with size limit
-            content = response.text[:max_size]
-            return content
+            if is_pdf:
+                return self._extract_pdf_text(response.content)
+            else:
+                return response.text[:max_size]
 
         except requests.RequestException as e:
             logger.error(f"Error fetching attachment: {e}")
+            return None
+
+    def _extract_pdf_text(self, pdf_content: bytes) -> Optional[str]:
+        """
+        Extract text content from a PDF file.
+
+        Args:
+            pdf_content: Raw PDF bytes.
+
+        Returns:
+            Extracted text or None if extraction fails.
+        """
+        try:
+            from pypdf import PdfReader
+            from io import BytesIO
+
+            reader = PdfReader(BytesIO(pdf_content))
+            text_parts = []
+
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+
+            if text_parts:
+                full_text = '\n\n'.join(text_parts)
+                logger.info(f"Extracted {len(full_text)} characters from PDF ({len(reader.pages)} pages)")
+                return full_text
+            else:
+                logger.warning("PDF contained no extractable text (may be image-based)")
+                return None
+
+        except ImportError:
+            logger.warning("pypdf not installed - cannot extract PDF text")
+            return None
+        except Exception as e:
+            logger.error(f"Error extracting PDF text: {e}")
             return None
 
     def get_song_with_attachments(self, song_title: str, fetch_content: bool = True) -> Optional[dict]:
@@ -1025,19 +1074,21 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             for attach in all_attachments:
                 url = attach.get('url')
                 content_type = attach.get('content_type')
-                filename = attach.get('filename', '').lower()
+                filename = attach.get('filename', '')
+                filename_lower = filename.lower()
 
-                # Try to fetch content for chord charts and lyrics files
+                # Try to fetch content for chord charts, lyrics files, and PDFs
                 if url and (
-                    'chord' in filename or
-                    'lyric' in filename or
-                    'chart' in filename or
-                    filename.endswith(('.txt', '.cho', '.chopro', '.chordpro', '.onsong', '.pro'))
+                    'chord' in filename_lower or
+                    'lyric' in filename_lower or
+                    'chart' in filename_lower or
+                    filename_lower.endswith('.pdf') or
+                    filename_lower.endswith(('.txt', '.cho', '.chopro', '.chordpro', '.onsong', '.pro'))
                 ):
-                    content = self.fetch_attachment_content(url, content_type)
+                    content = self.fetch_attachment_content(url, content_type, filename)
                     if content:
                         attach['text_content'] = content
-                        logger.info(f"Fetched content from attachment: {attach.get('filename')}")
+                        logger.info(f"Fetched content from attachment: {filename}")
 
         details['all_attachments'] = all_attachments
         return details
