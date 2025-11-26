@@ -370,19 +370,35 @@ def format_song_details(song: dict) -> str:
     return '\n'.join(parts)
 
 
-def format_song_suggestions(search_query: str, suggestions: list) -> str:
+def format_song_suggestions(search_query: str, suggestions: list, conversation_context=None) -> str:
     """
     Format song search suggestions into a readable string for the AI context.
 
     Args:
         search_query: The song title that was searched for.
         suggestions: List of suggestion dicts with 'title', 'author', and 'score'.
+        conversation_context: Optional ConversationContext to store suggestions for later selection.
 
     Returns:
         Formatted string with suggestions for the AI to present to the user.
     """
     if not suggestions:
         return f"\n[SONG SEARCH: No songs found matching '{search_query}'. The song may not be in the Planning Center library.]\n"
+
+    # Store suggestions in conversation context for later selection
+    if conversation_context is not None:
+        # Store the suggestions with their IDs for later retrieval
+        stored_suggestions = []
+        for s in suggestions[:5]:
+            stored_suggestions.append({
+                'id': s.get('id'),
+                'title': s.get('title', 'Unknown'),
+                'author': s.get('author', ''),
+                'score': s.get('score', 0)
+            })
+        conversation_context.set_pending_song_suggestions(stored_suggestions)
+        conversation_context.save()
+        logger.info(f"Stored {len(stored_suggestions)} pending song suggestions in context")
 
     parts = [f"\n[SONG SEARCH: No exact match found for '{search_query}']"]
     parts.append("Similar songs found in the Planning Center library:")
@@ -400,18 +416,19 @@ def format_song_suggestions(search_query: str, suggestions: list) -> str:
         parts.append(song_info)
 
     parts.append("")
-    parts.append("ASK THE USER: Please ask the user if they meant one of these songs, or provide more details about the song they're looking for.")
+    parts.append("ASK THE USER: Present these options to the user as a numbered list and ask which song they meant. They can respond with just the number (e.g., '1' or '2').")
     parts.append("[END SONG SUGGESTIONS]\n")
 
     return '\n'.join(parts)
 
 
-def format_song_usage_history(usage_data: dict) -> str:
+def format_song_usage_history(usage_data: dict, conversation_context=None) -> str:
     """
     Format song usage history into a readable string for the AI context.
 
     Args:
         usage_data: Dict with song info and usage history.
+        conversation_context: Optional ConversationContext to store suggestions for later selection.
 
     Returns:
         Formatted string with song usage history.
@@ -423,7 +440,7 @@ def format_song_usage_history(usage_data: dict) -> str:
         # Song not found - show suggestions
         suggestions = usage_data.get('suggestions', [])
         if suggestions:
-            return format_song_suggestions(usage_data.get('song_title', 'Unknown'), suggestions)
+            return format_song_suggestions(usage_data.get('song_title', 'Unknown'), suggestions, conversation_context)
         return f"\n[SONG HISTORY: No song found matching '{usage_data.get('song_title', 'Unknown')}'.]\n"
 
     parts = [f"\n[SONG USAGE HISTORY]"]
@@ -1139,6 +1156,116 @@ def has_contextual_date_reference(message: str) -> bool:
     return False
 
 
+def detect_song_selection(message: str, pending_suggestions: list) -> Optional[int]:
+    """
+    Detect if a user message is selecting a song from pending suggestions.
+
+    Args:
+        message: The user's message.
+        pending_suggestions: List of pending song suggestions from context.
+
+    Returns:
+        Index (0-based) of the selected song, or None if not a selection.
+    """
+    if not pending_suggestions:
+        return None
+
+    message_lower = message.lower().strip()
+    num_options = len(pending_suggestions)
+
+    # Pattern 1: Just a number (e.g., "1", "2", "3")
+    if message_lower.isdigit():
+        selection = int(message_lower)
+        if 1 <= selection <= num_options:
+            return selection - 1  # Convert to 0-based index
+        return None
+
+    # Pattern 2: Ordinal words (e.g., "first", "second", "third")
+    ordinal_map = {
+        'first': 1, 'one': 1, '1st': 1,
+        'second': 2, 'two': 2, '2nd': 2,
+        'third': 3, 'three': 3, '3rd': 3,
+        'fourth': 4, 'four': 4, '4th': 4,
+        'fifth': 5, 'five': 5, '5th': 5,
+    }
+
+    for ordinal, num in ordinal_map.items():
+        if ordinal in message_lower and num <= num_options:
+            return num - 1
+
+    # Pattern 3: "option X", "number X", "choice X"
+    option_patterns = [
+        r'(?:option|number|choice|#)\s*(\d+)',
+        r'(?:the\s+)?(\d+)(?:st|nd|rd|th)?\s*(?:one|option|song)?',
+    ]
+
+    for pattern in option_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            selection = int(match.group(1))
+            if 1 <= selection <= num_options:
+                return selection - 1
+
+    # Pattern 4: Song title match - user might type part of the title
+    for i, suggestion in enumerate(pending_suggestions):
+        title = suggestion.get('title', '').lower()
+        # Check if user typed a significant portion of the title
+        if title and len(message_lower) >= 3:
+            if message_lower in title or title.startswith(message_lower):
+                return i
+
+    return None
+
+
+def handle_song_selection(selection_index: int, pending_suggestions: list, query_type: str = 'song_info') -> str:
+    """
+    Handle a song selection by fetching the full details of the selected song.
+
+    Args:
+        selection_index: 0-based index of the selected song.
+        pending_suggestions: List of pending song suggestions.
+        query_type: Type of data requested (lyrics, chord_chart, song_info, song_history).
+
+    Returns:
+        Formatted string with the song details.
+    """
+    if selection_index < 0 or selection_index >= len(pending_suggestions):
+        return "\n[SONG SELECTION: Invalid selection. Please choose a number from the list.]\n"
+
+    selected_song = pending_suggestions[selection_index]
+    song_title = selected_song.get('title', '')
+    song_id = selected_song.get('id')
+
+    logger.info(f"User selected song: '{song_title}' (index {selection_index}, id {song_id})")
+
+    from .planning_center import PlanningCenterServicesAPI
+    services_api = PlanningCenterServicesAPI()
+
+    if not services_api.is_configured:
+        return "\n[SONG SELECTION: Planning Center is not configured.]\n"
+
+    if query_type == 'song_history':
+        # User wanted to know when the song was played
+        usage_history = services_api.get_song_usage_history(song_title)
+        if usage_history:
+            return format_song_usage_history(usage_history)
+        else:
+            return f"\n[SONG HISTORY: Could not find usage history for '{song_title}'.]\n"
+    else:
+        # Get full song details with attachments
+        if song_id:
+            # Use the song ID directly for more accurate lookup
+            song_details = services_api.get_song_details(song_id)
+        else:
+            # Fall back to title search
+            song_details = services_api.get_song_with_attachments(song_title)
+
+        if song_details:
+            return format_song_details(song_details)
+        else:
+            return f"\n[SONG: Could not retrieve details for '{song_title}'.]\n"
+
+
 def query_agent(question: str, user, session_id: str) -> str:
     """
     Answer a question using RAG (Retrieval Augmented Generation):
@@ -1165,6 +1292,87 @@ def query_agent(question: str, user, session_id: str) -> str:
     logger.info(f"Conversation context: {conversation_context.message_count} messages, "
                 f"{len(conversation_context.shown_interaction_ids or [])} shown interactions, "
                 f"{len(conversation_context.discussed_volunteer_ids or [])} discussed volunteers")
+
+    # Check if user is selecting from pending song suggestions
+    pending_suggestions = conversation_context.get_pending_song_suggestions()
+    if pending_suggestions:
+        selection_index = detect_song_selection(question, pending_suggestions)
+        if selection_index is not None:
+            logger.info(f"Detected song selection: index {selection_index}")
+
+            # Determine what type of query this was originally (default to song_info)
+            # We can infer from the most recent assistant message mentioning songs
+            query_type = 'song_info'
+            recent_messages = ChatMessage.objects.filter(
+                user=user,
+                session_id=session_id,
+                role='assistant'
+            ).order_by('-created_at')[:3]
+
+            for msg in recent_messages:
+                msg_lower = msg.content.lower()
+                if 'when was' in msg_lower or 'played' in msg_lower or 'history' in msg_lower:
+                    query_type = 'song_history'
+                    break
+                elif 'lyrics' in msg_lower:
+                    query_type = 'lyrics'
+                    break
+                elif 'chord' in msg_lower:
+                    query_type = 'chord_chart'
+                    break
+
+            # Handle the selection and get the song data
+            song_data_context = handle_song_selection(selection_index, pending_suggestions, query_type)
+
+            # Clear the pending suggestions
+            conversation_context.clear_pending_song_suggestions()
+            conversation_context.save()
+
+            # Build a response using the selected song's data
+            selected_song = pending_suggestions[selection_index]
+            selected_title = selected_song.get('title', 'Unknown')
+
+            # Save the user's selection to chat history
+            ChatMessage.objects.create(
+                user=user,
+                session_id=session_id,
+                role='user',
+                content=question
+            )
+
+            # Query Claude with the selected song data
+            user_name = user.display_name if user.display_name else user.username
+            selection_messages = [{"role": "user", "content": f"I selected song number {selection_index + 1}: \"{selected_title}\". Please provide the information about this song."}]
+
+            try:
+                response = client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=2000,
+                    system=SYSTEM_PROMPT.format(
+                        context=song_data_context,
+                        current_date=datetime.now().strftime('%Y-%m-%d'),
+                        user_name=user_name
+                    ),
+                    messages=selection_messages
+                )
+                answer = response.content[0].text
+            except Exception as e:
+                logger.error(f"Error querying Claude for song selection: {e}")
+                answer = f"I found the song \"{selected_title}\" but encountered an error retrieving the details. Please try again."
+
+            # Save assistant response to chat history
+            ChatMessage.objects.create(
+                user=user,
+                session_id=session_id,
+                role='assistant',
+                content=answer
+            )
+
+            # Update conversation context
+            conversation_context.increment_message_count(2)
+            conversation_context.save()
+
+            return answer
 
     # Check if this is a PCO data query (contact info, email, phone, etc.)
     pco_query, pco_query_type, pco_person_name = is_pco_data_query(question)
@@ -1264,7 +1472,7 @@ def query_agent(question: str, user, session_id: str) -> str:
                 else:
                     usage_history = services_api.get_song_usage_history(song_title)
                     if usage_history:
-                        song_data_context = format_song_usage_history(usage_history)
+                        song_data_context = format_song_usage_history(usage_history, conversation_context)
                         logger.info(f"Got usage history for '{song_title}': {usage_history.get('total_times_used', 0)} uses")
                     else:
                         song_data_context = f"\n[SONG HISTORY: Could not find song '{song_title}' in the Planning Center library.]\n"
@@ -1278,8 +1486,8 @@ def query_agent(question: str, user, session_id: str) -> str:
                         song_data_context = format_song_details(search_result['song'])
                         logger.info(f"Found song '{search_result['song'].get('title')}' with {len(search_result['song'].get('all_attachments', []))} attachments")
                     elif search_result['suggestions']:
-                        # No exact match - provide suggestions for AI to ask user
-                        song_data_context = format_song_suggestions(song_value, search_result['suggestions'])
+                        # No exact match - provide suggestions for AI to ask user and store for selection
+                        song_data_context = format_song_suggestions(song_value, search_result['suggestions'], conversation_context)
                         logger.info(f"No match for '{song_value}', providing {len(search_result['suggestions'])} suggestions")
                     else:
                         song_data_context = f"\n[SONG: No songs found matching '{song_value}'. The song may not be in the Planning Center library.]\n"
