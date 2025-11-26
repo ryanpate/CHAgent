@@ -1481,6 +1481,45 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         details['all_attachments'] = all_attachments
         return details
 
+    def get_plans_for_date_range(self, include_future: bool = True, include_past: bool = True, limit: int = 30) -> list:
+        """
+        Get plans across all service types, including both past and/or future plans.
+
+        Args:
+            include_future: Include future plans.
+            include_past: Include past plans.
+            limit: Maximum number of plans per direction.
+
+        Returns:
+            List of plan records with service type info.
+        """
+        service_types = self.get_service_types()
+        all_plans = []
+
+        for st in service_types:
+            st_id = st.get('id')
+            st_name = st.get('attributes', {}).get('name', 'Unknown')
+
+            # Get past plans if requested
+            if include_past:
+                past_plans = self.get_plans(st_id, past_only=True, limit=limit)
+                for plan in past_plans:
+                    plan['service_type_name'] = st_name
+                    plan['service_type_id'] = st_id
+                    all_plans.append(plan)
+
+            # Get future plans if requested
+            if include_future:
+                future_plans = self.get_plans(st_id, future_only=True, limit=limit)
+                for plan in future_plans:
+                    plan['service_type_name'] = st_name
+                    plan['service_type_id'] = st_id
+                    all_plans.append(plan)
+
+        # Sort by date
+        all_plans.sort(key=lambda p: p.get('attributes', {}).get('sort_date', ''), reverse=True)
+        return all_plans
+
     def find_plan_by_date(self, date_str: str) -> Optional[dict]:
         """
         Find a plan by date string.
@@ -1551,14 +1590,21 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         target_str = target_date.isoformat()
         logger.info(f"Looking for plan on {target_str}")
 
-        # Search through recent plans (increased limit)
-        plans = self.get_recent_plans(limit=60)
+        # Determine if we need to search past, future, or both
+        is_future = target_date >= today
+        is_past = target_date <= today
+
+        # Search through plans (both past and future to handle edge cases)
+        plans = self.get_plans_for_date_range(include_future=True, include_past=True, limit=30)
+        logger.info(f"Searching through {len(plans)} plans for date {target_str}")
 
         for plan in plans:
             plan_date = plan.get('attributes', {}).get('sort_date', '')[:10]
             if plan_date == target_str:
                 service_type_id = plan.get('service_type_id')
                 plan_id = plan.get('id')
+                logger.info(f"Found matching plan: {plan_id} on {plan_date}")
                 return self.get_plan_details(service_type_id, plan_id)
 
+        logger.info(f"No plan found for date {target_str}")
         return None
