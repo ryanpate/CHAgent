@@ -29,3 +29,8 @@ django-htmx>=1.17.0
 
 # PDF Parsing (for chord chart extraction)
 pypdf>=4.0.0
+
+# OCR for image-based PDFs (scanned chord charts)
+pytesseract>=0.3.10
+pdf2image>=1.16.0
+Pillow>=10.0.0
