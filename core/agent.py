@@ -165,7 +165,7 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
 
     # Patterns for song/setlist queries
     song_query_patterns = {
-        'setlist': r'(setlist|song\s*set|what\s+songs?\s+(did|do|are|were|will)|songs?\s+(from|for|on|we\s+(play|sang|did))|(last|this|next)\s+sunday|worship\s+set)',
+        'setlist': r'(setlist|song\s*set|what\s+songs?\s+(did|do|are|were|will)|songs?\s+(from|for|on|we\s+(play|sang|did))|(last|this|next)\s+sunday|worship\s+set|played\s+on|was\s+played|last\s+played|(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2})',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
         'lyrics': r'lyrics?\s+(for|to)|words?\s+(for|to)',
         'song_search': r'(find|search|look\s*up|get|show)\s+(the\s+)?(song|music)',
@@ -213,14 +213,14 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
         if query_type == 'setlist' and not extracted_value:
             date_patterns = [
                 r'(last\s+sunday|this\s+sunday|next\s+sunday|yesterday|today)',
-                r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}',
+                r'(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?',
                 r'(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
                 r'(\d{1,2}-\d{1,2}(?:-\d{2,4})?)',
             ]
             for pattern in date_patterns:
                 match = re.search(pattern, message_lower)
                 if match:
-                    extracted_value = match.group(1)
+                    extracted_value = match.group(0).replace('on ', '')  # Use full match, remove leading "on "
                     break
 
     return is_song_query, query_type, extracted_value
@@ -359,6 +359,42 @@ def format_song_details(song: dict) -> str:
         parts.append("\nNo attachments found for this song.")
 
     parts.append("[END SONG DATA]\n")
+    return '\n'.join(parts)
+
+
+def format_song_suggestions(search_query: str, suggestions: list) -> str:
+    """
+    Format song search suggestions into a readable string for the AI context.
+
+    Args:
+        search_query: The song title that was searched for.
+        suggestions: List of suggestion dicts with 'title', 'author', and 'score'.
+
+    Returns:
+        Formatted string with suggestions for the AI to present to the user.
+    """
+    if not suggestions:
+        return f"\n[SONG SEARCH: No songs found matching '{search_query}'. The song may not be in the Planning Center library.]\n"
+
+    parts = [f"\n[SONG SEARCH: No exact match found for '{search_query}']"]
+    parts.append("Similar songs found in the Planning Center library:")
+
+    for i, s in enumerate(suggestions[:5], 1):
+        title = s.get('title', 'Unknown')
+        author = s.get('author', '')
+        score = s.get('score', 0)
+
+        confidence = "high" if score >= 0.7 else "medium" if score >= 0.5 else "low"
+        song_info = f"  {i}. \"{title}\""
+        if author:
+            song_info += f" by {author}"
+        song_info += f" ({confidence} confidence)"
+        parts.append(song_info)
+
+    parts.append("")
+    parts.append("ASK THE USER: Please ask the user if they meant one of these songs, or provide more details about the song they're looking for.")
+    parts.append("[END SONG SUGGESTIONS]\n")
+
     return '\n'.join(parts)
 
 
@@ -938,14 +974,19 @@ def query_agent(question: str, user, session_id: str) -> str:
                         song_data_context = '\n'.join(parts)
 
             elif song_query_type in ['chord_chart', 'lyrics', 'song_search', 'song_info']:
-                # Looking for song info or attachments
+                # Looking for song info or attachments - use fuzzy search with suggestions
                 if song_value:
-                    song_details = services_api.get_song_with_attachments(song_value)
-                    if song_details:
-                        song_data_context = format_song_details(song_details)
-                        logger.info(f"Found song '{song_details.get('title')}' with {len(song_details.get('all_attachments', []))} attachments")
+                    search_result = services_api.search_song_with_suggestions(song_value)
+
+                    if search_result['found'] and search_result['song']:
+                        song_data_context = format_song_details(search_result['song'])
+                        logger.info(f"Found song '{search_result['song'].get('title')}' with {len(search_result['song'].get('all_attachments', []))} attachments")
+                    elif search_result['suggestions']:
+                        # No exact match - provide suggestions for AI to ask user
+                        song_data_context = format_song_suggestions(song_value, search_result['suggestions'])
+                        logger.info(f"No match for '{song_value}', providing {len(search_result['suggestions'])} suggestions")
                     else:
-                        song_data_context = f"\n[SONG: No song found matching '{song_value}'. Check the spelling or try a different search term.]\n"
+                        song_data_context = f"\n[SONG: No songs found matching '{song_value}'. The song may not be in the Planning Center library.]\n"
                 else:
                     song_data_context = "\n[SONG: Please specify a song title to search for.]\n"
         else:
