@@ -165,7 +165,7 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
 
     # Patterns for song/setlist queries
     song_query_patterns = {
-        'setlist': r'(setlist|song\s*set|what\s+songs?\s+(did|do|are|were|will)|songs?\s+(from|for|on|we\s+(play|sang|did))|(last|this|next)\s+sunday|worship\s+set)',
+        'setlist': r'(setlist|song\s*set|what\s+songs?\s+(did|do|are|were|will)|songs?\s+(from|for|on|we\s+(play|sang|did))|(last|this|next)\s+sunday|worship\s+set|played\s+on|was\s+played|last\s+played|(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2})',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
         'lyrics': r'lyrics?\s+(for|to)|words?\s+(for|to)',
         'song_search': r'(find|search|look\s*up|get|show)\s+(the\s+)?(song|music)',
@@ -213,14 +213,14 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
         if query_type == 'setlist' and not extracted_value:
             date_patterns = [
                 r'(last\s+sunday|this\s+sunday|next\s+sunday|yesterday|today)',
-                r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}',
+                r'(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?',
                 r'(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
                 r'(\d{1,2}-\d{1,2}(?:-\d{2,4})?)',
             ]
             for pattern in date_patterns:
                 match = re.search(pattern, message_lower)
                 if match:
-                    extracted_value = match.group(1)
+                    extracted_value = match.group(0).replace('on ', '')  # Use full match, remove leading "on "
                     break
 
     return is_song_query, query_type, extracted_value
