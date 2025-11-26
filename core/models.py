@@ -121,3 +121,94 @@ class ChatMessage(models.Model):
 
     def __str__(self):
         return f"{self.role}: {self.content[:50]}..."
+
+
+class ConversationContext(models.Model):
+    """
+    Tracks conversation state and context across multiple messages.
+
+    This model enables:
+    - Deduplication of shown interactions (avoid repeating the same info)
+    - Tracking which volunteers are being discussed
+    - Maintaining a running summary for long conversations
+    - Better context-aware RAG retrieval
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='conversation_contexts'
+    )
+    session_id = models.CharField(max_length=100, db_index=True, unique=True)
+
+    # Track which interactions have already been shown to avoid repetition
+    shown_interaction_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of Interaction IDs already shown in this conversation"
+    )
+
+    # Track which volunteers are being discussed for context-aware retrieval
+    discussed_volunteer_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of Volunteer IDs mentioned/discussed in this conversation"
+    )
+
+    # Running summary of the conversation for long conversations
+    conversation_summary = models.TextField(
+        blank=True,
+        help_text="AI-generated summary of conversation so far (for long conversations)"
+    )
+
+    # Current topic being discussed
+    current_topic = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="The current topic or volunteer being discussed"
+    )
+
+    # Message count for determining when to summarize
+    message_count = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"Context for session {self.session_id[:8]}... ({self.message_count} messages)"
+
+    def add_shown_interactions(self, interaction_ids: list):
+        """Add interaction IDs to the shown list."""
+        if not self.shown_interaction_ids:
+            self.shown_interaction_ids = []
+        # Use set to avoid duplicates
+        current = set(self.shown_interaction_ids)
+        current.update(interaction_ids)
+        self.shown_interaction_ids = list(current)
+
+    def add_discussed_volunteers(self, volunteer_ids: list):
+        """Add volunteer IDs to the discussed list."""
+        if not self.discussed_volunteer_ids:
+            self.discussed_volunteer_ids = []
+        # Use set to avoid duplicates
+        current = set(self.discussed_volunteer_ids)
+        current.update(volunteer_ids)
+        self.discussed_volunteer_ids = list(current)
+
+    def increment_message_count(self, count: int = 1):
+        """Increment the message count."""
+        self.message_count += count
+
+    def should_summarize(self) -> bool:
+        """Check if the conversation is long enough to warrant summarization."""
+        return self.message_count >= 15  # Summarize after 15 messages
+
+    def clear_context(self):
+        """Clear the conversation context for a fresh start."""
+        self.shown_interaction_ids = []
+        self.discussed_volunteer_ids = []
+        self.conversation_summary = ""
+        self.current_topic = ""
+        self.message_count = 0
