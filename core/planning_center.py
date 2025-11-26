@@ -1488,36 +1488,72 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         Args:
             include_future: Include future plans.
             include_past: Include past plans.
-            limit: Maximum number of plans per direction.
+            limit: Maximum number of plans per service type to fetch.
 
         Returns:
             List of plan records with service type info.
         """
+        from datetime import datetime
+        today = datetime.now().date()
+
         service_types = self.get_service_types()
         all_plans = []
+        seen_plan_ids = set()  # Avoid duplicates
 
         for st in service_types:
             st_id = st.get('id')
             st_name = st.get('attributes', {}).get('name', 'Unknown')
 
-            # Get past plans if requested
+            # Fetch past plans (descending order - most recent first)
             if include_past:
                 past_plans = self.get_plans(st_id, past_only=True, limit=limit)
+                logger.info(f"Fetched {len(past_plans)} past plans for service type '{st_name}'")
                 for plan in past_plans:
-                    plan['service_type_name'] = st_name
-                    plan['service_type_id'] = st_id
-                    all_plans.append(plan)
+                    plan_id = plan.get('id')
+                    if plan_id not in seen_plan_ids:
+                        plan['service_type_name'] = st_name
+                        plan['service_type_id'] = st_id
+                        all_plans.append(plan)
+                        seen_plan_ids.add(plan_id)
 
-            # Get future plans if requested
+            # Fetch future plans separately to ensure we get them
             if include_future:
+                # Try both: PCO's filter and also a no-filter approach
                 future_plans = self.get_plans(st_id, future_only=True, limit=limit)
+                logger.info(f"Fetched {len(future_plans)} future plans for service type '{st_name}'")
+
+                if not future_plans:
+                    # Fallback: fetch all plans and filter locally for future dates
+                    # This handles cases where PCO's filter might not work as expected
+                    logger.info(f"No future plans from filter, trying unfiltered fetch...")
+                    all_st_plans = self._get(
+                        f"/services/v2/service_types/{st_id}/plans",
+                        params={'per_page': 50, 'order': 'sort_date'}  # Ascending order to get upcoming first
+                    ).get('data', [])
+
+                    for plan in all_st_plans:
+                        plan_date_str = plan.get('attributes', {}).get('sort_date', '')[:10]
+                        if plan_date_str:
+                            try:
+                                plan_date = datetime.strptime(plan_date_str, '%Y-%m-%d').date()
+                                if plan_date >= today:
+                                    future_plans.append(plan)
+                            except ValueError:
+                                pass
+
+                    logger.info(f"Found {len(future_plans)} future plans from unfiltered fetch")
+
                 for plan in future_plans:
-                    plan['service_type_name'] = st_name
-                    plan['service_type_id'] = st_id
-                    all_plans.append(plan)
+                    plan_id = plan.get('id')
+                    if plan_id not in seen_plan_ids:
+                        plan['service_type_name'] = st_name
+                        plan['service_type_id'] = st_id
+                        all_plans.append(plan)
+                        seen_plan_ids.add(plan_id)
 
         # Sort by date
         all_plans.sort(key=lambda p: p.get('attributes', {}).get('sort_date', ''), reverse=True)
+        logger.info(f"Total plans: {len(all_plans)} (include_future={include_future}, include_past={include_past})")
         return all_plans
 
     def find_plan_by_date(self, date_str: str) -> Optional[dict]:
