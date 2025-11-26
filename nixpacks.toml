@@ -1,12 +1,13 @@
 # Nixpacks configuration for Railway
 # See: https://nixpacks.com/docs/configuration/file
 
+# System packages needed for OCR (scanned PDF chord charts)
+[phases.setup]
+nixPkgs = ["tesseract", "poppler_utils"]
+
 [phases.build]
 # Only run collectstatic during build - it doesn't need DATABASE_URL
 cmds = ["python manage.py collectstatic --noinput"]
-
-[phases.setup]
-# Don't run any setup commands that need DATABASE_URL
 
 # Start command is defined in railway.toml
 # Migrations run at runtime when DATABASE_URL is available

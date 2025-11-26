@@ -994,37 +994,86 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         """
         Extract text content from a PDF file.
 
+        First tries direct text extraction with pypdf. If that fails (image-based PDF),
+        falls back to OCR using pytesseract.
+
         Args:
             pdf_content: Raw PDF bytes.
 
         Returns:
             Extracted text or None if extraction fails.
         """
+        from io import BytesIO
+
+        # First try direct text extraction with pypdf
         try:
             from pypdf import PdfReader
-            from io import BytesIO
 
             reader = PdfReader(BytesIO(pdf_content))
             text_parts = []
 
             for page in reader.pages:
                 page_text = page.extract_text()
-                if page_text:
+                if page_text and page_text.strip():
                     text_parts.append(page_text)
 
             if text_parts:
                 full_text = '\n\n'.join(text_parts)
-                logger.info(f"Extracted {len(full_text)} characters from PDF ({len(reader.pages)} pages)")
-                return full_text
-            else:
-                logger.warning("PDF contained no extractable text (may be image-based)")
-                return None
+                # Check if we got meaningful text (not just whitespace/symbols)
+                if len(full_text.strip()) > 50:
+                    logger.info(f"Extracted {len(full_text)} characters from PDF ({len(reader.pages)} pages)")
+                    return full_text
+
+            # If we get here, text extraction didn't work well - try OCR
+            logger.info("PDF text extraction yielded little content, attempting OCR...")
 
         except ImportError:
-            logger.warning("pypdf not installed - cannot extract PDF text")
+            logger.warning("pypdf not installed - trying OCR directly")
+        except Exception as e:
+            logger.warning(f"pypdf extraction failed: {e} - trying OCR")
+
+        # Fall back to OCR for image-based PDFs
+        return self._extract_pdf_text_ocr(pdf_content)
+
+    def _extract_pdf_text_ocr(self, pdf_content: bytes) -> Optional[str]:
+        """
+        Extract text from a PDF using OCR (for scanned/image-based PDFs).
+
+        Args:
+            pdf_content: Raw PDF bytes.
+
+        Returns:
+            Extracted text or None if OCR fails.
+        """
+        try:
+            from pdf2image import convert_from_bytes
+            import pytesseract
+
+            # Convert PDF pages to images
+            logger.info("Converting PDF to images for OCR...")
+            images = convert_from_bytes(pdf_content, dpi=300)
+
+            text_parts = []
+            for i, image in enumerate(images):
+                logger.info(f"Running OCR on page {i + 1}/{len(images)}...")
+                # Run OCR on each page
+                page_text = pytesseract.image_to_string(image)
+                if page_text and page_text.strip():
+                    text_parts.append(page_text)
+
+            if text_parts:
+                full_text = '\n\n'.join(text_parts)
+                logger.info(f"OCR extracted {len(full_text)} characters from {len(images)} pages")
+                return full_text
+            else:
+                logger.warning("OCR could not extract any text from PDF")
+                return None
+
+        except ImportError as e:
+            logger.warning(f"OCR libraries not available: {e}")
             return None
         except Exception as e:
-            logger.error(f"Error extracting PDF text: {e}")
+            logger.error(f"OCR extraction failed: {e}")
             return None
 
     def get_song_with_attachments(self, song_title: str, fetch_content: bool = True) -> Optional[dict]:
