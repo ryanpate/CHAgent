@@ -197,8 +197,16 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
                 extracted_value = match.group(1).strip()
+                # Clean up common leading phrases like "the chorus of", "the verse of"
+                extracted_value = re.sub(
+                    r'^(the\s+)?(chorus|verse|bridge|intro|outro|pre-?chorus|hook|refrain)(\s+of\s+|\s+from\s+|\s+to\s+)',
+                    '',
+                    extracted_value,
+                    flags=re.IGNORECASE
+                )
                 # Clean up common trailing words
                 extracted_value = re.sub(r'\s+(chord|chart|lyric|song)s?$', '', extracted_value, flags=re.IGNORECASE)
+                extracted_value = extracted_value.strip()
                 break
 
         # Try to extract date for setlist queries
@@ -891,6 +899,9 @@ def query_agent(question: str, user, session_id: str) -> str:
         services_api = PlanningCenterServicesAPI()
 
         if services_api.is_configured:
+            # Check if user is asking about lyrics/chords (even in setlist context)
+            wants_lyrics_or_chords = bool(re.search(r'lyrics?|chords?|words|chart', question.lower()))
+
             if song_query_type == 'setlist':
                 # Looking for a service plan/setlist
                 if song_value:
@@ -898,6 +909,19 @@ def query_agent(question: str, user, session_id: str) -> str:
                     if plan:
                         song_data_context = format_plan_details(plan)
                         logger.info(f"Found plan for {song_value} with {len(plan.get('songs', []))} songs")
+
+                        # If asking about lyrics/chords, also fetch attachments for songs in the plan
+                        if wants_lyrics_or_chords and plan.get('songs'):
+                            song_details_parts = []
+                            for song in plan.get('songs', [])[:5]:  # Limit to first 5 to avoid timeout
+                                song_title = song.get('title')
+                                if song_title:
+                                    song_details = services_api.get_song_with_attachments(song_title)
+                                    if song_details:
+                                        song_details_parts.append(format_song_details(song_details))
+                                        logger.info(f"Fetched attachments for '{song_title}'")
+                            if song_details_parts:
+                                song_data_context += "\n" + "\n".join(song_details_parts)
                     else:
                         song_data_context = f"\n[SERVICE PLAN: No service plan found for '{song_value}'. Try specifying a different date like 'last Sunday' or 'December 1'.]\n"
                 else:
