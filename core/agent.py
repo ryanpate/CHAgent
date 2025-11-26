@@ -10,7 +10,7 @@ from typing import Optional, Tuple
 
 from django.conf import settings
 
-from .models import Interaction, Volunteer, ChatMessage
+from .models import Interaction, Volunteer, ChatMessage, ConversationContext
 from .embeddings import get_embedding, search_similar
 from .volunteer_matching import match_volunteers_for_interaction, VolunteerMatcher, MatchType
 
@@ -932,12 +932,149 @@ def skip_volunteer_match(interaction_id: int, original_name: str) -> bool:
     return True
 
 
+def get_or_create_conversation_context(user, session_id: str) -> ConversationContext:
+    """
+    Get or create a ConversationContext for the given session.
+
+    Args:
+        user: The user making the request.
+        session_id: The chat session ID.
+
+    Returns:
+        The ConversationContext for this session.
+    """
+    context, created = ConversationContext.objects.get_or_create(
+        session_id=session_id,
+        defaults={'user': user}
+    )
+    if created:
+        logger.info(f"Created new conversation context for session {session_id[:8]}...")
+    return context
+
+
+def extract_volunteer_ids_from_interactions(interactions) -> list:
+    """
+    Extract unique volunteer IDs from a list of interactions.
+
+    Args:
+        interactions: QuerySet or list of Interaction objects.
+
+    Returns:
+        List of unique volunteer IDs.
+    """
+    volunteer_ids = set()
+    for interaction in interactions:
+        for volunteer in interaction.volunteers.all():
+            volunteer_ids.add(volunteer.id)
+    return list(volunteer_ids)
+
+
+def summarize_conversation(client, messages: list, current_summary: str = "") -> str:
+    """
+    Generate a summary of the conversation for long conversations.
+
+    This helps maintain context without exceeding token limits.
+
+    Args:
+        client: Anthropic client instance.
+        messages: List of message dicts with 'role' and 'content'.
+        current_summary: Any existing summary to incorporate.
+
+    Returns:
+        A concise summary of the conversation.
+    """
+    if not client or len(messages) < 5:
+        return current_summary
+
+    # Build conversation text for summarization
+    conv_text = ""
+    for msg in messages[-10:]:  # Only summarize recent messages
+        role = "User" if msg['role'] == 'user' else "Assistant"
+        conv_text += f"{role}: {msg['content'][:500]}\n\n"
+
+    summary_prompt = f"""Summarize this conversation between a team member and an AI assistant about volunteers.
+Focus on:
+- Which volunteers were discussed
+- Key information learned about them
+- Any actions or follow-ups mentioned
+- The main topics covered
+
+Previous summary (if any): {current_summary}
+
+Recent conversation:
+{conv_text}
+
+Provide a concise 2-4 sentence summary that captures the essential context."""
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=300,
+            messages=[{"role": "user", "content": summary_prompt}]
+        )
+        return response.content[0].text
+    except Exception as e:
+        logger.error(f"Error summarizing conversation: {e}")
+        return current_summary
+
+
+def filter_interactions_by_context(
+    interactions,
+    conversation_context: ConversationContext,
+    prioritize_discussed: bool = True
+) -> list:
+    """
+    Filter and prioritize interactions based on conversation context.
+
+    - Excludes interactions already shown (unless we need them)
+    - Prioritizes interactions about volunteers being discussed
+
+    Args:
+        interactions: QuerySet or list of Interaction objects.
+        conversation_context: The ConversationContext for this session.
+        prioritize_discussed: Whether to prioritize discussed volunteers.
+
+    Returns:
+        Filtered and prioritized list of interactions.
+    """
+    shown_ids = set(conversation_context.shown_interaction_ids or [])
+    discussed_volunteer_ids = set(conversation_context.discussed_volunteer_ids or [])
+
+    # Separate into new vs already-shown
+    new_interactions = []
+    shown_interactions = []
+
+    for interaction in interactions:
+        if interaction.id in shown_ids:
+            shown_interactions.append(interaction)
+        else:
+            new_interactions.append(interaction)
+
+    # If prioritizing discussed volunteers, sort new interactions
+    if prioritize_discussed and discussed_volunteer_ids:
+        def interaction_priority(interaction):
+            # Higher priority (lower number) for interactions with discussed volunteers
+            interaction_volunteer_ids = {v.id for v in interaction.volunteers.all()}
+            overlap = len(interaction_volunteer_ids & discussed_volunteer_ids)
+            return -overlap  # Negative so more overlap = higher priority
+
+        new_interactions.sort(key=interaction_priority)
+
+    # Return new interactions first, then shown ones if needed for context
+    # Limit shown interactions to avoid too much repetition
+    result = new_interactions + shown_interactions[:3]
+
+    return result
+
+
 def query_agent(question: str, user, session_id: str) -> str:
     """
     Answer a question using RAG (Retrieval Augmented Generation):
-    1. Search for relevant interactions
-    2. Build context
-    3. Query Claude with context
+    1. Get/create conversation context for tracking state
+    2. Search for relevant interactions (with deduplication)
+    3. Build context
+    4. Query Claude with context
+    5. Update conversation context
 
     Args:
         question: The user's question.
@@ -950,6 +1087,12 @@ def query_agent(question: str, user, session_id: str) -> str:
     client = get_anthropic_client()
     if not client:
         return "I'm sorry, but the AI service is not currently available. Please check that the ANTHROPIC_API_KEY is configured."
+
+    # Get or create conversation context for this session
+    conversation_context = get_or_create_conversation_context(user, session_id)
+    logger.info(f"Conversation context: {conversation_context.message_count} messages, "
+                f"{len(conversation_context.shown_interaction_ids or [])} shown interactions, "
+                f"{len(conversation_context.discussed_volunteer_ids or [])} discussed volunteers")
 
     # Check if this is a PCO data query (contact info, email, phone, etc.)
     pco_query, pco_query_type, pco_person_name = is_pco_data_query(question)
@@ -1119,18 +1262,44 @@ def query_agent(question: str, user, session_id: str) -> str:
         question_embedding = get_embedding(question)
 
         if question_embedding:
-            relevant_interactions = search_similar(question_embedding, limit=20)
+            # Get more interactions than needed, then filter by context
+            raw_interactions = search_similar(question_embedding, limit=30)
+            # Filter and prioritize based on conversation context
+            relevant_interactions = filter_interactions_by_context(
+                raw_interactions,
+                conversation_context,
+                prioritize_discussed=True
+            )[:20]  # Limit to top 20 after filtering
         else:
             # Fallback: get recent interactions if embeddings unavailable
-            relevant_interactions = list(Interaction.objects.all()[:20])
+            raw_interactions = list(Interaction.objects.all()[:30])
+            relevant_interactions = filter_interactions_by_context(
+                raw_interactions,
+                conversation_context,
+                prioritize_discussed=True
+            )[:20]
+
+    # Track which interactions we're showing (for context deduplication)
+    shown_interaction_ids = [i.id for i in relevant_interactions]
 
     # Step 2: Build context from relevant interactions
     context_parts = []
+    new_interaction_ids = []  # Track new interactions being shown for the first time
+    already_shown_ids = set(conversation_context.shown_interaction_ids or [])
+
     for interaction in relevant_interactions:
         volunteers = ", ".join([v.name for v in interaction.volunteers.all()])
         date_str = interaction.created_at.strftime('%Y-%m-%d') if interaction.created_at else 'Unknown'
+
+        # Mark if this interaction was previously shown
+        previously_shown = interaction.id in already_shown_ids
+        marker = " (previously discussed)" if previously_shown else ""
+
+        if not previously_shown:
+            new_interaction_ids.append(interaction.id)
+
         context_parts.append(f"""
---- Interaction from {date_str} ---
+--- Interaction from {date_str}{marker} ---
 Volunteers: {volunteers or 'Not specified'}
 Notes: {interaction.content}
 Summary: {interaction.ai_summary or 'No summary'}
@@ -1153,12 +1322,29 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
         context = song_data_context + "\n" + context
 
     # Step 3: Get chat history for this session
-    history = ChatMessage.objects.filter(
+    all_history = ChatMessage.objects.filter(
         user=user,
         session_id=session_id
-    ).order_by('created_at')[:20]
+    ).order_by('created_at')
 
-    messages = [{"role": msg.role, "content": msg.content} for msg in history]
+    # For long conversations, use summarization to maintain context
+    history_count = all_history.count()
+    messages = []
+
+    if conversation_context.should_summarize() and conversation_context.conversation_summary:
+        # Include summary as a system-like context for long conversations
+        summary_context = f"\n[CONVERSATION SUMMARY: {conversation_context.conversation_summary}]\n"
+        context = summary_context + context
+
+        # Only include recent messages (last 10) plus the summary
+        recent_history = list(all_history[max(0, history_count - 10):])
+        messages = [{"role": msg.role, "content": msg.content} for msg in recent_history]
+        logger.info(f"Using conversation summary with {len(recent_history)} recent messages")
+    else:
+        # Normal case: include up to 20 recent messages
+        history = list(all_history[:20])
+        messages = [{"role": msg.role, "content": msg.content} for msg in history]
+
     messages.append({"role": "user", "content": question})
 
     # Step 4: Query Claude
@@ -1192,6 +1378,35 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
         role='assistant',
         content=answer
     )
+
+    # Step 6: Update conversation context
+    # Add newly shown interactions
+    if new_interaction_ids:
+        conversation_context.add_shown_interactions(new_interaction_ids)
+        logger.info(f"Added {len(new_interaction_ids)} new interactions to shown list")
+
+    # Add discussed volunteers from the interactions we showed
+    discussed_volunteer_ids = extract_volunteer_ids_from_interactions(relevant_interactions)
+    if discussed_volunteer_ids:
+        conversation_context.add_discussed_volunteers(discussed_volunteer_ids)
+
+    # Increment message count (user + assistant = 2 messages)
+    conversation_context.increment_message_count(2)
+
+    # Generate summary if conversation is getting long and we don't have one yet
+    if conversation_context.should_summarize() and not conversation_context.conversation_summary:
+        all_messages = [{"role": msg.role, "content": msg.content}
+                        for msg in all_history]
+        all_messages.append({"role": "user", "content": question})
+        all_messages.append({"role": "assistant", "content": answer})
+
+        new_summary = summarize_conversation(client, all_messages, "")
+        if new_summary:
+            conversation_context.conversation_summary = new_summary
+            logger.info(f"Generated conversation summary: {new_summary[:100]}...")
+
+    # Save the updated context
+    conversation_context.save()
 
     return answer
 

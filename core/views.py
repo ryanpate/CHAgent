@@ -10,7 +10,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST, require_http_methods
 from django.db.models import Count
 
-from .models import Interaction, Volunteer, ChatMessage
+from .models import Interaction, Volunteer, ChatMessage, ConversationContext
 from .agent import (
     query_agent,
     process_interaction,
@@ -27,33 +27,31 @@ def should_start_new_conversation(message: str) -> bool:
     """
     Determine if this message should start a fresh conversation.
 
-    Returns True for:
-    - New interactions being logged
-    - Prayer request queries
-    - Monthly/weekly summary requests
-    - Questions about volunteers (what do we know about...)
+    IMPORTANT: We now track conversation context across messages, so we should
+    be LESS aggressive about starting new sessions. This allows:
+    - Follow-up questions to work properly
+    - Context deduplication (not repeating the same interactions)
+    - Progressive conversation building
+
+    Returns True ONLY for:
+    - New interactions being logged (these are distinct events)
+    - Explicit requests to start fresh
     """
     message_lower = message.lower().strip()
 
-    # Patterns that indicate a new topic/conversation
-    new_topic_patterns = [
+    # Only start new sessions for ACTUAL new interactions being logged
+    # Questions and queries should continue the current conversation
+    new_interaction_patterns = [
         r'^log\s+interaction',           # "Log interaction: ..."
+        r'^log\s*:',                      # "Log: ..."
         r'^talked\s+(to|with)',           # "Talked to/with John..."
         r'^met\s+with',                   # "Met with Sarah..."
         r'^had\s+a\s+(conversation|chat|talk)', # "Had a conversation with..."
-        r'prayer\s+request',              # Prayer requests
-        r'monthly\s+summary',             # Monthly summary
-        r'weekly\s+summary',              # Weekly summary
-        r'team\s+summary',                # Team summary
-        r'^what\s+do\s+we\s+know\s+about', # "What do we know about..."
-        r'^tell\s+me\s+about',            # "Tell me about..."
-        r'^who\s+is',                     # "Who is..."
-        r'^find\s+volunteer',             # "Find volunteer..."
-        r'^show\s+(me\s+)?recent',        # "Show recent..."
-        r'^list\s+(all\s+)?',             # "List all..."
+        r'^spoke\s+(to|with)',            # "Spoke to/with..."
+        r'^chatted\s+with',               # "Chatted with..."
     ]
 
-    for pattern in new_topic_patterns:
+    for pattern in new_interaction_patterns:
         if re.search(pattern, message_lower):
             return True
 
@@ -207,7 +205,18 @@ def chat_send(request):
 @login_required
 @require_POST
 def chat_new_session(request):
-    """Start a new chat session."""
+    """Start a new chat session and clear conversation context."""
+    # Get the old session ID to clean up its context
+    old_session_id = request.COOKIES.get('chat_session_id')
+    if old_session_id:
+        # Clear the old conversation context (optional: could delete instead)
+        try:
+            old_context = ConversationContext.objects.get(session_id=old_session_id)
+            old_context.clear_context()
+            old_context.save()
+        except ConversationContext.DoesNotExist:
+            pass
+
     new_session_id = str(uuid.uuid4())
 
     response = render(request, 'core/chat_empty.html')
