@@ -913,12 +913,127 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         return attachments
 
-    def get_song_with_attachments(self, song_title: str) -> Optional[dict]:
+    def fetch_attachment_content(self, attachment_url: str, content_type: str = None, filename: str = None, max_size: int = 2000000) -> Optional[str]:
+        """
+        Fetch the text content of an attachment from its URL.
+
+        Supports text files and PDF extraction.
+
+        Args:
+            attachment_url: The URL to download from.
+            content_type: The content type of the file.
+            filename: The filename (used to detect file type).
+            max_size: Maximum file size to download (default 2MB for PDFs).
+
+        Returns:
+            Text content of the file, or None if not fetchable.
+        """
+        if not attachment_url:
+            return None
+
+        # Content types we can read as text
+        text_content_types = [
+            'text/plain',
+            'text/html',
+            'application/json',
+            'text/xml',
+            'application/xml',
+        ]
+
+        # File extensions we can read as text (for chord charts, lyrics)
+        text_extensions = ['.txt', '.cho', '.chopro', '.chordpro', '.onsong', '.pro']
+
+        # Check file type
+        url_lower = attachment_url.lower()
+        filename_lower = (filename or '').lower()
+
+        is_pdf = (
+            (content_type and 'pdf' in content_type.lower()) or
+            filename_lower.endswith('.pdf') or
+            url_lower.endswith('.pdf') or
+            '.pdf?' in url_lower
+        )
+
+        is_text = False
+        if not is_pdf:
+            if content_type and any(ct in content_type.lower() for ct in text_content_types):
+                is_text = True
+            elif any(url_lower.endswith(ext) or f'{ext}?' in url_lower for ext in text_extensions):
+                is_text = True
+            elif any(filename_lower.endswith(ext) for ext in text_extensions):
+                is_text = True
+
+        if not is_text and not is_pdf:
+            logger.debug(f"Skipping unsupported attachment type: {content_type} / {filename}")
+            return None
+
+        try:
+            response = requests.get(
+                attachment_url,
+                auth=(self.app_id, self.secret),
+                timeout=30
+            )
+            response.raise_for_status()
+
+            # Check content length
+            content_length = response.headers.get('content-length')
+            if content_length and int(content_length) > max_size:
+                logger.warning(f"Attachment too large: {content_length} bytes")
+                return None
+
+            if is_pdf:
+                return self._extract_pdf_text(response.content)
+            else:
+                return response.text[:max_size]
+
+        except requests.RequestException as e:
+            logger.error(f"Error fetching attachment: {e}")
+            return None
+
+    def _extract_pdf_text(self, pdf_content: bytes) -> Optional[str]:
+        """
+        Extract text content from a PDF file.
+
+        Args:
+            pdf_content: Raw PDF bytes.
+
+        Returns:
+            Extracted text or None if extraction fails.
+        """
+        try:
+            from pypdf import PdfReader
+            from io import BytesIO
+
+            reader = PdfReader(BytesIO(pdf_content))
+            text_parts = []
+
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+
+            if text_parts:
+                full_text = '\n\n'.join(text_parts)
+                logger.info(f"Extracted {len(full_text)} characters from PDF ({len(reader.pages)} pages)")
+                return full_text
+            else:
+                logger.warning("PDF contained no extractable text (may be image-based)")
+                return None
+
+        except ImportError:
+            logger.warning("pypdf not installed - cannot extract PDF text")
+            return None
+        except Exception as e:
+            logger.error(f"Error extracting PDF text: {e}")
+            return None
+
+    def get_song_with_attachments(self, song_title: str, fetch_content: bool = True) -> Optional[dict]:
         """
         Search for a song and get all its attachments across arrangements.
 
         Args:
             song_title: Title to search for.
+            fetch_content: If True, fetch text content from attachments.
 
         Returns:
             Dict with song info and all attachments, or None if not found.
@@ -953,6 +1068,27 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                     attach['arrangement_name'] = arr.get('name')
                     attach['arrangement_key'] = arr.get('key')
                 all_attachments.extend(arr_attachments)
+
+        # Fetch text content from attachments if requested
+        if fetch_content:
+            for attach in all_attachments:
+                url = attach.get('url')
+                content_type = attach.get('content_type')
+                filename = attach.get('filename', '')
+                filename_lower = filename.lower()
+
+                # Try to fetch content for chord charts, lyrics files, and PDFs
+                if url and (
+                    'chord' in filename_lower or
+                    'lyric' in filename_lower or
+                    'chart' in filename_lower or
+                    filename_lower.endswith('.pdf') or
+                    filename_lower.endswith(('.txt', '.cho', '.chopro', '.chordpro', '.onsong', '.pro'))
+                ):
+                    content = self.fetch_attachment_content(url, content_type, filename)
+                    if content:
+                        attach['text_content'] = content
+                        logger.info(f"Fetched content from attachment: {filename}")
 
         details['all_attachments'] = all_attachments
         return details

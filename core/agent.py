@@ -310,22 +310,43 @@ def format_song_details(song: dict) -> str:
     # Attachments
     all_attachments = song.get('all_attachments', []) or song.get('attachments', [])
     if all_attachments:
-        parts.append(f"\nAvailable Files ({len(all_attachments)}):")
-        for attach in all_attachments:
-            filename = attach.get('filename', 'Unknown file')
-            file_type = attach.get('file_type', '')
-            url = attach.get('url', '')
-            arr_key = attach.get('arrangement_key', '')
+        # First show any attachments with fetched text content (chord charts, lyrics)
+        content_attachments = [a for a in all_attachments if a.get('text_content')]
+        other_attachments = [a for a in all_attachments if not a.get('text_content')]
 
-            attach_info = f"  - {filename}"
-            if arr_key:
-                attach_info += f" (Key: {arr_key})"
-            if file_type:
-                attach_info += f" [{file_type}]"
-            parts.append(attach_info)
+        if content_attachments:
+            parts.append(f"\nChord Charts/Lyrics Content:")
+            for attach in content_attachments:
+                filename = attach.get('filename', 'Unknown file')
+                arr_name = attach.get('arrangement_name', '')
+                arr_key = attach.get('arrangement_key', '')
 
-            if url:
-                parts.append(f"    Download: {url}")
+                header = f"\n--- {filename}"
+                if arr_name:
+                    header += f" ({arr_name})"
+                if arr_key:
+                    header += f" [Key: {arr_key}]"
+                header += " ---"
+                parts.append(header)
+                parts.append(attach.get('text_content', ''))
+
+        if other_attachments:
+            parts.append(f"\nOther Available Files ({len(other_attachments)}):")
+            for attach in other_attachments:
+                filename = attach.get('filename', 'Unknown file')
+                file_type = attach.get('file_type', '')
+                url = attach.get('url', '')
+                arr_key = attach.get('arrangement_key', '')
+
+                attach_info = f"  - {filename}"
+                if arr_key:
+                    attach_info += f" (Key: {arr_key})"
+                if file_type:
+                    attach_info += f" [{file_type}]"
+                parts.append(attach_info)
+
+                if url:
+                    parts.append(f"    Download: {url}")
     else:
         parts.append("\nNo attachments found for this song.")
 
