@@ -177,6 +177,13 @@ class ConversationContext(models.Model):
         help_text="List of song suggestions waiting for user selection"
     )
 
+    # Track the current song being discussed for follow-up queries
+    current_song = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Current song being discussed (title, id, etc.) for context in follow-up queries"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -220,6 +227,7 @@ class ConversationContext(models.Model):
         self.current_topic = ""
         self.message_count = 0
         self.pending_song_suggestions = []
+        self.current_song = {}
 
     def set_pending_song_suggestions(self, suggestions: list):
         """Store song suggestions for user selection."""
@@ -232,3 +240,24 @@ class ConversationContext(models.Model):
     def clear_pending_song_suggestions(self):
         """Clear pending song suggestions after selection."""
         self.pending_song_suggestions = []
+
+    def set_current_song(self, song_title: str, song_id: str = None):
+        """Store the currently discussed song for follow-up queries."""
+        self.current_song = {
+            'title': song_title,
+            'id': song_id
+        }
+
+    def get_current_song(self) -> dict:
+        """Get the currently discussed song."""
+        return self.current_song or {}
+
+    def get_current_song_title(self) -> str:
+        """Get just the title of the currently discussed song."""
+        if self.current_song:
+            return self.current_song.get('title', '')
+        return ''
+
+    def clear_current_song(self):
+        """Clear the current song context."""
+        self.current_song = {}

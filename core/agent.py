@@ -168,7 +168,8 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
         'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|songs?\s+(from|for|on|we\s+(play|sang|did))|(last|this|next)\s+sunday|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?)\s+(that|on\s+that)\s+(day|date|service|sunday)|(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2})',
         'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|played)',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
-        'lyrics': r'lyrics?\s+(for|to)|words?\s+(for|to)',
+        # Lyrics patterns - include section requests like "lyrics to the bridge" or just "the lyrics"
+        'lyrics': r'lyrics?\s+(for|to)|words?\s+(for|to)|(give|show|get)\s+(me\s+)?(the\s+)?lyrics|(what\s+are\s+)?the\s+lyrics|lyrics?\s+to\s+the\s+(verse|chorus|bridge|intro|outro|pre-?chorus)',
         'song_search': r'(find|search|look\s*up|get|show)\s+(the\s+)?(song|music)',
         'song_info': r'(what\s+key|which\s+key|bpm|tempo|how\s+(long|fast))\s+.*(song|play)',
     }
@@ -215,7 +216,15 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
                 # Clean up common trailing words
                 extracted_value = re.sub(r'\s+(chord|chart|lyric|song)s?$', '', extracted_value, flags=re.IGNORECASE)
                 extracted_value = extracted_value.strip()
-                break
+
+                # If the "extracted" value is just a section name, it's not a song title
+                section_only_pattern = r'^(the\s+)?(\d+(?:st|nd|rd|th)\s+)?(chorus|verse|bridge|intro|outro|pre-?chorus|hook|refrain)(\s+\d+)?$'
+                if re.match(section_only_pattern, extracted_value, re.IGNORECASE):
+                    extracted_value = None  # Not a song title, just a section request
+                    break
+
+                if extracted_value:
+                    break
 
         # Try to extract date for setlist queries
         if query_type == 'setlist' and not extracted_value:
@@ -299,6 +308,10 @@ def format_song_details(song: dict) -> str:
     if song.get('copyright'):
         parts.append(f"Copyright: {song.get('copyright')}")
 
+    # Track if we found any lyrics or chord content
+    has_lyrics_content = False
+    has_chord_content = False
+
     # Arrangements
     arrangements = song.get('arrangements', [])
     if arrangements:
@@ -315,11 +328,13 @@ def format_song_details(song: dict) -> str:
 
             # Include lyrics if available
             if arr.get('lyrics'):
+                has_lyrics_content = True
                 parts.append(f"\n    LYRICS ({arr.get('name', 'Default')} arrangement):")
                 parts.append("    " + arr.get('lyrics').replace('\n', '\n    '))
 
             # Include chord chart if available
             if arr.get('chord_chart'):
+                has_chord_content = True
                 parts.append(f"\n    CHORD CHART ({arr.get('name', 'Default')} arrangement):")
                 parts.append("    " + arr.get('chord_chart').replace('\n', '\n    '))
 
@@ -333,6 +348,7 @@ def format_song_details(song: dict) -> str:
         if content_attachments:
             parts.append(f"\nChord Charts/Lyrics Content:")
             for attach in content_attachments:
+                has_lyrics_content = True  # Assume attachment content includes lyrics
                 filename = attach.get('filename', 'Unknown file')
                 arr_name = attach.get('arrangement_name', '')
                 arr_key = attach.get('arrangement_key', '')
@@ -347,11 +363,11 @@ def format_song_details(song: dict) -> str:
                 parts.append(attach.get('text_content', ''))
 
         if other_attachments:
-            parts.append(f"\nOther Available Files ({len(other_attachments)}):")
+            # Note: These are files we couldn't read content from
+            parts.append(f"\nFiles that could not be read ({len(other_attachments)} - may be image-based PDFs):")
             for attach in other_attachments:
                 filename = attach.get('filename', 'Unknown file')
                 file_type = attach.get('file_type', '')
-                url = attach.get('url', '')
                 arr_key = attach.get('arrangement_key', '')
 
                 attach_info = f"  - {filename}"
@@ -360,11 +376,12 @@ def format_song_details(song: dict) -> str:
                 if file_type:
                     attach_info += f" [{file_type}]"
                 parts.append(attach_info)
-
-                if url:
-                    parts.append(f"    Download: {url}")
     else:
         parts.append("\nNo attachments found for this song.")
+
+    # Add explicit note about content availability
+    if not has_lyrics_content and not has_chord_content:
+        parts.append("\n[NOTE: No lyrics or chord chart text content could be extracted from this song's files. The files may be image-based PDFs that cannot be read as text. Please inform the user that the lyrics are not available in a readable format in Planning Center.]")
 
     parts.append("[END SONG DATA]\n")
     return '\n'.join(parts)
@@ -724,9 +741,10 @@ SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant named Ar
 - Format responses clearly with relevant details
 - If asked about a volunteer with no logged interactions, say so clearly
 - When Planning Center data is provided, use it to answer contact-related questions accurately
-- IMPORTANT: When song data (lyrics, chord charts) is provided from Planning Center, you MUST display it directly in your response - do NOT just offer download links. The church has proper CCLI licensing for all songs in their Planning Center account. This is licensed content that authenticated team members are authorized to access.
+- IMPORTANT: When song data (lyrics, chord charts) is provided from Planning Center, you MUST display it directly in your response - do NOT just offer download links. The church has proper CCLI licensing for all songs in their Planning Center account.
 - When a user asks for specific sections (e.g., "2nd verse", "chorus"), find and display just that section from the lyrics data provided. Look for section markers like "Verse 1", "Verse 2", "Chorus", "Bridge", etc. in the lyrics content.
 - If lyrics or chord chart content is included in the context data, always display it directly rather than pointing to download links.
+- IMPORTANT: If the context indicates that lyrics/chord content could NOT be extracted (e.g., "[NOTE: No lyrics or chord chart text content could be extracted...]"), clearly tell the user that the lyrics are not available in a readable text format in Planning Center. Do NOT offer download links as an alternative - just explain that the files are likely image-based PDFs that cannot be read as text and suggest they check the song directly in Planning Center or that the worship team may need to add text-based lyrics to the song in PCO.
 
 ## Data Extraction:
 When processing a new interaction, extract and structure:
@@ -1472,23 +1490,41 @@ def query_agent(question: str, user, session_id: str) -> str:
                     if usage_history:
                         song_data_context = format_song_usage_history(usage_history, conversation_context)
                         logger.info(f"Got usage history for '{song_title}': {usage_history.get('total_times_used', 0)} uses")
+                        # Store the song title for follow-up queries (e.g., "give me the lyrics to the bridge")
+                        if usage_history.get('found'):
+                            actual_title = usage_history.get('song_title', song_title)
+                            conversation_context.set_current_song(actual_title)
+                            conversation_context.save()
+                            logger.info(f"Stored current song context: '{actual_title}'")
                     else:
                         song_data_context = f"\n[SONG HISTORY: Could not find song '{song_title}' in the Planning Center library.]\n"
 
             elif song_query_type in ['chord_chart', 'lyrics', 'song_search', 'song_info']:
                 # Looking for song info or attachments - use fuzzy search with suggestions
-                if song_value:
-                    search_result = services_api.search_song_with_suggestions(song_value)
+                # If no song title provided, check if we have a current song in context
+                song_to_lookup = song_value
+                if not song_to_lookup:
+                    current_song_title = conversation_context.get_current_song_title()
+                    if current_song_title:
+                        song_to_lookup = current_song_title
+                        logger.info(f"Using current song from context: '{current_song_title}'")
+
+                if song_to_lookup:
+                    search_result = services_api.search_song_with_suggestions(song_to_lookup)
 
                     if search_result['found'] and search_result['song']:
                         song_data_context = format_song_details(search_result['song'])
-                        logger.info(f"Found song '{search_result['song'].get('title')}' with {len(search_result['song'].get('all_attachments', []))} attachments")
+                        # Store the song for future follow-ups
+                        actual_title = search_result['song'].get('title', song_to_lookup)
+                        conversation_context.set_current_song(actual_title)
+                        conversation_context.save()
+                        logger.info(f"Found song '{actual_title}' with {len(search_result['song'].get('all_attachments', []))} attachments")
                     elif search_result['suggestions']:
                         # No exact match - provide suggestions for AI to ask user and store for selection
-                        song_data_context = format_song_suggestions(song_value, search_result['suggestions'], conversation_context)
-                        logger.info(f"No match for '{song_value}', providing {len(search_result['suggestions'])} suggestions")
+                        song_data_context = format_song_suggestions(song_to_lookup, search_result['suggestions'], conversation_context)
+                        logger.info(f"No match for '{song_to_lookup}', providing {len(search_result['suggestions'])} suggestions")
                     else:
-                        song_data_context = f"\n[SONG: No songs found matching '{song_value}'. The song may not be in the Planning Center library.]\n"
+                        song_data_context = f"\n[SONG: No songs found matching '{song_to_lookup}'. The song may not be in the Planning Center library.]\n"
                 else:
                     song_data_context = "\n[SONG: Please specify a song title to search for.]\n"
         else:

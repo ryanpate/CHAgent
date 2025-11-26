@@ -1139,7 +1139,7 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         return attachments
 
-    def fetch_attachment_content(self, attachment_url: str, content_type: str = None, filename: str = None, max_size: int = 2000000) -> Optional[str]:
+    def fetch_attachment_content(self, attachment_url: str, content_type: str = None, filename: str = None, max_size: int = 2000000, file_type: str = None) -> Optional[str]:
         """
         Fetch the text content of an attachment from its URL.
 
@@ -1150,6 +1150,7 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             content_type: The content type of the file.
             filename: The filename (used to detect file type).
             max_size: Maximum file size to download (default 2MB for PDFs).
+            file_type: The file type from PCO (e.g., 'pdf', 'txt').
 
         Returns:
             Text content of the file, or None if not fetchable.
@@ -1172,10 +1173,13 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         # Check file type
         url_lower = attachment_url.lower()
         filename_lower = (filename or '').lower()
+        file_type_lower = (file_type or '').lower()
 
         is_pdf = (
+            file_type_lower == 'pdf' or
             (content_type and 'pdf' in content_type.lower()) or
             filename_lower.endswith('.pdf') or
+            '.pdf' in filename_lower or
             url_lower.endswith('.pdf') or
             '.pdf?' in url_lower
         )
@@ -1190,7 +1194,7 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 is_text = True
 
         if not is_text and not is_pdf:
-            logger.debug(f"Skipping unsupported attachment type: {content_type} / {filename}")
+            logger.debug(f"Skipping unsupported attachment type: {content_type} / {filename} / {file_type}")
             return None
 
         try:
@@ -1373,10 +1377,12 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 )
 
                 if url and should_fetch:
-                    content = self.fetch_attachment_content(url, content_type, filename)
+                    content = self.fetch_attachment_content(url, content_type, filename, file_type=file_type)
                     if content:
                         attach['text_content'] = content
                         logger.info(f"Fetched content from attachment: {filename}")
+                    else:
+                        logger.warning(f"Could not extract content from attachment: {filename} (type: {file_type})")
 
         details['all_attachments'] = all_attachments
         return details
