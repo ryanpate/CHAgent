@@ -792,6 +792,100 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             'songs': songs
         }
 
+    def get_plan_team_members(self, service_type_id: str, plan_id: str) -> list:
+        """
+        Get team members scheduled for a service plan.
+
+        Args:
+            service_type_id: The service type ID.
+            plan_id: The plan ID.
+
+        Returns:
+            List of team member assignments with names, positions, and status.
+        """
+        # Get team members for this plan
+        result = self._get(
+            f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/team_members",
+            params={'include': 'person,team', 'per_page': 100}
+        )
+
+        team_members_data = result.get('data', [])
+        included = result.get('included', [])
+
+        # Build lookup for included people and teams
+        people_lookup = {}
+        teams_lookup = {}
+        for inc in included:
+            if inc.get('type') == 'Person':
+                people_lookup[inc.get('id')] = inc
+            elif inc.get('type') == 'Team':
+                teams_lookup[inc.get('id')] = inc
+
+        # Build team member list
+        team_members = []
+        for tm in team_members_data:
+            tm_attrs = tm.get('attributes', {})
+            tm_rels = tm.get('relationships', {})
+
+            # Get person info
+            person_rel = tm_rels.get('person', {}).get('data', {})
+            person_id = person_rel.get('id') if person_rel else None
+            person_data = people_lookup.get(person_id, {})
+            person_attrs = person_data.get('attributes', {})
+
+            # Get team info
+            team_rel = tm_rels.get('team', {}).get('data', {})
+            team_id = team_rel.get('id') if team_rel else None
+            team_data = teams_lookup.get(team_id, {})
+            team_attrs = team_data.get('attributes', {})
+
+            # Status codes: C=Confirmed, U=Unconfirmed, D=Declined
+            status = tm_attrs.get('status', 'U')
+            status_map = {
+                'C': 'Confirmed',
+                'U': 'Unconfirmed',
+                'D': 'Declined',
+                'B': 'Blocked out'
+            }
+
+            team_members.append({
+                'name': tm_attrs.get('name') or f"{person_attrs.get('first_name', '')} {person_attrs.get('last_name', '')}".strip(),
+                'team_name': team_attrs.get('name', 'Unknown Team'),
+                'position': tm_attrs.get('team_position_name', ''),
+                'status': status_map.get(status, status),
+                'status_code': status,
+                'notes': tm_attrs.get('notes', ''),
+                'person_id': person_id
+            })
+
+        # Sort by team name, then by name
+        team_members.sort(key=lambda x: (x['team_name'], x['name']))
+
+        return team_members
+
+    def get_plan_with_team(self, date_str: str) -> Optional[dict]:
+        """
+        Find a plan by date and include team member assignments.
+
+        Args:
+            date_str: Date string to search for.
+
+        Returns:
+            Dict with plan details, songs, and team members.
+        """
+        plan_details = self.find_plan_by_date(date_str)
+        if not plan_details:
+            return None
+
+        service_type_id = plan_details.get('service_type_id')
+        plan_id = plan_details.get('id')
+
+        if service_type_id and plan_id:
+            team_members = self.get_plan_team_members(service_type_id, plan_id)
+            plan_details['team_members'] = team_members
+
+        return plan_details
+
     def search_songs(self, query: str, limit: int = 10) -> list:
         """
         Search for songs in the library.
