@@ -1351,15 +1351,28 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 content_type = attach.get('content_type')
                 filename = attach.get('filename', '')
                 filename_lower = filename.lower()
+                file_type = attach.get('file_type', '').lower()
 
-                # Try to fetch content for chord charts, lyrics files, and PDFs
-                if url and (
+                # Try to fetch content for:
+                # - Files with chord/lyric/chart keywords
+                # - Any PDF files (they often contain lyrics/charts)
+                # - Text-based formats
+                # - Files with "numbers" or "lead" in the name (common chart formats)
+                should_fetch = (
                     'chord' in filename_lower or
                     'lyric' in filename_lower or
                     'chart' in filename_lower or
+                    'numbers' in filename_lower or
+                    'lead' in filename_lower or
+                    'sheet' in filename_lower or
                     filename_lower.endswith('.pdf') or
+                    '.pdf' in filename_lower or
+                    file_type == 'pdf' or
+                    'pdf' in (content_type or '').lower() or
                     filename_lower.endswith(('.txt', '.cho', '.chopro', '.chordpro', '.onsong', '.pro'))
-                ):
+                )
+
+                if url and should_fetch:
                     content = self.fetch_attachment_content(url, content_type, filename)
                     if content:
                         attach['text_content'] = content

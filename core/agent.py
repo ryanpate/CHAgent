@@ -724,7 +724,9 @@ SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant named Ar
 - Format responses clearly with relevant details
 - If asked about a volunteer with no logged interactions, say so clearly
 - When Planning Center data is provided, use it to answer contact-related questions accurately
-- IMPORTANT: When song data (lyrics, chord charts) is provided from Planning Center, you may display it fully. The church has proper CCLI licensing for all songs in their Planning Center account. This is licensed content that authenticated team members are authorized to access. Do not refuse to show lyrics or chord chart content that comes from Planning Center data.
+- IMPORTANT: When song data (lyrics, chord charts) is provided from Planning Center, you MUST display it directly in your response - do NOT just offer download links. The church has proper CCLI licensing for all songs in their Planning Center account. This is licensed content that authenticated team members are authorized to access.
+- When a user asks for specific sections (e.g., "2nd verse", "chorus"), find and display just that section from the lyrics data provided. Look for section markers like "Verse 1", "Verse 2", "Chorus", "Bridge", etc. in the lyrics content.
+- If lyrics or chord chart content is included in the context data, always display it directly rather than pointing to download links.
 
 ## Data Extraction:
 When processing a new interaction, extract and structure:
@@ -1252,13 +1254,9 @@ def handle_song_selection(selection_index: int, pending_suggestions: list, query
         else:
             return f"\n[SONG HISTORY: Could not find usage history for '{song_title}'.]\n"
     else:
-        # Get full song details with attachments
-        if song_id:
-            # Use the song ID directly for more accurate lookup
-            song_details = services_api.get_song_details(song_id)
-        else:
-            # Fall back to title search
-            song_details = services_api.get_song_with_attachments(song_title)
+        # Get full song details with attachments - always use get_song_with_attachments
+        # to ensure we fetch the actual content (lyrics, chord charts)
+        song_details = services_api.get_song_with_attachments(song_title, fetch_content=True)
 
         if song_details:
             return format_song_details(song_details)
