@@ -872,12 +872,24 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             elif title_lower in query_lower:
                 score = max(score, 0.75)
 
+            # Check if query matches the main title (before parentheses or subtitle)
+            # This handles cases like "I Stand Amazed" matching "I Stand Amazed (How Marvelous)"
+            main_title = title_lower.split('(')[0].strip()
+            if main_title and (query_lower == main_title or query_lower.rstrip('?!.,') == main_title):
+                score = max(score, 0.95)  # Very high score for main title match
+            elif main_title.startswith(query_lower.rstrip('?!.,')):
+                score = max(score, 0.85)  # Query is prefix of main title
+
+            # Also check if title starts with the query (prefix match)
+            if title_lower.startswith(query_lower.rstrip('?!.,')):
+                score = max(score, 0.90)
+
             # Check if any word in the query matches a word in the title
             query_words = set(query_lower.split())
             title_words = set(title_lower.split())
             common_words = query_words & title_words
             # Filter out common words like "the", "a", "in", "of"
-            common_words -= {'the', 'a', 'an', 'in', 'of', 'to', 'for', 'and', 'is'}
+            common_words -= {'the', 'a', 'an', 'in', 'of', 'to', 'for', 'and', 'is', 'i'}
             if common_words:
                 score = max(score, 0.5 + (len(common_words) * 0.1))
 
