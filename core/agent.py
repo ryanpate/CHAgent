@@ -165,7 +165,7 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
 
     # Patterns for song/setlist queries
     song_query_patterns = {
-        'setlist': r'(setlist|song\s*set|what\s+songs?\s+(did|do|are|were|will)|songs?\s+(from|for|on|we\s+(play|sang|did))|(last|this|next)\s+sunday|worship\s+set|played\s+on|was\s+played|last\s+played|(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2})',
+        'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|songs?\s+(from|for|on|we\s+(play|sang|did))|(last|this|next)\s+sunday|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?)\s+(that|on\s+that)\s+(day|date|service|sunday)|(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2})',
         'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|played)',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
         'lyrics': r'lyrics?\s+(for|to)|words?\s+(for|to)',
@@ -1070,6 +1070,74 @@ def filter_interactions_by_context(
     return result
 
 
+def extract_date_from_conversation(user, session_id: str) -> Optional[str]:
+    """
+    Extract a recently mentioned date from conversation history.
+
+    This helps resolve contextual references like "that day" or "that service"
+    by looking for dates mentioned in recent messages.
+
+    Args:
+        user: The user making the request.
+        session_id: The chat session ID.
+
+    Returns:
+        A date string if found, None otherwise.
+    """
+    # Get recent messages from this session
+    recent_messages = ChatMessage.objects.filter(
+        user=user,
+        session_id=session_id
+    ).order_by('-created_at')[:10]
+
+    # Date patterns to look for in conversation
+    date_patterns = [
+        # "November 23, 2025" or "November 23rd, 2025"
+        r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?,?\s*\d{4}',
+        # "November 23" or "November 23rd"
+        r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?',
+        # "11/23/2025" or "11-23-2025"
+        r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
+        # "last Sunday", "this Sunday"
+        r'(last|this|next)\s+sunday',
+    ]
+
+    for msg in recent_messages:
+        content = msg.content.lower()
+        for pattern in date_patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                date_str = match.group(0)
+                logger.info(f"Found date '{date_str}' in conversation context")
+                return date_str
+
+    return None
+
+
+def has_contextual_date_reference(message: str) -> bool:
+    """
+    Check if a message has a contextual date reference like "that day".
+
+    Args:
+        message: The user's message.
+
+    Returns:
+        True if the message references a date contextually.
+    """
+    contextual_patterns = [
+        r'that\s+(day|date|service|sunday|week)',
+        r'same\s+(day|date|service|sunday)',
+        r'the\s+same\s+(day|date)',
+        r'on\s+that\s+(day|date)',
+    ]
+
+    message_lower = message.lower()
+    for pattern in contextual_patterns:
+        if re.search(pattern, message_lower):
+            return True
+    return False
+
+
 def query_agent(question: str, user, session_id: str) -> str:
     """
     Answer a question using RAG (Retrieval Augmented Generation):
@@ -1141,11 +1209,20 @@ def query_agent(question: str, user, session_id: str) -> str:
 
             if song_query_type == 'setlist':
                 # Looking for a service plan/setlist
-                if song_value:
-                    plan = services_api.find_plan_by_date(song_value)
+                date_to_lookup = song_value
+
+                # If no date extracted but message has contextual reference, look up from conversation
+                if not date_to_lookup and has_contextual_date_reference(question):
+                    logger.info("Contextual date reference detected, searching conversation history")
+                    date_to_lookup = extract_date_from_conversation(user, session_id)
+                    if date_to_lookup:
+                        logger.info(f"Resolved contextual date reference to: {date_to_lookup}")
+
+                if date_to_lookup:
+                    plan = services_api.find_plan_by_date(date_to_lookup)
                     if plan:
                         song_data_context = format_plan_details(plan)
-                        logger.info(f"Found plan for {song_value} with {len(plan.get('songs', []))} songs")
+                        logger.info(f"Found plan for {date_to_lookup} with {len(plan.get('songs', []))} songs")
 
                         # If asking about lyrics/chords, also fetch attachments for songs in the plan
                         if wants_lyrics_or_chords and plan.get('songs'):
@@ -1160,7 +1237,7 @@ def query_agent(question: str, user, session_id: str) -> str:
                             if song_details_parts:
                                 song_data_context += "\n" + "\n".join(song_details_parts)
                     else:
-                        song_data_context = f"\n[SERVICE PLAN: No service plan found for '{song_value}'. Try specifying a different date like 'last Sunday' or 'December 1'.]\n"
+                        song_data_context = f"\n[SERVICE PLAN: No service plan found for '{date_to_lookup}'. Try specifying a different date like 'last Sunday' or 'December 1'.]\n"
                 else:
                     # No date specified - get recent plans
                     recent_plans = services_api.get_recent_plans(limit=5)
