@@ -2,8 +2,9 @@
 # See: https://nixpacks.com/docs/configuration/file
 
 # System packages needed for OCR (scanned PDF chord charts)
+# These are additional packages - nixpacks will still auto-detect Python
 [phases.setup]
-nixPkgs = ["tesseract", "poppler_utils"]
+aptPkgs = ["tesseract-ocr", "poppler-utils"]
 
 [phases.build]
 # Only run collectstatic during build - it doesn't need DATABASE_URL
