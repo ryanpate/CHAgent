@@ -170,6 +170,13 @@ class ConversationContext(models.Model):
     # Message count for determining when to summarize
     message_count = models.IntegerField(default=0)
 
+    # Store pending song suggestions for user selection
+    pending_song_suggestions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of song suggestions waiting for user selection"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -212,3 +219,16 @@ class ConversationContext(models.Model):
         self.conversation_summary = ""
         self.current_topic = ""
         self.message_count = 0
+        self.pending_song_suggestions = []
+
+    def set_pending_song_suggestions(self, suggestions: list):
+        """Store song suggestions for user selection."""
+        self.pending_song_suggestions = suggestions
+
+    def get_pending_song_suggestions(self) -> list:
+        """Get stored song suggestions."""
+        return self.pending_song_suggestions or []
+
+    def clear_pending_song_suggestions(self):
+        """Clear pending song suggestions after selection."""
+        self.pending_song_suggestions = []
