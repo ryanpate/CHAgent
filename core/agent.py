@@ -165,7 +165,9 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
 
     # Patterns for song/setlist queries
     song_query_patterns = {
-        'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|songs?\s+(from|for|on|we\s+(play|sang|did))|(last|this|next)\s+sunday|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?)\s+(that|on\s+that)\s+(day|date|service|sunday)|(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2})',
+        # Team/volunteer schedule - check this BEFORE setlist to catch volunteer-specific queries
+        'team_schedule': r'(who\s+(is|are)\s+(on|serving|scheduled|playing|singing)|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled\s+volunteer|serving\s+(on|this|next)|band\s+for|vocals?\s+for|tech\s+for|who\s+do\s+we\s+have)',
+        'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|songs?\s+(from|for|on|we\s+(play|sang|did))|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?)\s+(that|on\s+that)\s+(day|date|service|sunday))',
         'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|played)',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
         # Lyrics patterns - include section requests like "lyrics to the bridge" or just "the lyrics"
@@ -173,6 +175,10 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
         'song_search': r'(find|search|look\s*up|get|show)\s+(the\s+)?(song|music)',
         'song_info': r'(what\s+key|which\s+key|bpm|tempo|how\s+(long|fast))\s+.*(song|play)',
     }
+
+    # Also check for date patterns that suggest a service query
+    date_pattern = r'(last|this|next)\s+sunday|(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}'
+    has_date_reference = bool(re.search(date_pattern, message_lower))
 
     is_song_query = False
     query_type = None
@@ -226,8 +232,8 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
                 if extracted_value:
                     break
 
-        # Try to extract date for setlist queries
-        if query_type == 'setlist' and not extracted_value:
+        # Try to extract date for setlist or team_schedule queries
+        if query_type in ['setlist', 'team_schedule'] and not extracted_value:
             date_patterns = [
                 r'(last\s+sunday|this\s+sunday|next\s+sunday|yesterday|today)',
                 r'(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?',
@@ -282,6 +288,67 @@ def format_plan_details(plan: dict) -> str:
         parts.append("\nNo songs found in this plan.")
 
     parts.append("[END SERVICE PLAN DATA]\n")
+    return '\n'.join(parts)
+
+
+def format_team_schedule(plan: dict) -> str:
+    """
+    Format team/volunteer schedule from a service plan for the AI context.
+
+    Args:
+        plan: Plan details dict from PCO API with team_members included.
+
+    Returns:
+        Formatted string with team member assignments.
+    """
+    if not plan:
+        return ""
+
+    parts = [f"\n[SERVICE TEAM SCHEDULE]"]
+    parts.append(f"Date: {plan.get('dates') or plan.get('sort_date', 'Unknown')}")
+
+    if plan.get('title'):
+        parts.append(f"Service: {plan.get('title')}")
+
+    team_members = plan.get('team_members', [])
+    if team_members:
+        # Group by team
+        teams = {}
+        for member in team_members:
+            team_name = member.get('team_name', 'Other')
+            if team_name not in teams:
+                teams[team_name] = []
+            teams[team_name].append(member)
+
+        parts.append(f"\nTeam Assignments ({len(team_members)} people):")
+        for team_name in sorted(teams.keys()):
+            parts.append(f"\n  {team_name}:")
+            for member in teams[team_name]:
+                name = member.get('name', 'Unknown')
+                position = member.get('position', '')
+                status = member.get('status', 'Unknown')
+
+                member_line = f"    - {name}"
+                if position:
+                    member_line += f" ({position})"
+                member_line += f" - {status}"
+                parts.append(member_line)
+    else:
+        parts.append("\nNo team members assigned to this service yet.")
+
+    # Also include songs if available
+    songs = plan.get('songs', [])
+    if songs:
+        parts.append(f"\nSong Set ({len(songs)} songs):")
+        for i, song in enumerate(songs, 1):
+            title = song.get('title', 'Unknown')
+            key = song.get('key', '')
+            song_line = f"  {i}. {title}"
+            if key:
+                song_line += f" (Key: {key})"
+            parts.append(song_line)
+
+    parts.append("[END SERVICE TEAM SCHEDULE]\n")
     return '\n'.join(parts)
 
 
@@ -1432,7 +1499,28 @@ def query_agent(question: str, user, session_id: str) -> str:
             # Check if user is asking about lyrics/chords (even in setlist context)
             wants_lyrics_or_chords = bool(re.search(r'lyrics?|chords?|words|chart', question.lower()))
 
-            if song_query_type == 'setlist':
+            if song_query_type == 'team_schedule':
+                # Looking for team/volunteer schedule for a service
+                date_to_lookup = song_value
+
+                # If no date extracted but message has contextual reference, look up from conversation
+                if not date_to_lookup and has_contextual_date_reference(question):
+                    logger.info("Contextual date reference detected, searching conversation history")
+                    date_to_lookup = extract_date_from_conversation(user, session_id)
+                    if date_to_lookup:
+                        logger.info(f"Resolved contextual date reference to: {date_to_lookup}")
+
+                if date_to_lookup:
+                    plan_with_team = services_api.get_plan_with_team(date_to_lookup)
+                    if plan_with_team:
+                        song_data_context = format_team_schedule(plan_with_team)
+                        logger.info(f"Found plan for {date_to_lookup} with {len(plan_with_team.get('team_members', []))} team members")
+                    else:
+                        song_data_context = f"\n[SERVICE SCHEDULE: No service plan found for '{date_to_lookup}'. Try specifying a different date like 'last Sunday' or 'November 30'.]\n"
+                else:
+                    song_data_context = "\n[SERVICE SCHEDULE: Please specify a date to see the volunteer schedule (e.g., 'this Sunday', 'November 30', 'next Sunday').]\n"
+
+            elif song_query_type == 'setlist':
                 # Looking for a service plan/setlist
                 date_to_lookup = song_value
 
