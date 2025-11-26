@@ -166,7 +166,7 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
     # Patterns for song/setlist queries
     song_query_patterns = {
         'setlist': r'(setlist|song\s*set|what\s+songs?\s+(did|do|are|were|will)|songs?\s+(from|for|on|we\s+(play|sang|did))|(last|this|next)\s+sunday|worship\s+set|played\s+on|was\s+played|last\s+played|(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2})',
-        'song_history': r'when\s+(was|did)\s+(this\s+)?song\s+(last\s+)?(used|played|performed|scheduled)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|played)',
+        'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|played)',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
         'lyrics': r'lyrics?\s+(for|to)|words?\s+(for|to)',
         'song_search': r'(find|search|look\s*up|get|show)\s+(the\s+)?(song|music)',
@@ -192,8 +192,11 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
             r"'([^']+)'",  # Single-quoted title
             r'(?:chord\s*chart|chords?|lyrics?|song)\s+(?:for|to)\s+["\']?([^"\'?]+)["\']?',
             r'(?:find|search|look\s*up|get)\s+(?:the\s+)?(?:song\s+)?["\']?([^"\'?]+)["\']?',
-            # Song history patterns
+            # Song history patterns - match "when was the song [title] played last?"
+            r'when\s+(?:was|did)\s+(?:the\s+)?song\s+["\']?(.+?)["\']?\s+(?:last\s+)?(?:used|played|performed|scheduled)',
+            r'when\s+(?:was|did)\s+(?:the\s+)?song\s+["\']?(.+?)["\']?\s+(?:used|played|performed|scheduled)\s+(?:last|most\s+recently)',
             r'when\s+(?:was|did)\s+["\']?([^"\'?]+?)["\']?\s+(?:last\s+)?(?:used|played|performed|scheduled)',
+            r'when\s+was\s+["\']?(.+?)["\']?\s+played\s+(?:last|most\s+recently)',
             r'(?:history|usage)\s+(?:for|of)\s+["\']?([^"\'?]+)["\']?',
         ]
 
