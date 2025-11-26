@@ -825,9 +825,9 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         return songs
 
-    def search_song_with_suggestions(self, query: str, threshold: float = 0.5) -> dict:
+    def search_song_with_suggestions(self, query: str, threshold: float = 0.4) -> dict:
         """
-        Search for a song by title, returning suggestions if no exact match found.
+        Search for a song by title or attachment filename, returning suggestions if no exact match found.
 
         Args:
             query: Song title to search for.
@@ -849,9 +849,9 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         query_lower = query.lower().strip()
 
-        # Get all songs for matching
-        all_songs_result = self._get("/services/v2/songs", params={'per_page': 100})
-        all_songs = all_songs_result.get('data', [])
+        # Get all songs using pagination
+        all_songs = self._get_all_pages("/services/v2/songs")
+        logger.info(f"Searching through {len(all_songs)} songs for '{query}'")
 
         # Build list of songs with similarity scores
         matches = []
@@ -859,8 +859,9 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             song_attrs = song.get('attributes', {})
             title = song_attrs.get('title') or ''
             title_lower = title.lower()
+            author = song_attrs.get('author', '')
 
-            # Calculate similarity score
+            # Calculate similarity score based on title
             score = calculate_name_similarity(query_lower, title_lower)
 
             # Boost score for exact matches or if query is contained in title
@@ -869,7 +870,16 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             elif query_lower in title_lower:
                 score = max(score, 0.85)
             elif title_lower in query_lower:
-                score = max(score, 0.7)
+                score = max(score, 0.75)
+
+            # Check if any word in the query matches a word in the title
+            query_words = set(query_lower.split())
+            title_words = set(title_lower.split())
+            common_words = query_words & title_words
+            # Filter out common words like "the", "a", "in", "of"
+            common_words -= {'the', 'a', 'an', 'in', 'of', 'to', 'for', 'and', 'is'}
+            if common_words:
+                score = max(score, 0.5 + (len(common_words) * 0.1))
 
             if score >= threshold:
                 matches.append({
@@ -877,7 +887,8 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                     'title': title,
                     'score': score,
                     'song_id': song.get('id'),
-                    'author': song_attrs.get('author', '')
+                    'author': author,
+                    'match_type': 'title'
                 })
 
         # Sort by score descending
@@ -885,8 +896,8 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         if matches:
             best_match = matches[0]
-            # If we have a good match (score >= 0.8), consider it found
-            if best_match['score'] >= 0.8:
+            # If we have a good match (score >= 0.75), consider it found
+            if best_match['score'] >= 0.75:
                 result['found'] = True
                 result['song'] = self.get_song_with_attachments(best_match['title'])
                 logger.info(f"Found song '{best_match['title']}' with score {best_match['score']:.2f}")
@@ -1258,11 +1269,27 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         elif 'today' in date_lower:
             target_date = today
         else:
+            # Clean up the date string - remove ordinal suffixes (1st, 2nd, 3rd, 4th, etc.)
+            clean_date = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str)
+
             # Try parsing various formats
-            formats = ['%B %d', '%b %d', '%m/%d', '%m-%d', '%B %d, %Y', '%Y-%m-%d']
+            formats = [
+                '%B %d, %Y',   # November 16, 2025
+                '%B %d %Y',    # November 16 2025
+                '%B %d',       # November 16
+                '%b %d, %Y',   # Nov 16, 2025
+                '%b %d %Y',    # Nov 16 2025
+                '%b %d',       # Nov 16
+                '%m/%d/%Y',    # 11/16/2025
+                '%m/%d/%y',    # 11/16/25
+                '%m/%d',       # 11/16
+                '%m-%d-%Y',    # 11-16-2025
+                '%m-%d',       # 11-16
+                '%Y-%m-%d',    # 2025-11-16
+            ]
             for fmt in formats:
                 try:
-                    parsed = datetime.strptime(date_str, fmt)
+                    parsed = datetime.strptime(clean_date.strip(), fmt)
                     # If no year in format, assume current year
                     if parsed.year == 1900:
                         parsed = parsed.replace(year=today.year)
@@ -1278,8 +1305,8 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         target_str = target_date.isoformat()
         logger.info(f"Looking for plan on {target_str}")
 
-        # Search through recent plans
-        plans = self.get_recent_plans(limit=30)
+        # Search through recent plans (increased limit)
+        plans = self.get_recent_plans(limit=60)
 
         for plan in plans:
             plan_date = plan.get('attributes', {}).get('sort_date', '')[:10]
