@@ -204,9 +204,9 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
                 extracted_value = match.group(1).strip()
-                # Clean up common leading phrases like "the chorus of", "the verse of"
+                # Clean up common leading phrases like "the chorus of", "verse 2 in", etc.
                 extracted_value = re.sub(
-                    r'^(the\s+)?(chorus|verse|bridge|intro|outro|pre-?chorus|hook|refrain)(\s+of\s+|\s+from\s+|\s+to\s+)',
+                    r'^(the\s+)?(chorus|verse|bridge|intro|outro|pre-?chorus|hook|refrain)(\s+\d+)?(\s+of\s+|\s+from\s+|\s+to\s+|\s+in\s+)',
                     '',
                     extracted_value,
                     flags=re.IGNORECASE
