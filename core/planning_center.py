@@ -913,12 +913,78 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         return attachments
 
-    def get_song_with_attachments(self, song_title: str) -> Optional[dict]:
+    def fetch_attachment_content(self, attachment_url: str, content_type: str = None, max_size: int = 500000) -> Optional[str]:
+        """
+        Fetch the text content of an attachment from its URL.
+
+        Only fetches text-based content types to avoid downloading large binary files.
+
+        Args:
+            attachment_url: The URL to download from.
+            content_type: The content type of the file.
+            max_size: Maximum file size to download (default 500KB).
+
+        Returns:
+            Text content of the file, or None if not fetchable.
+        """
+        if not attachment_url:
+            return None
+
+        # Content types we can read as text
+        text_content_types = [
+            'text/plain',
+            'text/html',
+            'application/json',
+            'text/xml',
+            'application/xml',
+        ]
+
+        # File extensions we can read as text (for chord charts, lyrics)
+        text_extensions = ['.txt', '.cho', '.chopro', '.chordpro', '.onsong', '.pro']
+
+        # Check if this is a text file we can read
+        is_text = False
+        if content_type and any(ct in content_type.lower() for ct in text_content_types):
+            is_text = True
+        elif attachment_url:
+            url_lower = attachment_url.lower()
+            if any(url_lower.endswith(ext) or f'{ext}?' in url_lower for ext in text_extensions):
+                is_text = True
+
+        if not is_text:
+            logger.debug(f"Skipping non-text attachment: {content_type}")
+            return None
+
+        try:
+            response = requests.get(
+                attachment_url,
+                auth=(self.app_id, self.secret),
+                timeout=30,
+                stream=True
+            )
+            response.raise_for_status()
+
+            # Check content length
+            content_length = response.headers.get('content-length')
+            if content_length and int(content_length) > max_size:
+                logger.warning(f"Attachment too large: {content_length} bytes")
+                return None
+
+            # Read content with size limit
+            content = response.text[:max_size]
+            return content
+
+        except requests.RequestException as e:
+            logger.error(f"Error fetching attachment: {e}")
+            return None
+
+    def get_song_with_attachments(self, song_title: str, fetch_content: bool = True) -> Optional[dict]:
         """
         Search for a song and get all its attachments across arrangements.
 
         Args:
             song_title: Title to search for.
+            fetch_content: If True, fetch text content from attachments.
 
         Returns:
             Dict with song info and all attachments, or None if not found.
@@ -953,6 +1019,25 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                     attach['arrangement_name'] = arr.get('name')
                     attach['arrangement_key'] = arr.get('key')
                 all_attachments.extend(arr_attachments)
+
+        # Fetch text content from attachments if requested
+        if fetch_content:
+            for attach in all_attachments:
+                url = attach.get('url')
+                content_type = attach.get('content_type')
+                filename = attach.get('filename', '').lower()
+
+                # Try to fetch content for chord charts and lyrics files
+                if url and (
+                    'chord' in filename or
+                    'lyric' in filename or
+                    'chart' in filename or
+                    filename.endswith(('.txt', '.cho', '.chopro', '.chordpro', '.onsong', '.pro'))
+                ):
+                    content = self.fetch_attachment_content(url, content_type)
+                    if content:
+                        attach['text_content'] = content
+                        logger.info(f"Fetched content from attachment: {attach.get('filename')}")
 
         details['all_attachments'] = all_attachments
         return details
