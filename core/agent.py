@@ -299,6 +299,10 @@ def format_song_details(song: dict) -> str:
     if song.get('copyright'):
         parts.append(f"Copyright: {song.get('copyright')}")
 
+    # Track if we found any lyrics or chord content
+    has_lyrics_content = False
+    has_chord_content = False
+
     # Arrangements
     arrangements = song.get('arrangements', [])
     if arrangements:
@@ -315,11 +319,13 @@ def format_song_details(song: dict) -> str:
 
             # Include lyrics if available
             if arr.get('lyrics'):
+                has_lyrics_content = True
                 parts.append(f"\n    LYRICS ({arr.get('name', 'Default')} arrangement):")
                 parts.append("    " + arr.get('lyrics').replace('\n', '\n    '))
 
             # Include chord chart if available
             if arr.get('chord_chart'):
+                has_chord_content = True
                 parts.append(f"\n    CHORD CHART ({arr.get('name', 'Default')} arrangement):")
                 parts.append("    " + arr.get('chord_chart').replace('\n', '\n    '))
 
@@ -333,6 +339,7 @@ def format_song_details(song: dict) -> str:
         if content_attachments:
             parts.append(f"\nChord Charts/Lyrics Content:")
             for attach in content_attachments:
+                has_lyrics_content = True  # Assume attachment content includes lyrics
                 filename = attach.get('filename', 'Unknown file')
                 arr_name = attach.get('arrangement_name', '')
                 arr_key = attach.get('arrangement_key', '')
@@ -347,11 +354,11 @@ def format_song_details(song: dict) -> str:
                 parts.append(attach.get('text_content', ''))
 
         if other_attachments:
-            parts.append(f"\nOther Available Files ({len(other_attachments)}):")
+            # Note: These are files we couldn't read content from
+            parts.append(f"\nFiles that could not be read ({len(other_attachments)} - may be image-based PDFs):")
             for attach in other_attachments:
                 filename = attach.get('filename', 'Unknown file')
                 file_type = attach.get('file_type', '')
-                url = attach.get('url', '')
                 arr_key = attach.get('arrangement_key', '')
 
                 attach_info = f"  - {filename}"
@@ -360,11 +367,12 @@ def format_song_details(song: dict) -> str:
                 if file_type:
                     attach_info += f" [{file_type}]"
                 parts.append(attach_info)
-
-                if url:
-                    parts.append(f"    Download: {url}")
     else:
         parts.append("\nNo attachments found for this song.")
+
+    # Add explicit note about content availability
+    if not has_lyrics_content and not has_chord_content:
+        parts.append("\n[NOTE: No lyrics or chord chart text content could be extracted from this song's files. The files may be image-based PDFs that cannot be read as text. Please inform the user that the lyrics are not available in a readable format in Planning Center.]")
 
     parts.append("[END SONG DATA]\n")
     return '\n'.join(parts)
@@ -724,9 +732,10 @@ SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant named Ar
 - Format responses clearly with relevant details
 - If asked about a volunteer with no logged interactions, say so clearly
 - When Planning Center data is provided, use it to answer contact-related questions accurately
-- IMPORTANT: When song data (lyrics, chord charts) is provided from Planning Center, you MUST display it directly in your response - do NOT just offer download links. The church has proper CCLI licensing for all songs in their Planning Center account. This is licensed content that authenticated team members are authorized to access.
+- IMPORTANT: When song data (lyrics, chord charts) is provided from Planning Center, you MUST display it directly in your response - do NOT just offer download links. The church has proper CCLI licensing for all songs in their Planning Center account.
 - When a user asks for specific sections (e.g., "2nd verse", "chorus"), find and display just that section from the lyrics data provided. Look for section markers like "Verse 1", "Verse 2", "Chorus", "Bridge", etc. in the lyrics content.
 - If lyrics or chord chart content is included in the context data, always display it directly rather than pointing to download links.
+- IMPORTANT: If the context indicates that lyrics/chord content could NOT be extracted (e.g., "[NOTE: No lyrics or chord chart text content could be extracted...]"), clearly tell the user that the lyrics are not available in a readable text format in Planning Center. Do NOT offer download links as an alternative - just explain that the files are likely image-based PDFs that cannot be read as text and suggest they check the song directly in Planning Center or that the worship team may need to add text-based lyrics to the song in PCO.
 
 ## Data Extraction:
 When processing a new interaction, extract and structure:
