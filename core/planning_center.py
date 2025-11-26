@@ -983,6 +983,13 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 }
                 usages.append(usage)
 
+            # If song_schedules returned no results, fall back to searching through plans
+            # This handles cases where songs are in plans but not properly linked in song_schedules
+            if not usages:
+                logger.info(f"No song_schedules found for '{actual_title}', searching through recent plans")
+                fallback_result = self._get_song_usage_from_plans(song_id, actual_title, limit)
+                usages = fallback_result.get('usages', [])
+
             return {
                 'found': True,
                 'song_title': actual_title,
