@@ -362,6 +362,42 @@ def format_song_details(song: dict) -> str:
     return '\n'.join(parts)
 
 
+def format_song_suggestions(search_query: str, suggestions: list) -> str:
+    """
+    Format song search suggestions into a readable string for the AI context.
+
+    Args:
+        search_query: The song title that was searched for.
+        suggestions: List of suggestion dicts with 'title', 'author', and 'score'.
+
+    Returns:
+        Formatted string with suggestions for the AI to present to the user.
+    """
+    if not suggestions:
+        return f"\n[SONG SEARCH: No songs found matching '{search_query}'. The song may not be in the Planning Center library.]\n"
+
+    parts = [f"\n[SONG SEARCH: No exact match found for '{search_query}']"]
+    parts.append("Similar songs found in the Planning Center library:")
+
+    for i, s in enumerate(suggestions[:5], 1):
+        title = s.get('title', 'Unknown')
+        author = s.get('author', '')
+        score = s.get('score', 0)
+
+        confidence = "high" if score >= 0.7 else "medium" if score >= 0.5 else "low"
+        song_info = f"  {i}. \"{title}\""
+        if author:
+            song_info += f" by {author}"
+        song_info += f" ({confidence} confidence)"
+        parts.append(song_info)
+
+    parts.append("")
+    parts.append("ASK THE USER: Please ask the user if they meant one of these songs, or provide more details about the song they're looking for.")
+    parts.append("[END SONG SUGGESTIONS]\n")
+
+    return '\n'.join(parts)
+
+
 def format_pco_suggestions(search_name: str, suggestions: list, local_suggestions: list = None) -> str:
     """
     Format PCO name suggestions into a readable string for the AI context.
@@ -938,14 +974,19 @@ def query_agent(question: str, user, session_id: str) -> str:
                         song_data_context = '\n'.join(parts)
 
             elif song_query_type in ['chord_chart', 'lyrics', 'song_search', 'song_info']:
-                # Looking for song info or attachments
+                # Looking for song info or attachments - use fuzzy search with suggestions
                 if song_value:
-                    song_details = services_api.get_song_with_attachments(song_value)
-                    if song_details:
-                        song_data_context = format_song_details(song_details)
-                        logger.info(f"Found song '{song_details.get('title')}' with {len(song_details.get('all_attachments', []))} attachments")
+                    search_result = services_api.search_song_with_suggestions(song_value)
+
+                    if search_result['found'] and search_result['song']:
+                        song_data_context = format_song_details(search_result['song'])
+                        logger.info(f"Found song '{search_result['song'].get('title')}' with {len(search_result['song'].get('all_attachments', []))} attachments")
+                    elif search_result['suggestions']:
+                        # No exact match - provide suggestions for AI to ask user
+                        song_data_context = format_song_suggestions(song_value, search_result['suggestions'])
+                        logger.info(f"No match for '{song_value}', providing {len(search_result['suggestions'])} suggestions")
                     else:
-                        song_data_context = f"\n[SONG: No song found matching '{song_value}'. Check the spelling or try a different search term.]\n"
+                        song_data_context = f"\n[SONG: No songs found matching '{song_value}'. The song may not be in the Planning Center library.]\n"
                 else:
                     song_data_context = "\n[SONG: Please specify a song title to search for.]\n"
         else:

@@ -825,6 +825,88 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         return songs
 
+    def search_song_with_suggestions(self, query: str, threshold: float = 0.5) -> dict:
+        """
+        Search for a song by title, returning suggestions if no exact match found.
+
+        Args:
+            query: Song title to search for.
+            threshold: Minimum similarity score for suggestions (0-1).
+
+        Returns:
+            Dict with:
+            - 'found': True if exact/good match found
+            - 'song': Song details if found (with attachments)
+            - 'suggestions': List of similar song titles if not found
+            - 'search_query': The original search query
+        """
+        result = {
+            'found': False,
+            'song': None,
+            'suggestions': [],
+            'search_query': query
+        }
+
+        query_lower = query.lower().strip()
+
+        # Get all songs for matching
+        all_songs_result = self._get("/services/v2/songs", params={'per_page': 100})
+        all_songs = all_songs_result.get('data', [])
+
+        # Build list of songs with similarity scores
+        matches = []
+        for song in all_songs:
+            song_attrs = song.get('attributes', {})
+            title = song_attrs.get('title') or ''
+            title_lower = title.lower()
+
+            # Calculate similarity score
+            score = calculate_name_similarity(query_lower, title_lower)
+
+            # Boost score for exact matches or if query is contained in title
+            if query_lower == title_lower:
+                score = 1.0
+            elif query_lower in title_lower:
+                score = max(score, 0.85)
+            elif title_lower in query_lower:
+                score = max(score, 0.7)
+
+            if score >= threshold:
+                matches.append({
+                    'song': song,
+                    'title': title,
+                    'score': score,
+                    'song_id': song.get('id'),
+                    'author': song_attrs.get('author', '')
+                })
+
+        # Sort by score descending
+        matches.sort(key=lambda x: x['score'], reverse=True)
+
+        if matches:
+            best_match = matches[0]
+            # If we have a good match (score >= 0.8), consider it found
+            if best_match['score'] >= 0.8:
+                result['found'] = True
+                result['song'] = self.get_song_with_attachments(best_match['title'])
+                logger.info(f"Found song '{best_match['title']}' with score {best_match['score']:.2f}")
+            else:
+                # No good match - provide suggestions
+                result['suggestions'] = [
+                    {
+                        'title': m['title'],
+                        'author': m['author'],
+                        'score': m['score'],
+                        'song_id': m['song_id']
+                    }
+                    for m in matches[:5]  # Top 5 suggestions
+                ]
+                logger.info(f"No good match for '{query}', providing {len(result['suggestions'])} suggestions")
+        else:
+            logger.info(f"No songs found matching '{query}'")
+
+        return result
+
     def get_song_details(self, song_id: str) -> dict:
         """
         Get detailed song info including arrangements and attachments.
