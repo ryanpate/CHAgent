@@ -184,6 +184,13 @@ class ConversationContext(models.Model):
         help_text="Current song being discussed (title, id, etc.) for context in follow-up queries"
     )
 
+    # Store pending date lookup for confirmation (e.g., "Would you like me to look up April 20, 2025?")
+    pending_date_lookup = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Pending date lookup waiting for user confirmation (date, query_type)"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -228,6 +235,7 @@ class ConversationContext(models.Model):
         self.message_count = 0
         self.pending_song_suggestions = []
         self.current_song = {}
+        self.pending_date_lookup = {}
 
     def set_pending_song_suggestions(self, suggestions: list):
         """Store song suggestions for user selection."""
@@ -261,3 +269,18 @@ class ConversationContext(models.Model):
     def clear_current_song(self):
         """Clear the current song context."""
         self.current_song = {}
+
+    def set_pending_date_lookup(self, date_str: str, query_type: str = 'setlist'):
+        """Store a pending date lookup for user confirmation."""
+        self.pending_date_lookup = {
+            'date': date_str,
+            'query_type': query_type
+        }
+
+    def get_pending_date_lookup(self) -> dict:
+        """Get the pending date lookup."""
+        return self.pending_date_lookup or {}
+
+    def clear_pending_date_lookup(self):
+        """Clear the pending date lookup after use."""
+        self.pending_date_lookup = {}

@@ -1556,12 +1556,39 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         logger.info(f"Total plans: {len(all_plans)} (include_future={include_future}, include_past={include_past})")
         return all_plans
 
+    def _calculate_easter(self, year: int):
+        """
+        Calculate Easter Sunday for a given year using the Anonymous Gregorian algorithm.
+
+        Args:
+            year: The year to calculate Easter for.
+
+        Returns:
+            A date object for Easter Sunday.
+        """
+        from datetime import date
+        a = year % 19
+        b = year // 100
+        c = year % 100
+        d = b // 4
+        e = b % 4
+        f = (b + 8) // 25
+        g = (b - f + 1) // 3
+        h = (19 * a + b - d - g + 15) % 30
+        i = c // 4
+        k = c % 4
+        l = (32 + 2 * e + 2 * i - h - k) % 7
+        m = (a + 11 * h + 22 * l) // 451
+        month = (h + l - 7 * m + 114) // 31
+        day = ((h + l - 7 * m + 114) % 31) + 1
+        return date(year, month, day)
+
     def find_plan_by_date(self, date_str: str) -> Optional[dict]:
         """
         Find a plan by date string.
 
         Args:
-            date_str: Date string to search for (e.g., "December 1", "last Sunday", "12/1").
+            date_str: Date string to search for (e.g., "December 1", "last Sunday", "12/1", "Easter 2025").
 
         Returns:
             Plan details or None.
@@ -1589,6 +1616,20 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             target_date = today - timedelta(days=1)
         elif 'today' in date_lower:
             target_date = today
+        elif 'easter' in date_lower:
+            # Handle Easter date queries
+            # Try to extract year from the string (e.g., "Easter 2025", "Easter last year")
+            year_match = re.search(r'easter\s*(\d{4})', date_lower)
+            if year_match:
+                year = int(year_match.group(1))
+            elif 'last year' in date_lower:
+                year = today.year - 1
+            elif 'this year' in date_lower or 'next' not in date_lower:
+                year = today.year
+            else:
+                year = today.year + 1
+            target_date = self._calculate_easter(year)
+            logger.info(f"Calculated Easter {year} as {target_date}")
         else:
             # Clean up the date string - remove ordinal suffixes (1st, 2nd, 3rd, 4th, etc.)
             clean_date = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str)
