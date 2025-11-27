@@ -1677,8 +1677,15 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         is_future = target_date >= today
         is_past = target_date <= today
 
+        # Calculate how far back/forward we need to search
+        # If target is far from today, increase the limit
+        days_diff = abs((target_date - today).days)
+        # Assume roughly 1 plan per week, add buffer
+        needed_limit = max(30, (days_diff // 7) + 10)
+        logger.info(f"Target date is {days_diff} days from today, using limit of {needed_limit}")
+
         # Search through plans (both past and future to handle edge cases)
-        plans = self.get_plans_for_date_range(include_future=True, include_past=True, limit=30)
+        plans = self.get_plans_for_date_range(include_future=True, include_past=True, limit=needed_limit)
         logger.info(f"Searching through {len(plans)} plans for date {target_str}")
 
         for plan in plans:
