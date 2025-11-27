@@ -961,6 +961,14 @@ def process_interaction(content: str, user) -> dict:
     # Link confirmed volunteers
     interaction.volunteers.set(confirmed_volunteers)
 
+    # Step 5: Extract and store knowledge from the interaction
+    # This runs asynchronously-ish - we don't wait for it
+    try:
+        if confirmed_volunteers:
+            extract_knowledge_from_interaction(interaction, user)
+    except Exception as e:
+        logger.error(f"Error in knowledge extraction: {e}")
+
     return {
         'interaction': interaction,
         'extracted': extracted,
@@ -1055,6 +1063,148 @@ def skip_volunteer_match(interaction_id: int, original_name: str) -> bool:
     """
     logger.info(f"Skipped volunteer match for '{original_name}' in interaction {interaction_id}")
     return True
+
+
+def extract_knowledge_from_interaction(interaction, user=None):
+    """
+    Extract structured knowledge from an interaction and store it.
+
+    Uses Claude to analyze the interaction content and extract facts about
+    volunteers that can be stored in the knowledge base.
+
+    Args:
+        interaction: The Interaction instance.
+        user: Optional user who is extracting this knowledge.
+
+    Returns:
+        List of created/updated ExtractedKnowledge objects.
+    """
+    from .models import ExtractedKnowledge
+
+    # Get volunteers linked to this interaction
+    volunteers = list(interaction.volunteers.all())
+    if not volunteers:
+        return []
+
+    client = get_anthropic_client()
+    if not client:
+        return []
+
+    # Build the extraction prompt
+    volunteer_names = ", ".join([v.name for v in volunteers])
+    extraction_prompt = f"""Analyze this interaction about volunteer(s): {volunteer_names}
+
+Extract any factual information mentioned about them. For each piece of information, provide:
+- volunteer_name: Which volunteer this is about
+- knowledge_type: One of: hobby, family, preference, birthday, anniversary, prayer_request, health, work, availability, skill, contact, other
+- key: A short descriptive key (e.g., "favorite_food", "spouse_name", "child_age")
+- value: The actual information
+- confidence: "high" (directly stated), "medium" (clearly implied), or "low" (inferred/uncertain)
+
+Return a JSON array of knowledge items. If no extractable knowledge, return empty array [].
+
+Example output:
+[
+  {{"volunteer_name": "Sarah", "knowledge_type": "family", "key": "spouse_name", "value": "Mike", "confidence": "high"}},
+  {{"volunteer_name": "Sarah", "knowledge_type": "hobby", "key": "gardening", "value": "Enjoys growing tomatoes", "confidence": "high"}}
+]
+
+Interaction content:
+{interaction.content}"""
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1000,
+            messages=[{"role": "user", "content": extraction_prompt}]
+        )
+
+        # Parse the response
+        response_text = response.content[0].text
+        knowledge_items = parse_json_response_as_list(response_text)
+
+        if not knowledge_items:
+            return []
+
+        # Store extracted knowledge
+        created_knowledge = []
+        volunteer_lookup = {v.name.lower(): v for v in volunteers}
+
+        for item in knowledge_items:
+            volunteer_name = item.get('volunteer_name', '').lower()
+            volunteer = volunteer_lookup.get(volunteer_name)
+
+            if not volunteer:
+                # Try partial match
+                for v_name, v in volunteer_lookup.items():
+                    if volunteer_name in v_name or v_name in volunteer_name:
+                        volunteer = v
+                        break
+
+            if not volunteer:
+                continue
+
+            knowledge_type = item.get('knowledge_type', 'other')
+            key = item.get('key', '')
+            value = item.get('value', '')
+            confidence = item.get('confidence', 'medium')
+
+            if not key or not value:
+                continue
+
+            # Store the knowledge
+            knowledge, created = ExtractedKnowledge.update_or_create_knowledge(
+                volunteer=volunteer,
+                knowledge_type=knowledge_type,
+                key=key,
+                value=value,
+                source_interaction=interaction,
+                confidence=confidence,
+                user=user
+            )
+            created_knowledge.append(knowledge)
+
+            if created:
+                logger.info(f"Extracted new knowledge: {volunteer.name} - {key}: {value}")
+            else:
+                logger.info(f"Updated knowledge: {volunteer.name} - {key}: {value}")
+
+        return created_knowledge
+
+    except Exception as e:
+        logger.error(f"Error extracting knowledge from interaction: {e}")
+        return []
+
+
+def parse_json_response_as_list(response_text: str) -> list:
+    """
+    Parse a JSON array from Claude's response.
+
+    Args:
+        response_text: The raw response text.
+
+    Returns:
+        A list of dictionaries, or empty list if parsing fails.
+    """
+    import json
+    import re
+
+    # Try to extract JSON array from the response
+    try:
+        # First try direct parse
+        return json.loads(response_text)
+    except json.JSONDecodeError:
+        pass
+
+    # Try to find JSON array in the response
+    json_match = re.search(r'\[[\s\S]*\]', response_text)
+    if json_match:
+        try:
+            return json.loads(json_match.group(0))
+        except json.JSONDecodeError:
+            pass
+
+    return []
 
 
 def get_or_create_conversation_context(user, session_id: str) -> ConversationContext:
@@ -1398,6 +1548,196 @@ def detect_confirmation(message: str) -> bool:
             return True
 
     return False
+
+
+def detect_correction(message: str) -> tuple:
+    """
+    Detect if a user message contains a correction.
+
+    Patterns detected:
+    - "Actually, it's X not Y"
+    - "No, her name is spelled X"
+    - "It's X, not Y"
+    - "You mean X"
+    - "I meant X"
+    - "The correct spelling is X"
+
+    Args:
+        message: The user's message.
+
+    Returns:
+        Tuple of (is_correction, incorrect_value, correct_value, correction_type)
+    """
+    import re
+
+    message_lower = message.lower().strip()
+
+    # Pattern: "Actually, it's X not Y" or "Actually X, not Y"
+    match = re.search(
+        r'actually[,.]?\s*(?:it\'?s\s+)?["\']?(\w+(?:\s+\w+)?)["\']?\s*[,.]?\s*not\s+["\']?(\w+(?:\s+\w+)?)["\']?',
+        message_lower
+    )
+    if match:
+        correct = match.group(1).strip()
+        incorrect = match.group(2).strip()
+        return (True, incorrect, correct, 'spelling')
+
+    # Pattern: "No, her/his name is X" or "No, it's X"
+    match = re.search(
+        r'no[,.]?\s+(?:(?:her|his|their)\s+name\s+is|it\'?s)\s+["\']?(\w+(?:\s+\w+)?)["\']?',
+        message_lower
+    )
+    if match:
+        correct = match.group(1).strip()
+        return (True, None, correct, 'spelling')
+
+    # Pattern: "It's X, not Y"
+    match = re.search(
+        r'it\'?s\s+["\']?(\w+(?:\s+\w+)?)["\']?\s*[,.]?\s*not\s+["\']?(\w+(?:\s+\w+)?)["\']?',
+        message_lower
+    )
+    if match:
+        correct = match.group(1).strip()
+        incorrect = match.group(2).strip()
+        return (True, incorrect, correct, 'spelling')
+
+    # Pattern: "The correct X is Y" or "The right X is Y"
+    match = re.search(
+        r'the\s+(?:correct|right)\s+(?:spelling|name|term|word)\s+is\s+["\']?(\w+(?:\s+\w+)?)["\']?',
+        message_lower
+    )
+    if match:
+        correct = match.group(1).strip()
+        return (True, None, correct, 'spelling')
+
+    # Pattern: "spelled X" or "spelt X"
+    match = re.search(
+        r'(?:spelled|spelt)\s+["\']?(\w+(?:\s+\w+)?)["\']?',
+        message_lower
+    )
+    if match:
+        correct = match.group(1).strip()
+        return (True, None, correct, 'spelling')
+
+    # Pattern: "should be X" or "should say X"
+    match = re.search(
+        r'should\s+(?:be|say)\s+["\']?(\w+(?:\s+\w+)?)["\']?(?:\s*[,.]?\s*not\s+["\']?(\w+(?:\s+\w+)?)["\']?)?',
+        message_lower
+    )
+    if match:
+        correct = match.group(1).strip()
+        incorrect = match.group(2).strip() if match.group(2) else None
+        return (True, incorrect, correct, 'fact')
+
+    return (False, None, None, None)
+
+
+def store_correction(incorrect: str, correct: str, correction_type: str, user, volunteer=None):
+    """
+    Store a learned correction in the database.
+
+    Args:
+        incorrect: The incorrect value.
+        correct: The correct value.
+        correction_type: Type of correction (spelling, fact, preference, context).
+        user: The user providing the correction.
+        volunteer: Optional volunteer this correction is about.
+
+    Returns:
+        The created or updated LearnedCorrection.
+    """
+    from .models import LearnedCorrection
+
+    if not incorrect or not correct:
+        return None
+
+    # Check if this correction already exists
+    existing = LearnedCorrection.objects.filter(
+        incorrect_value__iexact=incorrect,
+        volunteer=volunteer,
+        is_active=True
+    ).first()
+
+    if existing:
+        # Update if different correct value
+        if existing.correct_value.lower() != correct.lower():
+            existing.correct_value = correct
+            existing.correction_type = correction_type
+            existing.save()
+        return existing
+
+    # Create new correction
+    correction = LearnedCorrection.objects.create(
+        incorrect_value=incorrect,
+        correct_value=correct,
+        correction_type=correction_type,
+        corrected_by=user,
+        volunteer=volunteer
+    )
+
+    logger.info(f"Stored correction: '{incorrect}' → '{correct}' (type: {correction_type})")
+    return correction
+
+
+def apply_learned_corrections(text: str, volunteer=None) -> str:
+    """
+    Apply any learned corrections to a piece of text.
+
+    Args:
+        text: The text to correct.
+        volunteer: Optional volunteer context.
+
+    Returns:
+        The text with corrections applied.
+    """
+    from .models import LearnedCorrection
+    return LearnedCorrection.apply_corrections(text, volunteer)
+
+
+def get_volunteer_knowledge_context(volunteer) -> str:
+    """
+    Get accumulated knowledge about a volunteer for context.
+
+    Args:
+        volunteer: The Volunteer instance.
+
+    Returns:
+        A formatted string with known information about the volunteer.
+    """
+    from .models import ExtractedKnowledge
+
+    profile = ExtractedKnowledge.get_volunteer_profile(volunteer)
+    if not profile:
+        return ""
+
+    parts = [f"\n[KNOWN INFORMATION ABOUT {volunteer.name.upper()}]"]
+
+    type_labels = {
+        'hobby': 'Hobbies/Interests',
+        'family': 'Family',
+        'preference': 'Preferences',
+        'birthday': 'Birthday',
+        'anniversary': 'Anniversary',
+        'prayer_request': 'Prayer Requests',
+        'health': 'Health',
+        'work': 'Work/Career',
+        'availability': 'Availability',
+        'skill': 'Skills',
+        'contact': 'Contact Info',
+        'other': 'Other'
+    }
+
+    for knowledge_type, items in profile.items():
+        label = type_labels.get(knowledge_type, knowledge_type.title())
+        parts.append(f"\n{label}:")
+        for key, data in items.items():
+            value = data['value']
+            confidence = data.get('confidence', 'medium')
+            verified = " (verified)" if data.get('verified') else ""
+            parts.append(f"  - {key}: {value}{verified}")
+
+    parts.append("")
+    return "\n".join(parts)
 
 
 def extract_followup_date(message: str):
@@ -2022,6 +2362,59 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
             context = f"[AGGREGATE QUERY - You have access to {len(relevant_interactions)} interactions covering the full team. Analyze ALL the data below to provide comprehensive team-wide insights.]\n\n" + context
     else:
         context = "No relevant interactions found in the database."
+
+    # Add learned knowledge about discussed volunteers
+    # This gives Aria accumulated knowledge about volunteers from past interactions
+    try:
+        from .models import ExtractedKnowledge
+        discussed_vols = conversation_context.discussed_volunteer_ids or []
+        # Also extract volunteer names from the current question
+        for interaction in relevant_interactions:
+            for vol in interaction.volunteers.all():
+                if vol.id not in discussed_vols:
+                    discussed_vols.append(vol.id)
+
+        # Get knowledge context for discussed volunteers (limit to 5 to avoid token overflow)
+        knowledge_context_parts = []
+        for vol_id in discussed_vols[:5]:
+            try:
+                vol = Volunteer.objects.get(id=vol_id)
+                vol_knowledge = get_volunteer_knowledge_context(vol)
+                if vol_knowledge:
+                    knowledge_context_parts.append(vol_knowledge)
+            except Volunteer.DoesNotExist:
+                pass
+
+        if knowledge_context_parts:
+            knowledge_context = "\n[LEARNED KNOWLEDGE FROM PAST INTERACTIONS]\n" + "\n".join(knowledge_context_parts)
+            context = knowledge_context + "\n" + context
+            logger.info(f"Added learned knowledge for {len(knowledge_context_parts)} volunteers")
+    except Exception as e:
+        logger.error(f"Error adding learned knowledge to context: {e}")
+
+    # Check if user is providing a correction and learn from it
+    try:
+        is_correction, incorrect, correct, correction_type = detect_correction(question)
+        if is_correction and correct:
+            # Try to find which volunteer this correction might be about
+            correction_volunteer = None
+            for interaction in relevant_interactions:
+                for vol in interaction.volunteers.all():
+                    if incorrect and incorrect.lower() in vol.name.lower():
+                        correction_volunteer = vol
+                        break
+                    if correct.lower() in vol.name.lower():
+                        correction_volunteer = vol
+                        break
+                if correction_volunteer:
+                    break
+
+            # Store the correction for future use
+            if incorrect:
+                store_correction(incorrect, correct, correction_type, user, correction_volunteer)
+                logger.info(f"Learned correction: '{incorrect}' → '{correct}'")
+    except Exception as e:
+        logger.error(f"Error processing correction: {e}")
 
     # Add PCO data to context if available
     if pco_data_context:

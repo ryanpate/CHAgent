@@ -6,6 +6,7 @@ urlpatterns = [
     path('chat/', views.chat, name='chat'),
     path('chat/send/', views.chat_send, name='chat_send'),
     path('chat/new/', views.chat_new_session, name='chat_new_session'),
+    path('chat/feedback/', views.chat_feedback, name='chat_feedback'),
     path('interactions/', views.interaction_list, name='interaction_list'),
     path('interactions/new/', views.interaction_create, name='interaction_create'),
     path('interactions/<int:pk>/', views.interaction_detail, name='interaction_detail'),

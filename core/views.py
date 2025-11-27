@@ -10,7 +10,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST, require_http_methods
 from django.db.models import Count
 
-from .models import Interaction, Volunteer, ChatMessage, ConversationContext, FollowUp
+from .models import Interaction, Volunteer, ChatMessage, ConversationContext, FollowUp, ResponseFeedback
 from .agent import (
     query_agent,
     process_interaction,
@@ -223,6 +223,77 @@ def chat_new_session(request):
     response.set_cookie('chat_session_id', new_session_id, max_age=86400 * 7)
 
     return response
+
+
+@login_required
+@require_POST
+def chat_feedback(request):
+    """
+    Handle feedback submission for AI responses.
+
+    Creates a ResponseFeedback record and optionally stores successful
+    query patterns for learning.
+    """
+    message_id = request.POST.get('message_id')
+    feedback_type = request.POST.get('feedback_type', 'positive')
+
+    if not message_id:
+        return HttpResponse('<span class="text-red-500 text-xs">Error</span>')
+
+    try:
+        chat_message = ChatMessage.objects.get(pk=int(message_id), role='assistant')
+    except ChatMessage.DoesNotExist:
+        return HttpResponse('<span class="text-red-500 text-xs">Error</span>')
+
+    # Check if feedback already exists
+    existing_feedback = ResponseFeedback.objects.filter(chat_message=chat_message).first()
+    if existing_feedback:
+        # Update existing feedback
+        existing_feedback.feedback_type = feedback_type
+        existing_feedback.save()
+    else:
+        # Create new feedback
+        ResponseFeedback.objects.create(
+            chat_message=chat_message,
+            user=request.user,
+            feedback_type=feedback_type
+        )
+
+    # If positive feedback, store the query pattern for learning
+    if feedback_type == 'positive':
+        try:
+            from .models import QueryPattern
+            # Find the user's question that preceded this response
+            user_message = ChatMessage.objects.filter(
+                user=chat_message.user,
+                session_id=chat_message.session_id,
+                role='user',
+                created_at__lt=chat_message.created_at
+            ).order_by('-created_at').first()
+
+            if user_message:
+                # Store the successful query pattern
+                normalized = QueryPattern.normalize_query(user_message.content)
+                # Check if similar pattern already exists
+                existing_pattern = QueryPattern.objects.filter(
+                    normalized_query=normalized
+                ).first()
+
+                if existing_pattern:
+                    existing_pattern.record_match(was_successful=True)
+                else:
+                    QueryPattern.objects.create(
+                        query_text=user_message.content,
+                        normalized_query=normalized,
+                        detected_intent='general',  # Could be enhanced to detect actual intent
+                        extracted_entities={}
+                    )
+        except Exception:
+            pass  # Don't fail feedback submission if pattern storage fails
+
+    return render(request, 'core/partials/feedback_response.html', {
+        'feedback_type': feedback_type
+    })
 
 
 @login_required
