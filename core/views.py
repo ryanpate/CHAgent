@@ -10,7 +10,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST, require_http_methods
 from django.db.models import Count
 
-from .models import Interaction, Volunteer, ChatMessage, ConversationContext
+from .models import Interaction, Volunteer, ChatMessage, ConversationContext, FollowUp
 from .agent import (
     query_agent,
     process_interaction,
@@ -411,3 +411,198 @@ def volunteer_match_skip(request):
     return render(request, 'core/partials/match_skipped.html', {
         'original_name': original_name
     })
+
+
+# ============================================================================
+# Follow-up Views
+# ============================================================================
+
+@login_required
+def followup_list(request):
+    """List all follow-ups with filtering options."""
+    from django.utils import timezone
+    from datetime import timedelta
+
+    # Get filter parameters
+    status_filter = request.GET.get('status', 'pending')
+    priority_filter = request.GET.get('priority', '')
+    date_filter = request.GET.get('date', '')
+
+    # Base queryset
+    followups = FollowUp.objects.select_related('volunteer', 'created_by', 'assigned_to')
+
+    # Apply status filter
+    if status_filter and status_filter != 'all':
+        followups = followups.filter(status=status_filter)
+
+    # Apply priority filter
+    if priority_filter:
+        followups = followups.filter(priority=priority_filter)
+
+    # Apply date filter
+    today = timezone.now().date()
+    if date_filter == 'overdue':
+        followups = followups.filter(follow_up_date__lt=today, status='pending')
+    elif date_filter == 'today':
+        followups = followups.filter(follow_up_date=today)
+    elif date_filter == 'this_week':
+        week_end = today + timedelta(days=7)
+        followups = followups.filter(follow_up_date__gte=today, follow_up_date__lte=week_end)
+    elif date_filter == 'no_date':
+        followups = followups.filter(follow_up_date__isnull=True)
+
+    # Get counts for sidebar/stats
+    overdue_count = FollowUp.objects.filter(
+        follow_up_date__lt=today,
+        status='pending'
+    ).count()
+    today_count = FollowUp.objects.filter(
+        follow_up_date=today,
+        status='pending'
+    ).count()
+    pending_count = FollowUp.objects.filter(status='pending').count()
+
+    context = {
+        'followups': followups[:50],
+        'status_filter': status_filter,
+        'priority_filter': priority_filter,
+        'date_filter': date_filter,
+        'overdue_count': overdue_count,
+        'today_count': today_count,
+        'pending_count': pending_count,
+        'volunteers': Volunteer.objects.all()[:100],  # For the create form dropdown
+    }
+    return render(request, 'core/followup_list.html', context)
+
+
+@login_required
+def followup_detail(request, pk):
+    """View details of a single follow-up."""
+    followup = get_object_or_404(FollowUp, pk=pk)
+    context = {
+        'followup': followup,
+    }
+    return render(request, 'core/followup_detail.html', context)
+
+
+@login_required
+@require_POST
+def followup_create(request):
+    """Create a new follow-up."""
+    from django.utils import timezone
+    from datetime import datetime
+
+    title = request.POST.get('title', '').strip()
+    description = request.POST.get('description', '').strip()
+    volunteer_id = request.POST.get('volunteer_id')
+    follow_up_date_str = request.POST.get('follow_up_date', '')
+    priority = request.POST.get('priority', 'medium')
+    category = request.POST.get('category', '')
+
+    if not title:
+        if request.headers.get('HX-Request'):
+            return HttpResponse('<div class="text-red-500">Error: Title is required</div>')
+        return redirect('followup_list')
+
+    # Parse follow-up date if provided
+    follow_up_date = None
+    if follow_up_date_str:
+        try:
+            follow_up_date = datetime.strptime(follow_up_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    # Get volunteer if specified
+    volunteer = None
+    if volunteer_id:
+        try:
+            volunteer = Volunteer.objects.get(pk=int(volunteer_id))
+        except (ValueError, Volunteer.DoesNotExist):
+            pass
+
+    followup = FollowUp.objects.create(
+        created_by=request.user,
+        title=title,
+        description=description,
+        volunteer=volunteer,
+        follow_up_date=follow_up_date,
+        priority=priority,
+        category=category
+    )
+
+    if request.headers.get('HX-Request'):
+        # Return the new follow-up row for HTMX
+        return render(request, 'core/partials/followup_row.html', {'followup': followup})
+
+    return redirect('followup_list')
+
+
+@login_required
+@require_POST
+def followup_complete(request, pk):
+    """Mark a follow-up as completed."""
+    followup = get_object_or_404(FollowUp, pk=pk)
+    notes = request.POST.get('notes', '')
+    followup.mark_completed(notes)
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/followup_row.html', {'followup': followup})
+
+    return redirect('followup_list')
+
+
+@login_required
+@require_POST
+def followup_update(request, pk):
+    """Update a follow-up's details."""
+    from datetime import datetime
+
+    followup = get_object_or_404(FollowUp, pk=pk)
+
+    # Update fields if provided
+    if 'title' in request.POST:
+        followup.title = request.POST['title'].strip()
+    if 'description' in request.POST:
+        followup.description = request.POST['description'].strip()
+    if 'priority' in request.POST:
+        followup.priority = request.POST['priority']
+    if 'status' in request.POST:
+        followup.status = request.POST['status']
+    if 'follow_up_date' in request.POST:
+        date_str = request.POST['follow_up_date']
+        if date_str:
+            try:
+                followup.follow_up_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        else:
+            followup.follow_up_date = None
+    if 'volunteer_id' in request.POST:
+        vol_id = request.POST['volunteer_id']
+        if vol_id:
+            try:
+                followup.volunteer = Volunteer.objects.get(pk=int(vol_id))
+            except (ValueError, Volunteer.DoesNotExist):
+                pass
+        else:
+            followup.volunteer = None
+
+    followup.save()
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/followup_row.html', {'followup': followup})
+
+    return redirect('followup_detail', pk=pk)
+
+
+@login_required
+@require_POST
+def followup_delete(request, pk):
+    """Delete a follow-up."""
+    followup = get_object_or_404(FollowUp, pk=pk)
+    followup.delete()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('')  # Empty response removes the row
+
+    return redirect('followup_list')

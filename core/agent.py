@@ -825,6 +825,20 @@ When processing a new interaction, extract and structure:
 - Availability or scheduling notes
 - Any follow-up actions needed
 
+## Follow-up Detection:
+When a user logs an interaction or mentions something that requires follow-up, you should:
+1. Identify items that need follow-up (prayer requests, concerns, action items, promises made, check-ins needed)
+2. Ask if they would like to create a follow-up item to track it
+3. If they confirm, ask for a follow-up date (e.g., "When would you like to follow up on this?")
+4. Suggest reasonable follow-up timeframes based on context:
+   - Prayer requests: 1-2 weeks
+   - Health concerns: 1 week
+   - General check-ins: 2-4 weeks
+   - Time-sensitive items: Specify urgency
+
+When you detect something needing follow-up, respond like:
+"It sounds like [volunteer name] could use some follow-up regarding [topic]. Would you like me to create a follow-up reminder for this? If so, when would you like to be reminded?"
+
 ## Context:
 You have access to the following interaction history for context:
 {context}
@@ -1386,6 +1400,111 @@ def detect_confirmation(message: str) -> bool:
     return False
 
 
+def extract_followup_date(message: str):
+    """
+    Extract a date from a message that might specify when to follow up.
+
+    Args:
+        message: The user's message.
+
+    Returns:
+        A date object if found, None otherwise.
+    """
+    from datetime import datetime, timedelta
+    import re
+
+    message_lower = message.lower().strip()
+    today = datetime.now().date()
+
+    # Patterns for relative dates
+    if re.search(r'(in\s+)?a?\s*week|next\s+week|1\s+week', message_lower):
+        return today + timedelta(weeks=1)
+    if re.search(r'(in\s+)?two\s+weeks?|2\s+weeks?', message_lower):
+        return today + timedelta(weeks=2)
+    if re.search(r'(in\s+)?three\s+weeks?|3\s+weeks?', message_lower):
+        return today + timedelta(weeks=3)
+    if re.search(r'(in\s+)?a\s+month|next\s+month|1\s+month', message_lower):
+        return today + timedelta(days=30)
+    if re.search(r'tomorrow', message_lower):
+        return today + timedelta(days=1)
+    if re.search(r'(in\s+)?a?\s*few\s+days?|couple\s+(of\s+)?days?', message_lower):
+        return today + timedelta(days=3)
+
+    # Try to extract specific date formats
+    date_patterns = [
+        (r'(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?', '%m/%d/%Y'),
+        (r'(\d{1,2})-(\d{1,2})(?:-(\d{2,4}))?', '%m-%d-%Y'),
+    ]
+
+    for pattern, fmt in date_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            try:
+                date_str = match.group(0)
+                if len(date_str.split('/')[-1]) <= 2 or len(date_str.split('-')[-1]) <= 2:
+                    # Add current year
+                    date_str = date_str + '/' + str(today.year) if '/' in date_str else date_str + '-' + str(today.year)
+                parsed = datetime.strptime(date_str, fmt)
+                return parsed.date()
+            except ValueError:
+                pass
+
+    # Try month day patterns
+    month_pattern = r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?'
+    match = re.search(month_pattern, message_lower)
+    if match:
+        try:
+            month_str = match.group(1)
+            day = int(match.group(2))
+            year = int(match.group(3)) if match.group(3) else today.year
+            month = datetime.strptime(month_str, '%B').month
+            return datetime(year, month, day).date()
+        except ValueError:
+            pass
+
+    return None
+
+
+def create_followup_from_pending(pending: dict, follow_up_date, user) -> 'FollowUp':
+    """
+    Create a FollowUp from pending data.
+
+    Args:
+        pending: Dict with title, description, volunteer_name, category.
+        follow_up_date: The date to follow up.
+        user: The user creating the follow-up.
+
+    Returns:
+        The created FollowUp object.
+    """
+    from .models import FollowUp, Volunteer
+
+    title = pending.get('title', 'Follow-up')
+    description = pending.get('description', '')
+    volunteer_name = pending.get('volunteer_name', '')
+    category = pending.get('category', '')
+
+    # Try to find the volunteer
+    volunteer = None
+    if volunteer_name:
+        volunteer = Volunteer.objects.filter(
+            normalized_name__icontains=volunteer_name.lower()
+        ).first()
+
+    followup = FollowUp.objects.create(
+        created_by=user,
+        volunteer=volunteer,
+        title=title,
+        description=description,
+        category=category,
+        follow_up_date=follow_up_date,
+        priority='medium'
+    )
+
+    logger.info(f"Created follow-up: '{title}' for {follow_up_date}")
+    return followup
+
+
 def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None) -> str:
     """
     Handle a pending date lookup by fetching the data from Planning Center.
@@ -1588,6 +1707,46 @@ def query_agent(question: str, user, session_id: str) -> str:
         conversation_context.save()
 
         return answer
+
+    # Check if user is providing a date for a pending follow-up
+    pending_followup = conversation_context.get_pending_followup()
+    if pending_followup:
+        # Try to extract a date from the message
+        followup_date = extract_followup_date(question)
+        if followup_date:
+            logger.info(f"Creating follow-up with date: {followup_date}")
+
+            # Create the follow-up
+            followup = create_followup_from_pending(pending_followup, followup_date, user)
+
+            # Clear the pending follow-up
+            conversation_context.clear_pending_followup()
+            conversation_context.save()
+
+            # Save the user's message to chat history
+            ChatMessage.objects.create(
+                user=user,
+                session_id=session_id,
+                role='user',
+                content=question
+            )
+
+            # Respond confirming the follow-up was created
+            answer = f"I've created a follow-up reminder for \"{pending_followup.get('title', 'Follow-up')}\" scheduled for {followup_date.strftime('%B %d, %Y')}. You can view and manage it on the Follow-ups page."
+
+            # Save assistant response to chat history
+            ChatMessage.objects.create(
+                user=user,
+                session_id=session_id,
+                role='assistant',
+                content=answer
+            )
+
+            # Update conversation context
+            conversation_context.increment_message_count(2)
+            conversation_context.save()
+
+            return answer
 
     # Check if this is a PCO data query (contact info, email, phone, etc.)
     pco_query, pco_query_type, pco_person_name = is_pco_data_query(question)

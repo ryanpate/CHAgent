@@ -1,0 +1,84 @@
+<tr id="followup-{{ followup.id }}" class="border-b border-gray-800 hover:bg-ch-gray/50 transition">
+    <td class="p-4">
+        <a href="{% url 'followup_detail' followup.id %}" class="hover:text-ch-gold transition">
+            <span class="{% if followup.is_overdue %}text-red-400{% elif followup.is_due_soon %}text-yellow-400{% endif %}">
+                {{ followup.title }}
+            </span>
+        </a>
+        {% if followup.category %}
+        <span class="ml-2 text-xs px-2 py-0.5 rounded bg-ch-gray text-gray-400">
+            {{ followup.category|title }}
+        </span>
+        {% endif %}
+    </td>
+    <td class="p-4 text-gray-400">
+        {% if followup.volunteer %}
+        <a href="{% url 'volunteer_detail' followup.volunteer.id %}" class="hover:text-ch-gold transition">
+            {{ followup.volunteer.name }}
+        </a>
+        {% else %}
+        <span class="text-gray-500">-</span>
+        {% endif %}
+    </td>
+    <td class="p-4">
+        {% if followup.follow_up_date %}
+        <span class="{% if followup.is_overdue %}text-red-400{% elif followup.is_due_soon %}text-yellow-400{% else %}text-gray-400{% endif %}">
+            {{ followup.follow_up_date|date:"M j, Y" }}
+        </span>
+        {% if followup.is_overdue %}
+        <span class="ml-1 text-xs text-red-400">(Overdue)</span>
+        {% endif %}
+        {% else %}
+        <span class="text-gray-500">No date</span>
+        {% endif %}
+    </td>
+    <td class="p-4">
+        <span class="px-2 py-1 rounded text-xs font-medium
+            {% if followup.priority == 'urgent' %}bg-red-900/50 text-red-300
+            {% elif followup.priority == 'high' %}bg-orange-900/50 text-orange-300
+            {% elif followup.priority == 'medium' %}bg-yellow-900/50 text-yellow-300
+            {% else %}bg-gray-700 text-gray-300{% endif %}">
+            {{ followup.priority|title }}
+        </span>
+    </td>
+    <td class="p-4">
+        <span class="px-2 py-1 rounded text-xs font-medium
+            {% if followup.status == 'completed' %}bg-green-900/50 text-green-300
+            {% elif followup.status == 'in_progress' %}bg-blue-900/50 text-blue-300
+            {% elif followup.status == 'cancelled' %}bg-gray-700 text-gray-400
+            {% else %}bg-ch-gray text-gray-300{% endif %}">
+            {{ followup.get_status_display }}
+        </span>
+    </td>
+    <td class="p-4">
+        <div class="flex gap-2">
+            {% if followup.status == 'pending' or followup.status == 'in_progress' %}
+            <form method="post" action="{% url 'followup_complete' followup.id %}"
+                  hx-post="{% url 'followup_complete' followup.id %}"
+                  hx-target="#followup-{{ followup.id }}"
+                  hx-swap="outerHTML">
+                {% csrf_token %}
+                <button type="submit" title="Mark as complete"
+                        class="text-green-400 hover:text-green-300 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </button>
+            </form>
+            {% endif %}
+            <form method="post" action="{% url 'followup_delete' followup.id %}"
+                  hx-post="{% url 'followup_delete' followup.id %}"
+                  hx-target="#followup-{{ followup.id }}"
+                  hx-swap="outerHTML"
+                  hx-confirm="Are you sure you want to delete this follow-up?">
+                {% csrf_token %}
+                <button type="submit" title="Delete"
+                        class="text-red-400 hover:text-red-300 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                </button>
+            </form>
+        </div>
+    </td>
+</tr>

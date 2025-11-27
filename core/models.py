@@ -191,6 +191,13 @@ class ConversationContext(models.Model):
         help_text="Pending date lookup waiting for user confirmation (date, query_type)"
     )
 
+    # Store pending follow-up items waiting for date confirmation
+    pending_followup = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Pending follow-up item waiting for date (title, description, volunteer_name, category)"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -236,6 +243,7 @@ class ConversationContext(models.Model):
         self.pending_song_suggestions = []
         self.current_song = {}
         self.pending_date_lookup = {}
+        self.pending_followup = {}
 
     def set_pending_song_suggestions(self, suggestions: list):
         """Store song suggestions for user selection."""
@@ -284,3 +292,170 @@ class ConversationContext(models.Model):
     def clear_pending_date_lookup(self):
         """Clear the pending date lookup after use."""
         self.pending_date_lookup = {}
+
+    def set_pending_followup(self, title: str, description: str = '', volunteer_name: str = '', category: str = ''):
+        """Store a pending follow-up waiting for date confirmation."""
+        self.pending_followup = {
+            'title': title,
+            'description': description,
+            'volunteer_name': volunteer_name,
+            'category': category
+        }
+
+    def get_pending_followup(self) -> dict:
+        """Get the pending follow-up."""
+        return self.pending_followup or {}
+
+    def clear_pending_followup(self):
+        """Clear the pending follow-up after use."""
+        self.pending_followup = {}
+
+
+class FollowUp(models.Model):
+    """
+    Tracks items that require follow-up action.
+
+    Created automatically when the AI detects something needing follow-up
+    (prayer requests, concerns, action items, etc.) or manually by team members.
+    """
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('urgent', 'Urgent'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    # Who created this follow-up
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_followups',
+        help_text="Team member who created this follow-up"
+    )
+
+    # Who is assigned to handle this follow-up (optional)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_followups',
+        help_text="Team member assigned to handle this follow-up"
+    )
+
+    # Which volunteer(s) this follow-up is about (optional)
+    volunteer = models.ForeignKey(
+        Volunteer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='followups',
+        help_text="Volunteer this follow-up is about"
+    )
+
+    # The follow-up details
+    title = models.CharField(
+        max_length=200,
+        help_text="Brief title/summary of the follow-up"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Detailed description of what needs to be followed up on"
+    )
+    category = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Category (e.g., 'prayer_request', 'concern', 'action_item', 'feedback')"
+    )
+
+    # Scheduling
+    follow_up_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="When to follow up"
+    )
+    reminder_sent = models.BooleanField(
+        default=False,
+        help_text="Whether a reminder has been sent for this follow-up"
+    )
+
+    # Status tracking
+    priority = models.CharField(
+        max_length=10,
+        choices=PRIORITY_CHOICES,
+        default='medium'
+    )
+    status = models.CharField(
+        max_length=15,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+
+    # Completion details
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this follow-up was completed"
+    )
+    completion_notes = models.TextField(
+        blank=True,
+        help_text="Notes about how this was resolved"
+    )
+
+    # Link to source interaction (if auto-created from a conversation)
+    source_interaction = models.ForeignKey(
+        Interaction,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='followups',
+        help_text="The interaction that triggered this follow-up"
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['follow_up_date', '-priority', '-created_at']
+        verbose_name = 'Follow-up'
+        verbose_name_plural = 'Follow-ups'
+
+    def __str__(self):
+        volunteer_name = self.volunteer.name if self.volunteer else 'General'
+        return f"{self.title} ({volunteer_name})"
+
+    def mark_completed(self, notes: str = ''):
+        """Mark this follow-up as completed."""
+        from django.utils import timezone
+        self.status = 'completed'
+        self.completed_at = timezone.now()
+        if notes:
+            self.completion_notes = notes
+        self.save()
+
+    @property
+    def is_overdue(self) -> bool:
+        """Check if this follow-up is past its due date."""
+        from django.utils import timezone
+        if self.follow_up_date and self.status == 'pending':
+            return self.follow_up_date < timezone.now().date()
+        return False
+
+    @property
+    def is_due_soon(self) -> bool:
+        """Check if this follow-up is due within the next 3 days."""
+        from django.utils import timezone
+        from datetime import timedelta
+        if self.follow_up_date and self.status == 'pending':
+            today = timezone.now().date()
+            return today <= self.follow_up_date <= today + timedelta(days=3)
+        return False
