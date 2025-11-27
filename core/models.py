@@ -459,3 +459,531 @@ class FollowUp(models.Model):
             today = timezone.now().date()
             return today <= self.follow_up_date <= today + timedelta(days=3)
         return False
+
+
+# =============================================================================
+# Learning System Models - Enable Aria to learn and improve from interactions
+# =============================================================================
+
+class ResponseFeedback(models.Model):
+    """
+    Stores user feedback (thumbs up/down) on AI responses.
+
+    This enables:
+    - Tracking which responses were helpful
+    - Using highly-rated responses as few-shot examples
+    - Identifying areas where Aria needs improvement
+    """
+    FEEDBACK_CHOICES = [
+        ('positive', 'Helpful'),
+        ('negative', 'Not Helpful'),
+    ]
+
+    # The chat message this feedback is for
+    chat_message = models.OneToOneField(
+        ChatMessage,
+        on_delete=models.CASCADE,
+        related_name='feedback',
+        help_text="The AI response being rated"
+    )
+
+    # Who provided the feedback
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='response_feedbacks'
+    )
+
+    feedback_type = models.CharField(
+        max_length=10,
+        choices=FEEDBACK_CHOICES,
+        help_text="Whether the response was helpful or not"
+    )
+
+    # Optional comment explaining the feedback
+    comment = models.TextField(
+        blank=True,
+        help_text="Optional explanation for the feedback"
+    )
+
+    # Context about the query for learning
+    query_type = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Type of query (e.g., 'volunteer_info', 'setlist', 'lyrics')"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Response Feedback'
+        verbose_name_plural = 'Response Feedbacks'
+
+    def __str__(self):
+        return f"{self.feedback_type} feedback on message {self.chat_message_id}"
+
+    @classmethod
+    def get_positive_examples(cls, query_type: str = None, limit: int = 5):
+        """
+        Get highly-rated responses that can be used as few-shot examples.
+
+        Args:
+            query_type: Optional filter by query type.
+            limit: Maximum number of examples to return.
+
+        Returns:
+            QuerySet of positive feedback with related chat messages.
+        """
+        qs = cls.objects.filter(feedback_type='positive').select_related('chat_message')
+        if query_type:
+            qs = qs.filter(query_type=query_type)
+        return qs.order_by('-created_at')[:limit]
+
+
+class LearnedCorrection(models.Model):
+    """
+    Stores corrections learned from user feedback.
+
+    When users correct Aria (e.g., "Actually her name is spelled Sarah, not Sara"),
+    this correction is stored and used to improve future responses.
+    """
+    CORRECTION_TYPE_CHOICES = [
+        ('spelling', 'Spelling/Name'),
+        ('fact', 'Factual Correction'),
+        ('preference', 'Terminology Preference'),
+        ('context', 'Contextual Correction'),
+    ]
+
+    # The incorrect value
+    incorrect_value = models.CharField(
+        max_length=500,
+        db_index=True,
+        help_text="The incorrect term/value that was used"
+    )
+
+    # The correct value
+    correct_value = models.CharField(
+        max_length=500,
+        help_text="The correct term/value to use instead"
+    )
+
+    correction_type = models.CharField(
+        max_length=20,
+        choices=CORRECTION_TYPE_CHOICES,
+        default='spelling'
+    )
+
+    # Optional: Link to a specific volunteer if it's about them
+    volunteer = models.ForeignKey(
+        Volunteer,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='corrections',
+        help_text="The volunteer this correction is about (if applicable)"
+    )
+
+    # Who provided this correction
+    corrected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='provided_corrections'
+    )
+
+    # How many times this correction has been applied
+    times_applied = models.IntegerField(default=0)
+
+    # Is this correction active?
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-times_applied', '-created_at']
+        unique_together = ['incorrect_value', 'volunteer']
+        verbose_name = 'Learned Correction'
+        verbose_name_plural = 'Learned Corrections'
+
+    def __str__(self):
+        return f"'{self.incorrect_value}' → '{self.correct_value}'"
+
+    def apply(self):
+        """Record that this correction was applied."""
+        self.times_applied += 1
+        self.save(update_fields=['times_applied'])
+
+    @classmethod
+    def find_correction(cls, text: str, volunteer=None):
+        """
+        Check if any corrections apply to the given text.
+
+        Args:
+            text: The text to check for corrections.
+            volunteer: Optional volunteer context.
+
+        Returns:
+            The matching LearnedCorrection or None.
+        """
+        text_lower = text.lower()
+
+        # First check volunteer-specific corrections
+        if volunteer:
+            correction = cls.objects.filter(
+                is_active=True,
+                volunteer=volunteer,
+                incorrect_value__iexact=text
+            ).first()
+            if correction:
+                return correction
+
+        # Then check general corrections
+        correction = cls.objects.filter(
+            is_active=True,
+            volunteer__isnull=True,
+            incorrect_value__iexact=text
+        ).first()
+
+        return correction
+
+    @classmethod
+    def apply_corrections(cls, text: str, volunteer=None) -> str:
+        """
+        Apply all relevant corrections to a piece of text.
+
+        Args:
+            text: The text to correct.
+            volunteer: Optional volunteer context.
+
+        Returns:
+            The corrected text.
+        """
+        import re
+
+        # Get all active corrections
+        corrections = cls.objects.filter(is_active=True)
+        if volunteer:
+            corrections = corrections.filter(
+                models.Q(volunteer=volunteer) | models.Q(volunteer__isnull=True)
+            )
+        else:
+            corrections = corrections.filter(volunteer__isnull=True)
+
+        for correction in corrections:
+            # Case-insensitive replacement
+            pattern = re.compile(re.escape(correction.incorrect_value), re.IGNORECASE)
+            if pattern.search(text):
+                text = pattern.sub(correction.correct_value, text)
+                correction.apply()
+
+        return text
+
+
+class ExtractedKnowledge(models.Model):
+    """
+    Stores structured knowledge extracted from interactions.
+
+    This builds a knowledge base about volunteers that can be used
+    to provide better, more informed responses.
+    """
+    KNOWLEDGE_TYPE_CHOICES = [
+        ('hobby', 'Hobby/Interest'),
+        ('family', 'Family Info'),
+        ('preference', 'Preference'),
+        ('birthday', 'Birthday'),
+        ('anniversary', 'Anniversary'),
+        ('prayer_request', 'Prayer Request'),
+        ('health', 'Health Info'),
+        ('work', 'Work/Career'),
+        ('availability', 'Availability'),
+        ('skill', 'Skill/Talent'),
+        ('contact', 'Contact Info'),
+        ('other', 'Other'),
+    ]
+
+    CONFIDENCE_CHOICES = [
+        ('high', 'High - Directly stated'),
+        ('medium', 'Medium - Inferred'),
+        ('low', 'Low - Uncertain'),
+    ]
+
+    # The volunteer this knowledge is about
+    volunteer = models.ForeignKey(
+        Volunteer,
+        on_delete=models.CASCADE,
+        related_name='knowledge',
+        help_text="The volunteer this knowledge is about"
+    )
+
+    knowledge_type = models.CharField(
+        max_length=20,
+        choices=KNOWLEDGE_TYPE_CHOICES,
+        db_index=True
+    )
+
+    # The key (e.g., "favorite_food", "spouse_name", "birthday")
+    key = models.CharField(
+        max_length=100,
+        help_text="The knowledge key (e.g., 'favorite_food', 'children_count')"
+    )
+
+    # The value (e.g., "Pizza", "Sarah", "March 15")
+    value = models.TextField(
+        help_text="The knowledge value"
+    )
+
+    # Confidence level in this knowledge
+    confidence = models.CharField(
+        max_length=10,
+        choices=CONFIDENCE_CHOICES,
+        default='medium'
+    )
+
+    # Source interaction (where we learned this)
+    source_interaction = models.ForeignKey(
+        Interaction,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='extracted_knowledge',
+        help_text="The interaction where this was learned"
+    )
+
+    # Who extracted this (could be AI or human)
+    extracted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='extracted_knowledge'
+    )
+
+    # Has this been verified by a human?
+    is_verified = models.BooleanField(
+        default=False,
+        help_text="Whether this knowledge has been verified by a human"
+    )
+
+    # Is this knowledge still current/valid?
+    is_current = models.BooleanField(
+        default=True,
+        help_text="Whether this knowledge is still current"
+    )
+
+    # When this knowledge was last confirmed/used
+    last_confirmed = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this knowledge was last confirmed as accurate"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-confidence', '-updated_at']
+        verbose_name = 'Extracted Knowledge'
+        verbose_name_plural = 'Extracted Knowledge'
+        # Prevent duplicate knowledge entries
+        unique_together = ['volunteer', 'knowledge_type', 'key']
+
+    def __str__(self):
+        return f"{self.volunteer.name}: {self.key} = {self.value}"
+
+    def verify(self, user=None):
+        """Mark this knowledge as verified."""
+        from django.utils import timezone
+        self.is_verified = True
+        self.last_confirmed = timezone.now()
+        self.confidence = 'high'
+        self.save()
+
+    def mark_outdated(self):
+        """Mark this knowledge as no longer current."""
+        self.is_current = False
+        self.save(update_fields=['is_current', 'updated_at'])
+
+    @classmethod
+    def get_volunteer_profile(cls, volunteer) -> dict:
+        """
+        Get all current knowledge about a volunteer as a structured profile.
+
+        Args:
+            volunteer: The Volunteer instance.
+
+        Returns:
+            Dict with knowledge organized by type.
+        """
+        knowledge = cls.objects.filter(
+            volunteer=volunteer,
+            is_current=True
+        ).order_by('-confidence', '-updated_at')
+
+        profile = {}
+        for k in knowledge:
+            if k.knowledge_type not in profile:
+                profile[k.knowledge_type] = {}
+            profile[k.knowledge_type][k.key] = {
+                'value': k.value,
+                'confidence': k.confidence,
+                'verified': k.is_verified,
+                'last_updated': k.updated_at.isoformat() if k.updated_at else None
+            }
+
+        return profile
+
+    @classmethod
+    def update_or_create_knowledge(cls, volunteer, knowledge_type: str, key: str,
+                                   value: str, source_interaction=None,
+                                   confidence: str = 'medium', user=None):
+        """
+        Update existing knowledge or create new entry.
+
+        Args:
+            volunteer: The volunteer this is about.
+            knowledge_type: Type of knowledge.
+            key: The knowledge key.
+            value: The knowledge value.
+            source_interaction: Optional source interaction.
+            confidence: Confidence level.
+            user: User who extracted this.
+
+        Returns:
+            Tuple of (ExtractedKnowledge, created).
+        """
+        from django.utils import timezone
+
+        obj, created = cls.objects.update_or_create(
+            volunteer=volunteer,
+            knowledge_type=knowledge_type,
+            key=key,
+            defaults={
+                'value': value,
+                'confidence': confidence,
+                'source_interaction': source_interaction,
+                'extracted_by': user,
+                'is_current': True,
+                'last_confirmed': timezone.now() if not created else None
+            }
+        )
+
+        return obj, created
+
+
+class QueryPattern(models.Model):
+    """
+    Stores successful query patterns for intent recognition improvement.
+
+    When a query leads to a helpful response (positive feedback),
+    the pattern is stored to help with similar future queries.
+    """
+    # The original query text
+    query_text = models.TextField(
+        help_text="The original query from the user"
+    )
+
+    # Normalized/cleaned version for matching
+    normalized_query = models.CharField(
+        max_length=500,
+        db_index=True,
+        help_text="Normalized version of the query for matching"
+    )
+
+    # The detected intent/query type
+    detected_intent = models.CharField(
+        max_length=50,
+        db_index=True,
+        help_text="The intent that was detected (e.g., 'volunteer_info', 'setlist')"
+    )
+
+    # Extracted entities
+    extracted_entities = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Entities extracted from the query (names, dates, etc.)"
+    )
+
+    # Link to the positive feedback that validated this pattern
+    validated_by_feedback = models.ForeignKey(
+        ResponseFeedback,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='validated_patterns'
+    )
+
+    # How often this pattern has been matched
+    match_count = models.IntegerField(default=1)
+
+    # Success rate (positive responses / total uses)
+    success_count = models.IntegerField(default=1)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-match_count', '-success_count']
+        verbose_name = 'Query Pattern'
+        verbose_name_plural = 'Query Patterns'
+
+    def __str__(self):
+        return f"'{self.normalized_query[:50]}...' → {self.detected_intent}"
+
+    @property
+    def success_rate(self) -> float:
+        """Calculate the success rate for this pattern."""
+        if self.match_count == 0:
+            return 0.0
+        return self.success_count / self.match_count
+
+    def record_match(self, was_successful: bool = True):
+        """Record that this pattern was matched."""
+        self.match_count += 1
+        if was_successful:
+            self.success_count += 1
+        self.save(update_fields=['match_count', 'success_count', 'updated_at'])
+
+    @classmethod
+    def find_similar_pattern(cls, query: str, threshold: float = 0.7):
+        """
+        Find a similar pattern to help with intent detection.
+
+        Args:
+            query: The new query to match.
+            threshold: Minimum similarity threshold.
+
+        Returns:
+            The best matching QueryPattern or None.
+        """
+        from difflib import SequenceMatcher
+
+        normalized = cls.normalize_query(query)
+        patterns = cls.objects.filter(success_count__gte=1).order_by('-success_count')[:100]
+
+        best_match = None
+        best_score = threshold
+
+        for pattern in patterns:
+            score = SequenceMatcher(None, normalized, pattern.normalized_query).ratio()
+            # Boost score based on success rate
+            score *= (0.5 + 0.5 * pattern.success_rate)
+
+            if score > best_score:
+                best_score = score
+                best_match = pattern
+
+        return best_match
+
+    @staticmethod
+    def normalize_query(query: str) -> str:
+        """Normalize a query for pattern matching."""
+        import re
+        # Lowercase
+        normalized = query.lower().strip()
+        # Remove extra whitespace
+        normalized = ' '.join(normalized.split())
+        # Remove punctuation except question marks
+        normalized = re.sub(r'[^\w\s?]', '', normalized)
+        return normalized
