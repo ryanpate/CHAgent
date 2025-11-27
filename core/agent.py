@@ -252,6 +252,35 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
     return is_song_query, query_type, extracted_value
 
 
+def detect_service_type_from_question(message: str) -> Optional[str]:
+    """
+    Detect if a question is asking about a specific service type.
+
+    Args:
+        message: The user's question.
+
+    Returns:
+        Service type name if detected, None otherwise (will default to main service).
+    """
+    message_lower = message.lower().strip()
+
+    # Service type keywords and their mappings
+    # If any of these are found, return the corresponding service type name
+    service_type_patterns = {
+        'HSM': [r'\bhsm\b', r'high\s+school', r'high-school', r'highschool'],
+        'MSM': [r'\bmsm\b', r'middle\s+school', r'middle-school', r'middleschool'],
+    }
+
+    for service_type, patterns in service_type_patterns.items():
+        for pattern in patterns:
+            if re.search(pattern, message_lower):
+                logger.info(f"Detected service type '{service_type}' from question")
+                return service_type
+
+    # No specific service type mentioned - will default to main service
+    return None
+
+
 def format_plan_details(plan: dict) -> str:
     """
     Format service plan details into a readable string for the AI context.
@@ -266,6 +295,8 @@ def format_plan_details(plan: dict) -> str:
         return ""
 
     parts = [f"\n[SERVICE PLAN DATA]"]
+    if plan.get('service_type_name'):
+        parts.append(f"Service Type: {plan.get('service_type_name')}")
     parts.append(f"Date: {plan.get('dates') or plan.get('sort_date', 'Unknown')}")
 
     if plan.get('title'):
@@ -308,6 +339,8 @@ def format_team_schedule(plan: dict) -> str:
         return ""
 
     parts = [f"\n[SERVICE TEAM SCHEDULE]"]
+    if plan.get('service_type_name'):
+        parts.append(f"Service Type: {plan.get('service_type_name')}")
     parts.append(f"Date: {plan.get('dates') or plan.get('sort_date', 'Unknown')}")
 
     if plan.get('title'):
@@ -1845,24 +1878,26 @@ def create_followup_from_pending(pending: dict, follow_up_date, user) -> 'Follow
     return followup
 
 
-def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None) -> str:
+def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None, service_type: str = None) -> str:
     """
     Handle a pending date lookup by fetching the data from Planning Center.
 
     Args:
-        pending_lookup: Dict with 'date' and 'query_type'.
+        pending_lookup: Dict with 'date', 'query_type', and optionally 'service_type'.
         query_type: Override query type if provided.
+        service_type: Override service type if provided (e.g., 'HSM', 'MSM').
 
     Returns:
         Formatted string with the service data.
     """
     date_str = pending_lookup.get('date', '')
     lookup_type = query_type or pending_lookup.get('query_type', 'setlist')
+    lookup_service_type = service_type or pending_lookup.get('service_type')
 
     if not date_str:
         return "\n[DATE LOOKUP: No date specified.]\n"
 
-    logger.info(f"Handling pending date lookup: '{date_str}' (type: {lookup_type})")
+    logger.info(f"Handling pending date lookup: '{date_str}' (type: {lookup_type}, service_type: {lookup_service_type})")
 
     from .planning_center import PlanningCenterServicesAPI
     services_api = PlanningCenterServicesAPI()
@@ -1871,14 +1906,14 @@ def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None) -> 
         return "\n[DATE LOOKUP: Planning Center is not configured.]\n"
 
     if lookup_type == 'team_schedule':
-        plan_with_team = services_api.get_plan_with_team(date_str)
+        plan_with_team = services_api.get_plan_with_team(date_str, service_type=lookup_service_type)
         if plan_with_team:
             return format_team_schedule(plan_with_team)
         else:
             return f"\n[SERVICE SCHEDULE: No service plan found for '{date_str}'.]\n"
     else:
         # Default to setlist lookup
-        plan = services_api.find_plan_by_date(date_str)
+        plan = services_api.find_plan_by_date(date_str, service_type=lookup_service_type)
         if plan:
             return format_plan_details(plan)
         else:
@@ -2130,6 +2165,10 @@ def query_agent(question: str, user, session_id: str) -> str:
             # Check if user is asking about lyrics/chords (even in setlist context)
             wants_lyrics_or_chords = bool(re.search(r'lyrics?|chords?|words|chart', question.lower()))
 
+            # Detect service type from the question (e.g., HSM, MSM)
+            # If none specified, will default to main Sunday morning service
+            requested_service_type = detect_service_type_from_question(question)
+
             if song_query_type == 'team_schedule':
                 # Looking for team/volunteer schedule for a service
                 date_to_lookup = song_value
@@ -2142,7 +2181,7 @@ def query_agent(question: str, user, session_id: str) -> str:
                         logger.info(f"Resolved contextual date reference to: {date_to_lookup}")
 
                 if date_to_lookup:
-                    plan_with_team = services_api.get_plan_with_team(date_to_lookup)
+                    plan_with_team = services_api.get_plan_with_team(date_to_lookup, service_type=requested_service_type)
                     if plan_with_team:
                         song_data_context = format_team_schedule(plan_with_team)
                         logger.info(f"Found plan for {date_to_lookup} with {len(plan_with_team.get('team_members', []))} team members")
@@ -2167,7 +2206,7 @@ def query_agent(question: str, user, session_id: str) -> str:
                         logger.info(f"Resolved contextual date reference to: {date_to_lookup}")
 
                 if date_to_lookup:
-                    plan = services_api.find_plan_by_date(date_to_lookup)
+                    plan = services_api.find_plan_by_date(date_to_lookup, service_type=requested_service_type)
                     if plan:
                         song_data_context = format_plan_details(plan)
                         logger.info(f"Found plan for {date_to_lookup} with {len(plan.get('songs', []))} songs")
