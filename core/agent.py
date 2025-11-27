@@ -240,8 +240,8 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
                 r'(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?',
                 r'(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
                 r'(\d{1,2}-\d{1,2}(?:-\d{2,4})?)',
-                # Easter pattern - matches "Easter", "Easter 2025", "Easter last year"
-                r'(easter(?:\s+\d{4}|\s+(?:last|this|next)\s+year)?)',
+                # Easter pattern - matches "Easter", "Easter 2025", "Easter last year", "last Easter"
+                r'((?:last|this|next)\s+easter|easter(?:\s+\d{4}|\s+(?:last|this|next)\s+year)?)',
             ]
             for pattern in date_patterns:
                 match = re.search(pattern, message_lower)

@@ -1618,16 +1618,22 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             target_date = today
         elif 'easter' in date_lower:
             # Handle Easter date queries
-            # Try to extract year from the string (e.g., "Easter 2025", "Easter last year")
+            # Supported formats:
+            # - "Easter 2025" / "easter 2024"
+            # - "Easter last year" / "Easter this year" / "Easter next year"
+            # - "last Easter" / "this Easter" / "next Easter"
             year_match = re.search(r'easter\s*(\d{4})', date_lower)
             if year_match:
                 year = int(year_match.group(1))
-            elif 'last year' in date_lower:
+            elif 'last year' in date_lower or 'last easter' in date_lower:
                 year = today.year - 1
-            elif 'this year' in date_lower or 'next' not in date_lower:
+            elif 'next year' in date_lower or 'next easter' in date_lower:
+                year = today.year + 1
+            elif 'this year' in date_lower or 'this easter' in date_lower:
                 year = today.year
             else:
-                year = today.year + 1
+                # Default to current year if no modifier specified
+                year = today.year
             target_date = self._calculate_easter(year)
             logger.info(f"Calculated Easter {year} as {target_date}")
         else:
