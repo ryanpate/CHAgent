@@ -19,6 +19,12 @@ PCO_PLANS_CACHE_KEY = 'pco_plans_list'
 PCO_CACHE_TIMEOUT = 3600  # 1 hour
 PCO_PLANS_CACHE_TIMEOUT = 900  # 15 minutes for plans (they change more often)
 
+# Default service type - Cherry Hills Sunday Morning Main Service
+# This is used when no specific service type is requested
+DEFAULT_SERVICE_TYPE_NAME = 'Cherry Hills Morning Main'
+# Keywords to identify non-main services (case-insensitive)
+YOUTH_SERVICE_KEYWORDS = ['hsm', 'msm', 'high school', 'middle school', 'youth', 'student']
+
 
 class PlanningCenterAPI:
     """Client for Planning Center Online API."""
@@ -865,17 +871,19 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         return team_members
 
-    def get_plan_with_team(self, date_str: str) -> Optional[dict]:
+    def get_plan_with_team(self, date_str: str, service_type: str = None) -> Optional[dict]:
         """
         Find a plan by date and include team member assignments.
 
         Args:
             date_str: Date string to search for.
+            service_type: Optional service type name (e.g., "HSM", "Cherry Hills Morning Main").
+                         If not specified, defaults to the main Sunday morning service.
 
         Returns:
             Dict with plan details, songs, and team members.
         """
-        plan_details = self.find_plan_by_date(date_str)
+        plan_details = self.find_plan_by_date(date_str, service_type=service_type)
         if not plan_details:
             return None
 
@@ -1599,12 +1607,14 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         day = ((h + l - 7 * m + 114) % 31) + 1
         return date(year, month, day)
 
-    def find_plan_by_date(self, date_str: str) -> Optional[dict]:
+    def find_plan_by_date(self, date_str: str, service_type: str = None) -> Optional[dict]:
         """
         Find a plan by date string.
 
         Args:
             date_str: Date string to search for (e.g., "December 1", "last Sunday", "12/1", "Easter 2025").
+            service_type: Optional service type name to filter by (e.g., "HSM", "Cherry Hills Morning Main").
+                         If not specified, defaults to the main Sunday morning service.
 
         Returns:
             Plan details or None.
@@ -1712,13 +1722,60 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             plans = self.get_plans_for_date_range(include_future=True, include_past=True, limit=10)
         logger.info(f"Searching through {len(plans)} plans for date {target_str}")
 
+        # Find all plans matching the target date
+        matching_plans = []
         for plan in plans:
             plan_date = plan.get('attributes', {}).get('sort_date', '')[:10]
             if plan_date == target_str:
-                service_type_id = plan.get('service_type_id')
-                plan_id = plan.get('id')
-                logger.info(f"Found matching plan: {plan_id} on {plan_date}")
-                return self.get_plan_details(service_type_id, plan_id)
+                matching_plans.append(plan)
 
-        logger.info(f"No plan found for date {target_str}")
-        return None
+        if not matching_plans:
+            logger.info(f"No plan found for date {target_str}")
+            return None
+
+        logger.info(f"Found {len(matching_plans)} plans for date {target_str}")
+
+        # Helper to get plan details and include service_type_name
+        def get_plan_with_service_name(plan_data):
+            service_type_id = plan_data.get('service_type_id')
+            plan_id = plan_data.get('id')
+            service_name = plan_data.get('service_type_name', '')
+            details = self.get_plan_details(service_type_id, plan_id)
+            if details:
+                details['service_type_name'] = service_name
+            return details
+
+        # If a specific service type was requested, filter to that
+        if service_type:
+            service_type_lower = service_type.lower()
+            for plan in matching_plans:
+                plan_service_name = (plan.get('service_type_name') or '').lower()
+                # Check for partial match (e.g., "HSM" matches "HSM Sunday")
+                if service_type_lower in plan_service_name or plan_service_name in service_type_lower:
+                    logger.info(f"Found matching plan for '{service_type}': {plan.get('id')} ({plan.get('service_type_name')})")
+                    return get_plan_with_service_name(plan)
+            # If specific type not found, log and return None
+            logger.info(f"No plan found for service type '{service_type}' on {target_str}")
+            return None
+
+        # No specific service type requested - prioritize main service
+        # First, look for the default main service
+        default_name_lower = DEFAULT_SERVICE_TYPE_NAME.lower()
+        for plan in matching_plans:
+            plan_service_name = (plan.get('service_type_name') or '').lower()
+            if default_name_lower in plan_service_name or plan_service_name in default_name_lower:
+                logger.info(f"Found main service plan: {plan.get('id')} ({plan.get('service_type_name')})")
+                return get_plan_with_service_name(plan)
+
+        # If main service not found, look for any non-youth service
+        for plan in matching_plans:
+            plan_service_name = (plan.get('service_type_name') or '').lower()
+            is_youth_service = any(keyword in plan_service_name for keyword in YOUTH_SERVICE_KEYWORDS)
+            if not is_youth_service:
+                logger.info(f"Found non-youth service plan: {plan.get('id')} ({plan.get('service_type_name')})")
+                return get_plan_with_service_name(plan)
+
+        # Fallback: return first matching plan
+        plan = matching_plans[0]
+        logger.info(f"Fallback to first plan: {plan.get('id')} ({plan.get('service_type_name')})")
+        return get_plan_with_service_name(plan)
