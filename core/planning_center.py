@@ -13,9 +13,11 @@ from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
-# Cache key for PCO people list
+# Cache keys for PCO data
 PCO_PEOPLE_CACHE_KEY = 'pco_people_list'
+PCO_PLANS_CACHE_KEY = 'pco_plans_list'
 PCO_CACHE_TIMEOUT = 3600  # 1 hour
+PCO_PLANS_CACHE_TIMEOUT = 900  # 15 minutes for plans (they change more often)
 
 
 class PlanningCenterAPI:
@@ -1481,7 +1483,7 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         details['all_attachments'] = all_attachments
         return details
 
-    def get_plans_for_date_range(self, include_future: bool = True, include_past: bool = True, limit: int = 30) -> list:
+    def get_plans_for_date_range(self, include_future: bool = True, include_past: bool = True, limit: int = 30, use_cache: bool = True) -> list:
         """
         Get plans across all service types, including both past and/or future plans.
 
@@ -1489,12 +1491,21 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             include_future: Include future plans.
             include_past: Include past plans.
             limit: Maximum number of plans per service type to fetch.
+            use_cache: Whether to use cached results.
 
         Returns:
             List of plan records with service type info.
         """
         from datetime import datetime
         today = datetime.now().date()
+
+        # Check cache first
+        cache_key = f"{PCO_PLANS_CACHE_KEY}_future{include_future}_past{include_past}_limit{limit}"
+        if use_cache:
+            cached = cache.get(cache_key)
+            if cached:
+                logger.info(f"Using cached plans list ({len(cached)} plans)")
+                return cached
 
         service_types = self.get_service_types()
         all_plans = []
@@ -1554,6 +1565,11 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         # Sort by date
         all_plans.sort(key=lambda p: p.get('attributes', {}).get('sort_date', ''), reverse=True)
         logger.info(f"Total plans: {len(all_plans)} (include_future={include_future}, include_past={include_past})")
+
+        # Cache results
+        if all_plans:
+            cache.set(cache_key, all_plans, PCO_PLANS_CACHE_TIMEOUT)
+
         return all_plans
 
     def _calculate_easter(self, year: int):
@@ -1673,19 +1689,27 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         target_str = target_date.isoformat()
         logger.info(f"Looking for plan on {target_str}")
 
-        # Determine if we need to search past, future, or both
-        is_future = target_date >= today
-        is_past = target_date <= today
+        # Determine if we need to search past or future only
+        is_future = target_date > today
+        is_past = target_date < today
 
         # Calculate how far back/forward we need to search
         # If target is far from today, increase the limit
         days_diff = abs((target_date - today).days)
         # Assume roughly 1 plan per week, add buffer
-        needed_limit = max(30, (days_diff // 7) + 10)
+        # Cap at 60 to prevent excessive API calls (roughly 1 year of weekly services)
+        needed_limit = min(60, max(30, (days_diff // 7) + 10))
         logger.info(f"Target date is {days_diff} days from today, using limit of {needed_limit}")
 
-        # Search through plans (both past and future to handle edge cases)
-        plans = self.get_plans_for_date_range(include_future=True, include_past=True, limit=needed_limit)
+        # Only fetch what we need - past OR future, not both
+        # This reduces API calls significantly for historical lookups
+        if is_past:
+            plans = self.get_plans_for_date_range(include_future=False, include_past=True, limit=needed_limit)
+        elif is_future:
+            plans = self.get_plans_for_date_range(include_future=True, include_past=False, limit=needed_limit)
+        else:
+            # Target is today - check both but with smaller limit
+            plans = self.get_plans_for_date_range(include_future=True, include_past=True, limit=10)
         logger.info(f"Searching through {len(plans)} plans for date {target_str}")
 
         for plan in plans:
