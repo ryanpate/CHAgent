@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ followup.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <!-- Header -->
+    <div class="flex items-center gap-4 mb-6">
+        <a href="{% url 'followup_list' %}" class="text-gray-400 hover:text-white transition">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            </svg>
+        </a>
+        <div class="flex-1">
+            <h1 class="text-2xl font-bold text-ch-gold">{{ followup.title }}</h1>
+            <div class="flex items-center gap-3 mt-1">
+                <span class="px-2 py-1 rounded text-xs font-medium
+                    {% if followup.status == 'completed' %}bg-green-900/50 text-green-300
+                    {% elif followup.status == 'in_progress' %}bg-blue-900/50 text-blue-300
+                    {% elif followup.status == 'cancelled' %}bg-gray-700 text-gray-400
+                    {% else %}bg-ch-gray text-gray-300{% endif %}">
+                    {{ followup.get_status_display }}
+                </span>
+                <span class="px-2 py-1 rounded text-xs font-medium
+                    {% if followup.priority == 'urgent' %}bg-red-900/50 text-red-300
+                    {% elif followup.priority == 'high' %}bg-orange-900/50 text-orange-300
+                    {% elif followup.priority == 'medium' %}bg-yellow-900/50 text-yellow-300
+                    {% else %}bg-gray-700 text-gray-300{% endif %}">
+                    {{ followup.priority|title }} Priority
+                </span>
+                {% if followup.is_overdue %}
+                <span class="px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300">
+                    Overdue
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        {% if followup.status != 'completed' %}
+        <form method="post" action="{% url 'followup_complete' followup.id %}">
+            {% csrf_token %}
+            <button type="submit"
+                    class="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-500 transition">
+                Mark Complete
+            </button>
+        </form>
+        {% endif %}
+    </div>
+
+    <!-- Main Content -->
+    <div class="bg-ch-dark rounded-lg border border-gray-800 p-6 mb-6">
+        <div class="grid grid-cols-2 gap-6 mb-6">
+            <div>
+                <label class="text-sm text-gray-400 block mb-1">Volunteer</label>
+                {% if followup.volunteer %}
+                <a href="{% url 'volunteer_detail' followup.volunteer.id %}"
+                   class="text-ch-gold hover:underline">
+                    {{ followup.volunteer.name }}
+                </a>
+                {% else %}
+                <span class="text-gray-500">No volunteer assigned</span>
+                {% endif %}
+            </div>
+            <div>
+                <label class="text-sm text-gray-400 block mb-1">Follow-up Date</label>
+                {% if followup.follow_up_date %}
+                <span class="{% if followup.is_overdue %}text-red-400{% elif followup.is_due_soon %}text-yellow-400{% endif %}">
+                    {{ followup.follow_up_date|date:"F j, Y" }}
+                </span>
+                {% else %}
+                <span class="text-gray-500">No date set</span>
+                {% endif %}
+            </div>
+            <div>
+                <label class="text-sm text-gray-400 block mb-1">Category</label>
+                <span>{{ followup.category|default:"Not specified"|title }}</span>
+            </div>
+            <div>
+                <label class="text-sm text-gray-400 block mb-1">Created By</label>
+                <span>{{ followup.created_by.display_name|default:followup.created_by.username }}</span>
+                <span class="text-gray-500 text-sm">on {{ followup.created_at|date:"M j, Y" }}</span>
+            </div>
+        </div>
+
+        {% if followup.description %}
+        <div class="mb-6">
+            <label class="text-sm text-gray-400 block mb-2">Description</label>
+            <div class="bg-ch-gray rounded-lg p-4">
+                {{ followup.description|linebreaks }}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if followup.status == 'completed' and followup.completion_notes %}
+        <div class="mb-6">
+            <label class="text-sm text-gray-400 block mb-2">Completion Notes</label>
+            <div class="bg-green-900/20 border border-green-800 rounded-lg p-4">
+                {{ followup.completion_notes|linebreaks }}
+            </div>
+            <p class="text-gray-500 text-sm mt-2">
+                Completed on {{ followup.completed_at|date:"F j, Y \a\t g:i A" }}
+            </p>
+        </div>
+        {% endif %}
+
+        {% if followup.source_interaction %}
+        <div>
+            <label class="text-sm text-gray-400 block mb-2">Source Interaction</label>
+            <a href="{% url 'interaction_detail' followup.source_interaction.id %}"
+               class="block bg-ch-gray rounded-lg p-4 hover:bg-gray-700 transition">
+                <div class="text-sm text-gray-400 mb-2">
+                    {{ followup.source_interaction.created_at|date:"F j, Y" }}
+                </div>
+                <div class="text-gray-300">
+                    {{ followup.source_interaction.ai_summary|default:followup.source_interaction.content|truncatechars:200 }}
+                </div>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Edit Form -->
+    <div class="bg-ch-dark rounded-lg border border-gray-800 p-6">
+        <h2 class="text-lg font-bold mb-4">Edit Follow-up</h2>
+        <form method="post" action="{% url 'followup_update' followup.id %}">
+            {% csrf_token %}
+            <div class="space-y-4">
+                <div>
+                    <label class="text-sm text-gray-400 block mb-1">Title</label>
+                    <input type="text" name="title" value="{{ followup.title }}"
+                           class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2 focus:outline-none focus:border-ch-gold">
+                </div>
+                <div>
+                    <label class="text-sm text-gray-400 block mb-1">Description</label>
+                    <textarea name="description" rows="3"
+                              class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2 focus:outline-none focus:border-ch-gold">{{ followup.description }}</textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm text-gray-400 block mb-1">Follow-up Date</label>
+                        <input type="date" name="follow_up_date"
+                               value="{% if followup.follow_up_date %}{{ followup.follow_up_date|date:'Y-m-d' }}{% endif %}"
+                               class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-400 block mb-1">Priority</label>
+                        <select name="priority"
+                                class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2">
+                            <option value="low" {% if followup.priority == 'low' %}selected{% endif %}>Low</option>
+                            <option value="medium" {% if followup.priority == 'medium' %}selected{% endif %}>Medium</option>
+                            <option value="high" {% if followup.priority == 'high' %}selected{% endif %}>High</option>
+                            <option value="urgent" {% if followup.priority == 'urgent' %}selected{% endif %}>Urgent</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm text-gray-400 block mb-1">Status</label>
+                        <select name="status"
+                                class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2">
+                            <option value="pending" {% if followup.status == 'pending' %}selected{% endif %}>Pending</option>
+                            <option value="in_progress" {% if followup.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+                            <option value="completed" {% if followup.status == 'completed' %}selected{% endif %}>Completed</option>
+                            <option value="cancelled" {% if followup.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 pt-4">
+                    <a href="{% url 'followup_list' %}"
+                       class="px-4 py-2 bg-ch-gray text-gray-300 rounded hover:bg-gray-600 transition">
+                        Cancel
+                    </a>
+                    <button type="submit"
+                            class="px-4 py-2 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

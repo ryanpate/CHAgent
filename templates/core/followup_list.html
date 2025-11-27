@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+
+{% block title %}Follow-ups{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-ch-gold">Follow-ups</h1>
+            <p class="text-gray-400 text-sm mt-1">Track and manage items that need follow-up</p>
+        </div>
+        <button onclick="document.getElementById('createModal').classList.remove('hidden')"
+                class="px-4 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+            + New Follow-up
+        </button>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="bg-ch-dark rounded-lg p-4 border border-gray-800">
+            <div class="text-3xl font-bold text-red-400">{{ overdue_count }}</div>
+            <div class="text-gray-400 text-sm">Overdue</div>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border border-gray-800">
+            <div class="text-3xl font-bold text-yellow-400">{{ today_count }}</div>
+            <div class="text-gray-400 text-sm">Due Today</div>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border border-gray-800">
+            <div class="text-3xl font-bold text-ch-gold">{{ pending_count }}</div>
+            <div class="text-gray-400 text-sm">Total Pending</div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-ch-dark rounded-lg p-4 mb-6 border border-gray-800">
+        <form method="get" class="flex flex-wrap gap-4">
+            <div>
+                <label class="text-sm text-gray-400 block mb-1">Status</label>
+                <select name="status" onchange="this.form.submit()"
+                        class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm">
+                    <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="in_progress" {% if status_filter == 'in_progress' %}selected{% endif %}>In Progress</option>
+                    <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-sm text-gray-400 block mb-1">Priority</label>
+                <select name="priority" onchange="this.form.submit()"
+                        class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm">
+                    <option value="">All Priorities</option>
+                    <option value="urgent" {% if priority_filter == 'urgent' %}selected{% endif %}>Urgent</option>
+                    <option value="high" {% if priority_filter == 'high' %}selected{% endif %}>High</option>
+                    <option value="medium" {% if priority_filter == 'medium' %}selected{% endif %}>Medium</option>
+                    <option value="low" {% if priority_filter == 'low' %}selected{% endif %}>Low</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-sm text-gray-400 block mb-1">Date</label>
+                <select name="date" onchange="this.form.submit()"
+                        class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm">
+                    <option value="">All Dates</option>
+                    <option value="overdue" {% if date_filter == 'overdue' %}selected{% endif %}>Overdue</option>
+                    <option value="today" {% if date_filter == 'today' %}selected{% endif %}>Today</option>
+                    <option value="this_week" {% if date_filter == 'this_week' %}selected{% endif %}>This Week</option>
+                    <option value="no_date" {% if date_filter == 'no_date' %}selected{% endif %}>No Date Set</option>
+                </select>
+            </div>
+        </form>
+    </div>
+
+    <!-- Follow-up List -->
+    <div class="bg-ch-dark rounded-lg border border-gray-800" id="followup-list">
+        {% if followups %}
+        <table class="w-full">
+            <thead>
+                <tr class="border-b border-gray-700 text-gray-400 text-sm">
+                    <th class="text-left p-4">Title</th>
+                    <th class="text-left p-4">Volunteer</th>
+                    <th class="text-left p-4">Due Date</th>
+                    <th class="text-left p-4">Priority</th>
+                    <th class="text-left p-4">Status</th>
+                    <th class="text-left p-4">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for followup in followups %}
+                {% include 'core/partials/followup_row.html' %}
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-8 text-center text-gray-400">
+            <svg class="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+            </svg>
+            <p>No follow-ups found</p>
+            <p class="text-sm mt-2">Create a new follow-up or adjust your filters</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Create Modal -->
+<div id="createModal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div class="bg-ch-dark rounded-lg p-6 w-full max-w-lg border border-gray-700">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-ch-gold">New Follow-up</h2>
+            <button onclick="document.getElementById('createModal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-white">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <form method="post" action="{% url 'followup_create' %}"
+              hx-post="{% url 'followup_create' %}"
+              hx-target="#followup-list tbody"
+              hx-swap="afterbegin"
+              hx-on::after-request="if(event.detail.successful) { document.getElementById('createModal').classList.add('hidden'); this.reset(); }">
+            {% csrf_token %}
+            <div class="space-y-4">
+                <div>
+                    <label class="text-sm text-gray-400 block mb-1">Title *</label>
+                    <input type="text" name="title" required
+                           class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2 focus:outline-none focus:border-ch-gold"
+                           placeholder="Brief description of the follow-up">
+                </div>
+                <div>
+                    <label class="text-sm text-gray-400 block mb-1">Description</label>
+                    <textarea name="description" rows="3"
+                              class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2 focus:outline-none focus:border-ch-gold"
+                              placeholder="Additional details..."></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm text-gray-400 block mb-1">Volunteer</label>
+                        <select name="volunteer_id"
+                                class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2">
+                            <option value="">-- Select --</option>
+                            {% for volunteer in volunteers %}
+                            <option value="{{ volunteer.id }}">{{ volunteer.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-400 block mb-1">Follow-up Date</label>
+                        <input type="date" name="follow_up_date"
+                               class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm text-gray-400 block mb-1">Priority</label>
+                        <select name="priority"
+                                class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-400 block mb-1">Category</label>
+                        <select name="category"
+                                class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2">
+                            <option value="">-- Select --</option>
+                            <option value="prayer_request">Prayer Request</option>
+                            <option value="concern">Concern</option>
+                            <option value="action_item">Action Item</option>
+                            <option value="feedback">Feedback</option>
+                            <option value="check_in">Check-in</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 pt-4">
+                    <button type="button"
+                            onclick="document.getElementById('createModal').classList.add('hidden')"
+                            class="px-4 py-2 bg-ch-gray text-gray-300 rounded hover:bg-gray-600 transition">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition">
+                        Create Follow-up
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
