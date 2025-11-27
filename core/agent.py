@@ -168,7 +168,7 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
         # Team/volunteer schedule - check this BEFORE setlist to catch volunteer-specific queries
         # Include both present (is/are) and past (was/were) tense for queries like "who was on the team last Sunday"
         'team_schedule': r'(who\s+(is|are|was|were)\s+(on|serving|scheduled|playing|singing)|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled\s+volunteer|serving\s+(on|this|next|last)|band\s+for|vocals?\s+for|tech\s+for|who\s+(do|did)\s+we\s+have)',
-        'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|songs?\s+(from|for|on|we\s+(play|sang|did))|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?)\s+(that|on\s+that)\s+(day|date|service|sunday))',
+        'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|songs?\s+(from|for|on|we\s+(play|sang|did))|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?)\s+(that|on\s+that)\s+(day|date|service|sunday|easter)|(songs?|play|sang|played)\s+.*(easter|christmas|good\s+friday))',
         'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|played)',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
         # Lyrics patterns - include section requests like "lyrics to the bridge" or just "the lyrics"
@@ -237,9 +237,11 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
         if query_type in ['setlist', 'team_schedule'] and not extracted_value:
             date_patterns = [
                 r'(last\s+sunday|this\s+sunday|next\s+sunday|yesterday|today)',
-                r'(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?',
+                r'(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?',
                 r'(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
                 r'(\d{1,2}-\d{1,2}(?:-\d{2,4})?)',
+                # Easter pattern - matches "Easter", "Easter 2025", "Easter last year"
+                r'(easter(?:\s+\d{4}|\s+(?:last|this|next)\s+year)?)',
             ]
             for pattern in date_patterns:
                 match = re.search(pattern, message_lower)
@@ -1350,6 +1352,80 @@ def handle_song_selection(selection_index: int, pending_suggestions: list, query
             return f"\n[SONG: Could not retrieve details for '{song_title}'.]\n"
 
 
+def detect_confirmation(message: str) -> bool:
+    """
+    Detect if a user message is a confirmation/affirmation.
+
+    Args:
+        message: The user's message.
+
+    Returns:
+        True if the message is a confirmation.
+    """
+    message_lower = message.lower().strip()
+
+    # Direct affirmations
+    affirmations = [
+        'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay', 'please',
+        'please do', 'go ahead', 'do it', 'yes please', 'that would be great',
+        'sounds good', 'perfect', 'absolutely', 'definitely', 'of course',
+        'correct', 'right', 'that\'s right', 'exactly', 'yes, please',
+        'y', 'yea', 'aye', 'affirmative'
+    ]
+
+    if message_lower in affirmations:
+        return True
+
+    # Check for affirmation at the start of the message
+    for affirmation in affirmations:
+        if message_lower.startswith(affirmation + ' ') or message_lower.startswith(affirmation + ','):
+            return True
+        if message_lower.startswith(affirmation + '.') or message_lower.startswith(affirmation + '!'):
+            return True
+
+    return False
+
+
+def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None) -> str:
+    """
+    Handle a pending date lookup by fetching the data from Planning Center.
+
+    Args:
+        pending_lookup: Dict with 'date' and 'query_type'.
+        query_type: Override query type if provided.
+
+    Returns:
+        Formatted string with the service data.
+    """
+    date_str = pending_lookup.get('date', '')
+    lookup_type = query_type or pending_lookup.get('query_type', 'setlist')
+
+    if not date_str:
+        return "\n[DATE LOOKUP: No date specified.]\n"
+
+    logger.info(f"Handling pending date lookup: '{date_str}' (type: {lookup_type})")
+
+    from .planning_center import PlanningCenterServicesAPI
+    services_api = PlanningCenterServicesAPI()
+
+    if not services_api.is_configured:
+        return "\n[DATE LOOKUP: Planning Center is not configured.]\n"
+
+    if lookup_type == 'team_schedule':
+        plan_with_team = services_api.get_plan_with_team(date_str)
+        if plan_with_team:
+            return format_team_schedule(plan_with_team)
+        else:
+            return f"\n[SERVICE SCHEDULE: No service plan found for '{date_str}'.]\n"
+    else:
+        # Default to setlist lookup
+        plan = services_api.find_plan_by_date(date_str)
+        if plan:
+            return format_plan_details(plan)
+        else:
+            return f"\n[SERVICE PLAN: No service plan found for '{date_str}'.]\n"
+
+
 def query_agent(question: str, user, session_id: str) -> str:
     """
     Answer a question using RAG (Retrieval Augmented Generation):
@@ -1458,6 +1534,61 @@ def query_agent(question: str, user, session_id: str) -> str:
 
             return answer
 
+    # Check if user is confirming a pending date lookup
+    pending_date = conversation_context.get_pending_date_lookup()
+    if pending_date and detect_confirmation(question):
+        logger.info(f"Detected confirmation for pending date lookup: {pending_date}")
+
+        # Handle the date lookup
+        date_data_context = handle_pending_date_lookup(pending_date)
+
+        # Clear the pending lookup
+        conversation_context.clear_pending_date_lookup()
+        conversation_context.save()
+
+        # Save the user's confirmation to chat history
+        ChatMessage.objects.create(
+            user=user,
+            session_id=session_id,
+            role='user',
+            content=question
+        )
+
+        # Query Claude with the date data
+        user_name = user.display_name if user.display_name else user.username
+        date_str = pending_date.get('date', 'the requested date')
+        lookup_messages = [{"role": "user", "content": f"Yes, please look up the service for {date_str}."}]
+
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=2000,
+                system=SYSTEM_PROMPT.format(
+                    context=date_data_context,
+                    current_date=datetime.now().strftime('%Y-%m-%d'),
+                    user_name=user_name
+                ),
+                messages=lookup_messages
+            )
+            answer = response.content[0].text
+        except Exception as e:
+            logger.error(f"Error querying Claude for date lookup: {e}")
+            answer = f"I found the service plan for {date_str} but encountered an error formatting the response. Please try again."
+
+        # Save assistant response to chat history
+        ChatMessage.objects.create(
+            user=user,
+            session_id=session_id,
+            role='assistant',
+            content=answer
+        )
+
+        # Update conversation context
+        conversation_context.increment_message_count(2)
+        conversation_context.save()
+
+        return answer
+
     # Check if this is a PCO data query (contact info, email, phone, etc.)
     pco_query, pco_query_type, pco_person_name = is_pco_data_query(question)
     pco_data_context = ""
@@ -1517,7 +1648,11 @@ def query_agent(question: str, user, session_id: str) -> str:
                         song_data_context = format_team_schedule(plan_with_team)
                         logger.info(f"Found plan for {date_to_lookup} with {len(plan_with_team.get('team_members', []))} team members")
                     else:
-                        song_data_context = f"\n[SERVICE SCHEDULE: No service plan found for '{date_to_lookup}'. Try specifying a different date like 'last Sunday' or 'November 30'.]\n"
+                        song_data_context = f"\n[SERVICE SCHEDULE: No service plan found for '{date_to_lookup}'. The AI should ask if the user wants to try a different date.]\n"
+                        # Store the date as pending so user can confirm
+                        conversation_context.set_pending_date_lookup(date_to_lookup, 'team_schedule')
+                        conversation_context.save()
+                        logger.info(f"Stored pending date lookup for '{date_to_lookup}' (team_schedule)")
                 else:
                     song_data_context = "\n[SERVICE SCHEDULE: Please specify a date to see the volunteer schedule (e.g., 'this Sunday', 'November 30', 'next Sunday').]\n"
 
@@ -1551,7 +1686,11 @@ def query_agent(question: str, user, session_id: str) -> str:
                             if song_details_parts:
                                 song_data_context += "\n" + "\n".join(song_details_parts)
                     else:
-                        song_data_context = f"\n[SERVICE PLAN: No service plan found for '{date_to_lookup}'. Try specifying a different date like 'last Sunday' or 'December 1'.]\n"
+                        song_data_context = f"\n[SERVICE PLAN: No service plan found for '{date_to_lookup}'. The AI should ask if the user wants to try a different date or confirm this is the correct date.]\n"
+                        # Store the date as pending so user can confirm
+                        conversation_context.set_pending_date_lookup(date_to_lookup, 'setlist')
+                        conversation_context.save()
+                        logger.info(f"Stored pending date lookup for '{date_to_lookup}'")
                 else:
                     # No date specified - get recent plans
                     recent_plans = services_api.get_recent_plans(limit=5)
