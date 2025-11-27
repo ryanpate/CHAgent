@@ -688,6 +688,31 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         result = self._get(f"/services/v2/service_types/{service_type_id}/plans", params)
         return result.get('data', [])
 
+    def get_plans_by_date_range(self, service_type_id: str, start_date: str, end_date: str, limit: int = 10) -> list:
+        """
+        Get plans for a service type within a specific date range.
+
+        Args:
+            service_type_id: The service type ID.
+            start_date: Start date in YYYY-MM-DD format.
+            end_date: End date in YYYY-MM-DD format.
+            limit: Maximum number of plans to return.
+
+        Returns:
+            List of plan records within the date range.
+        """
+        # PCO API supports after and before filters
+        params = {
+            'per_page': limit,
+            'order': '-sort_date',
+            'filter': f'after,before',
+            'after': start_date,
+            'before': end_date
+        }
+
+        result = self._get(f"/services/v2/service_types/{service_type_id}/plans", params)
+        return result.get('data', [])
+
     def get_recent_plans(self, limit: int = 10) -> list:
         """
         Get recent plans across all service types.
@@ -1491,6 +1516,72 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         details['all_attachments'] = all_attachments
         return details
 
+    def find_plans_for_target_date(self, target_date, window_days: int = 0) -> list:
+        """
+        Find plans across all service types for a specific target date.
+
+        This is more efficient than get_plans_for_date_range when looking for a known date
+        (like Easter, Thanksgiving, etc.) because it uses date filtering in the API
+        rather than fetching many plans and filtering locally.
+
+        Args:
+            target_date: The target date (datetime.date object).
+            window_days: Days before/after target to search (default 0 for exact date only).
+
+        Returns:
+            List of plan records matching the date window, with service_type_name included.
+        """
+        from datetime import timedelta
+
+        # Calculate date range
+        start_date = (target_date - timedelta(days=window_days)).isoformat()
+        end_date = (target_date + timedelta(days=window_days)).isoformat()
+        target_str = target_date.isoformat()
+
+        logger.info(f"Searching for plans on {target_str} (window: ±{window_days} days)")
+
+        service_types = self.get_service_types()
+        matching_plans = []
+        seen_plan_ids = set()
+
+        for st in service_types:
+            st_id = st.get('id')
+            st_name = st.get('attributes', {}).get('name', 'Unknown')
+
+            # Use date range filter if supported, otherwise fetch and filter
+            plans = self.get_plans_by_date_range(st_id, start_date, end_date, limit=10)
+
+            # If no results from date range filter, fall back to recent plans
+            if not plans:
+                # Fetch a small number of recent plans and filter
+                plans = self.get_plans(st_id, past_only=True, limit=5)
+
+            for plan in plans:
+                plan_id = plan.get('id')
+                if plan_id in seen_plan_ids:
+                    continue
+
+                plan_date = plan.get('attributes', {}).get('sort_date', '')[:10]
+
+                # Check if plan is within our window
+                if window_days == 0:
+                    # Exact date match only
+                    if plan_date == target_str:
+                        plan['service_type_name'] = st_name
+                        plan['service_type_id'] = st_id
+                        matching_plans.append(plan)
+                        seen_plan_ids.add(plan_id)
+                else:
+                    # Within window
+                    if start_date <= plan_date <= end_date:
+                        plan['service_type_name'] = st_name
+                        plan['service_type_id'] = st_id
+                        matching_plans.append(plan)
+                        seen_plan_ids.add(plan_id)
+
+        logger.info(f"Found {len(matching_plans)} plans for target date {target_str}")
+        return matching_plans
+
     def get_plans_for_date_range(self, include_future: bool = True, include_past: bool = True, limit: int = 30, use_cache: bool = True) -> list:
         """
         Get plans across all service types, including both past and/or future plans.
@@ -1699,35 +1790,25 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         target_str = target_date.isoformat()
         logger.info(f"Looking for plan on {target_str}")
 
-        # Determine if we need to search past or future only
-        is_future = target_date > today
-        is_past = target_date < today
+        # OPTIMIZED SEARCH: First try exact date, then expand if needed
+        # This is much more efficient than fetching 30-60 plans and filtering
 
-        # Calculate how far back/forward we need to search
-        # If target is far from today, increase the limit
-        days_diff = abs((target_date - today).days)
-        # Assume roughly 1 plan per week, add buffer
-        # Cap at 60 to prevent excessive API calls (roughly 1 year of weekly services)
-        needed_limit = min(60, max(30, (days_diff // 7) + 10))
-        logger.info(f"Target date is {days_diff} days from today, using limit of {needed_limit}")
+        # Step 1: Try to find plans on the exact target date
+        matching_plans = self.find_plans_for_target_date(target_date, window_days=0)
 
-        # Only fetch what we need - past OR future, not both
-        # This reduces API calls significantly for historical lookups
-        if is_past:
-            plans = self.get_plans_for_date_range(include_future=False, include_past=True, limit=needed_limit)
-        elif is_future:
-            plans = self.get_plans_for_date_range(include_future=True, include_past=False, limit=needed_limit)
-        else:
-            # Target is today - check both but with smaller limit
-            plans = self.get_plans_for_date_range(include_future=True, include_past=True, limit=10)
-        logger.info(f"Searching through {len(plans)} plans for date {target_str}")
+        # Step 2: If no exact match, expand to ±14 days (2 weeks / ~2 Sundays)
+        if not matching_plans:
+            logger.info(f"No exact match for {target_str}, expanding search to ±14 days")
+            matching_plans = self.find_plans_for_target_date(target_date, window_days=14)
 
-        # Find all plans matching the target date
-        matching_plans = []
-        for plan in plans:
-            plan_date = plan.get('attributes', {}).get('sort_date', '')[:10]
-            if plan_date == target_str:
-                matching_plans.append(plan)
+            # Filter to prefer plans closest to target date
+            if matching_plans:
+                # Sort by proximity to target date
+                matching_plans.sort(
+                    key=lambda p: abs(
+                        (datetime.strptime(p.get('attributes', {}).get('sort_date', '')[:10], '%Y-%m-%d').date() - target_date).days
+                    )
+                )
 
         if not matching_plans:
             logger.info(f"No plan found for date {target_str}")
