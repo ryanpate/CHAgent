@@ -773,6 +773,61 @@ python manage.py createsuperuser
 
 ## Optional: Planning Center Integration
 
+### Service Type Configuration
+
+The system defaults to **Cherry Hills Morning Main** service when no specific service type is requested. This ensures queries like "Who was on the team last Sunday?" return the main Sunday service, not youth services.
+
+```python
+# core/planning_center.py
+
+# Default service type for plan lookups
+DEFAULT_SERVICE_TYPE_NAME = 'Cherry Hills Morning Main'
+
+# Keywords that identify youth/non-main services (case-insensitive)
+YOUTH_SERVICE_KEYWORDS = ['hsm', 'msm', 'high school', 'middle school', 'youth', 'student']
+```
+
+**Service Type Detection:**
+- `HSM` or `high school` → High School Ministry
+- `MSM` or `middle school` → Middle School Ministry
+- No service specified → Cherry Hills Morning Main (default)
+
+**Examples:**
+| Query | Service Type Returned |
+|-------|----------------------|
+| "Who was on the team November 16?" | Cherry Hills Morning Main |
+| "What songs were played last Easter?" | Cherry Hills Morning Main |
+| "Who was serving at HSM last Sunday?" | High School Ministry |
+| "MSM team for November 16" | Middle School Ministry |
+
+### Optimized Date Lookups
+
+The system uses an efficient two-step search for date-based queries:
+
+1. **Exact Date Search**: First searches for plans on the exact calculated date
+2. **Expanded Window**: If no match, expands to ±14 days (2 weeks)
+
+This dramatically reduces API calls compared to fetching many plans and filtering locally.
+
+```python
+# Efficient target date search
+def find_plans_for_target_date(self, target_date, window_days: int = 0) -> list:
+    """
+    Search for plans on a specific date using PCO's date filters.
+
+    Args:
+        target_date: The target date (datetime.date object)
+        window_days: Days before/after to search (0 = exact date only)
+    """
+```
+
+**Supported Date Formats:**
+- Relative: `last Sunday`, `this Sunday`, `next Sunday`, `yesterday`, `today`
+- Holidays: `Easter`, `last Easter`, `Easter 2024`, `Thanksgiving`, `Christmas Eve`
+- Specific: `November 16`, `11/16/2025`, `2025-11-16`
+
+### Basic API Usage
+
 ```python
 # core/planning_center.py
 import requests
