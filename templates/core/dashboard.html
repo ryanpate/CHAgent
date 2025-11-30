@@ -9,14 +9,14 @@
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-2xl font-bold">Ask Aria</h2>
             <div class="flex gap-2">
-                <button hx-post="{% url 'chat_new_session' %}"
-                        hx-target="#chat-messages"
-                        hx-swap="innerHTML"
-                        class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded-lg transition text-sm flex items-center gap-2">
+                <button onclick="copyConversation()"
+                        id="copy-btn"
+                        class="px-4 py-2 bg-ch-gray hover:bg-gray-600 rounded-lg transition text-sm flex items-center gap-2"
+                        title="Copy conversation to clipboard">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                     </svg>
-                    Clear
+                    <span id="copy-btn-text">Copy</span>
                 </button>
                 <button hx-post="{% url 'chat_new_session' %}"
                         hx-target="#chat-messages"
@@ -225,6 +225,96 @@ function startNewAndSetMessage(text) {
         input.value = text;
         input.focus();
     });
+}
+
+function copyConversation() {
+    const chatContainer = document.getElementById('chat-messages');
+    const messages = chatContainer.querySelectorAll(':scope > div:not(#chat-welcome)');
+
+    if (messages.length === 0) {
+        showCopyFeedback('No messages to copy', false);
+        return;
+    }
+
+    let conversationText = '';
+
+    messages.forEach((msgDiv) => {
+        // Determine if user or assistant
+        const isUser = msgDiv.classList.contains('ml-12');
+        const role = isUser ? 'User' : 'Aria';
+
+        // Get the message content
+        const contentDiv = msgDiv.querySelector('.rounded-lg.p-4');
+        if (contentDiv) {
+            // Get text content, preserving some structure
+            let content = contentDiv.innerText || contentDiv.textContent;
+            content = content.trim();
+
+            // Get timestamp if available
+            const timeEl = msgDiv.querySelector('.text-xs.text-gray-500');
+            const timestamp = timeEl ? timeEl.textContent.trim() : '';
+
+            conversationText += `${role}:\n${content}\n`;
+            if (timestamp) {
+                conversationText += `(${timestamp})\n`;
+            }
+            conversationText += '\n';
+        }
+    });
+
+    // Add header with current date
+    const header = `=== Aria WA Conversation ===\nCopied: ${new Date().toLocaleString()}\n\n`;
+    conversationText = header + conversationText;
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(conversationText).then(() => {
+        showCopyFeedback('Copied!', true);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+        // Fallback for older browsers
+        fallbackCopy(conversationText);
+    });
+}
+
+function showCopyFeedback(message, success) {
+    const btnText = document.getElementById('copy-btn-text');
+    const btn = document.getElementById('copy-btn');
+    const originalText = btnText.textContent;
+
+    btnText.textContent = message;
+    if (success) {
+        btn.classList.add('bg-green-600');
+        btn.classList.remove('bg-ch-gray');
+    } else {
+        btn.classList.add('bg-red-600');
+        btn.classList.remove('bg-ch-gray');
+    }
+
+    setTimeout(() => {
+        btnText.textContent = originalText;
+        btn.classList.remove('bg-green-600', 'bg-red-600');
+        btn.classList.add('bg-ch-gray');
+    }, 2000);
+}
+
+function fallbackCopy(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    try {
+        document.execCommand('copy');
+        showCopyFeedback('Copied!', true);
+    } catch (err) {
+        showCopyFeedback('Failed to copy', false);
+    }
+
+    document.body.removeChild(textArea);
 }
 </script>
 {% endblock %}
