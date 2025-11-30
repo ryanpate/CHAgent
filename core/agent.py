@@ -128,19 +128,39 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
     if is_pco_query:
         # Common patterns for extracting names (case-insensitive)
         # Names will be title-cased after extraction
+        # Order matters - more specific patterns first
         name_patterns = [
-            r"(?:for|of|about|contact|reach|call|email)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
-            r"([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s\s+(?:contact|email|phone|address|birthday)",
+            # "what is [name]'s contact" - with apostrophe
             r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s",
+            # "what is [name] contact info" - without apostrophe (name before contact)
+            r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*?)\s+contact",
+            # "[name]'s contact/email/phone" - with apostrophe
+            r"([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s\s+(?:contact|email|phone|address|birthday)",
+            # "[name]s contact info" - possessive without apostrophe (e.g., "strucks contact")
+            r"([a-zA-Z]+(?:\s+[a-zA-Z]+)*s)\s+contact\s+(?:info|information|details?)",
+            # "contact info for [name]"
+            r"contact\s+(?:info|information|details?)\s+(?:for|of|about)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
+            # "for/of/about [name]" - generic
+            r"(?:for|of|about)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
+            # "reach/call/email [name]"
+            r"(?:reach|call|email)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
+            # "where does/when was [name]"
             r"(?:where\s+does|when\s+(?:was|is))\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
         ]
 
         for pattern in name_patterns:
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
-                person_name = match.group(1).strip().title()  # Title-case the name
+                extracted = match.group(1).strip()
+                # Remove trailing 's' if it's a possessive without apostrophe (e.g., "strucks" -> "struck")
+                if extracted.lower().endswith('s') and len(extracted) > 2:
+                    # Check if this looks like a possessive (followed by contact/email/phone in original)
+                    if re.search(r'\b' + re.escape(extracted) + r'\s+(?:contact|email|phone)', message, re.IGNORECASE):
+                        extracted = extracted[:-1]  # Remove trailing 's'
+                person_name = extracted.title()  # Title-case the name
                 # Filter out common false positives
-                false_positives = ['I', 'What', 'Where', 'When', 'How', 'Can', 'Do', 'Does', 'Is', 'Are', 'The', 'Info', 'Information', 'Details']
+                false_positives = ['I', 'What', 'Where', 'When', 'How', 'Can', 'Do', 'Does', 'Is', 'Are',
+                                   'The', 'Info', 'Information', 'Details', 'Contact', 'Their', 'My', 'Your']
                 if person_name not in false_positives and len(person_name) > 1:
                     break
                 else:
