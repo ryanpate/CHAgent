@@ -272,6 +272,10 @@ class PlanningCenterAPI:
             )
             logger.info(f"Schedules response: {len(schedules_result.get('data', []))} schedules found")
 
+            # Get today's date for filtering past schedules
+            from datetime import datetime
+            today_str = datetime.now().date().isoformat()
+
             for schedule in schedules_result.get('data', []):
                 sched_attrs = schedule.get('attributes', {})
                 sort_date = sched_attrs.get('sort_date')
@@ -285,10 +289,14 @@ class PlanningCenterAPI:
                     'decline_reason': sched_attrs.get('decline_reason')
                 })
 
-                # Track last served date (confirmed schedules only)
+                # Track last served date (confirmed schedules only, past dates only)
+                # Only consider dates that have already passed (not future scheduled dates)
                 if sched_attrs.get('status') == 'C' and sort_date:  # C = Confirmed
-                    if not details['last_served'] or sort_date > details['last_served']:
-                        details['last_served'] = sort_date
+                    # Compare date portion only (YYYY-MM-DD format)
+                    schedule_date = sort_date[:10] if len(sort_date) >= 10 else sort_date
+                    if schedule_date <= today_str:  # Only past or today's dates
+                        if not details['last_served'] or schedule_date > details['last_served'][:10]:
+                            details['last_served'] = sort_date
 
             if not details['recent_schedules']:
                 logger.info(f"No schedules found for Services person {services_person_id}")
