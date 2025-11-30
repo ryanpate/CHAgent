@@ -126,21 +126,22 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
     # Extract person name from the question
     person_name = None
     if is_pco_query:
-        # Common patterns for extracting names
+        # Common patterns for extracting names (case-insensitive)
+        # Names will be title-cased after extraction
         name_patterns = [
-            r"(?:for|of|about|contact|reach|call|email)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
-            r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)'s\s+(?:contact|email|phone|address|birthday)",
-            r"what\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)'s",
-            r"(?:where\s+does|when\s+(?:was|is))\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
+            r"(?:for|of|about|contact|reach|call|email)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
+            r"([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s\s+(?:contact|email|phone|address|birthday)",
+            r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s",
+            r"(?:where\s+does|when\s+(?:was|is))\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
         ]
 
         for pattern in name_patterns:
-            match = re.search(pattern, message)
+            match = re.search(pattern, message, re.IGNORECASE)
             if match:
-                person_name = match.group(1).strip()
+                person_name = match.group(1).strip().title()  # Title-case the name
                 # Filter out common false positives
-                false_positives = ['I', 'What', 'Where', 'When', 'How', 'Can', 'Do', 'Does', 'Is', 'Are', 'The']
-                if person_name not in false_positives:
+                false_positives = ['I', 'What', 'Where', 'When', 'How', 'Can', 'Do', 'Does', 'Is', 'Are', 'The', 'Info', 'Information', 'Details']
+                if person_name not in false_positives and len(person_name) > 1:
                     break
                 else:
                     person_name = None
