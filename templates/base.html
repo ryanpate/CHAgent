@@ -2,9 +2,30 @@
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
     <title>{% block title %}Aria WA Assistant{% endblock %} | Cherry Hills</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#c9a227">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Aria WA">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Aria WA">
+    <meta name="msapplication-TileColor" content="#c9a227">
+    <meta name="msapplication-TileImage" content="/static/icons/icon-144x144.png">
+    <meta name="format-detection" content="telephone=no">
+
+    <!-- Favicon and Icons -->
     <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/static/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="/static/icons/icon-192x192.png">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -203,13 +224,146 @@
         .markdown-content th {
             background-color: rgba(0, 0, 0, 0.3);
         }
+
+        /* PWA Safe Area Support */
+        @supports (padding: env(safe-area-inset-top)) {
+            body {
+                padding-top: env(safe-area-inset-top);
+                padding-bottom: env(safe-area-inset-bottom);
+                padding-left: env(safe-area-inset-left);
+                padding-right: env(safe-area-inset-right);
+            }
+        }
+
+        /* Mobile sidebar overlay */
+        .sidebar-overlay {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        /* Mobile hamburger menu button */
+        .mobile-menu-btn {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-menu-btn {
+                display: flex;
+            }
+            .desktop-sidebar {
+                display: none;
+            }
+        }
+
+        /* Touch-friendly targets */
+        @media (pointer: coarse) {
+            .nav-link {
+                min-height: 48px;
+            }
+            .quick-action {
+                min-height: 44px;
+            }
+        }
+
+        /* Prevent text selection on touch */
+        .no-select {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        /* Pull to refresh indicator */
+        .ptr-indicator {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-ch-black text-white min-h-screen">
+<body class="bg-ch-black text-white min-h-screen" x-data="{ sidebarOpen: false }">
     {% if user.is_authenticated %}
-    <!-- Sidebar Navigation -->
-    <aside class="fixed left-0 top-0 h-full w-64 bg-ch-dark border-r border-gray-800 p-6 flex flex-col">
+    <!-- Mobile Header -->
+    <header class="md:hidden fixed top-0 left-0 right-0 z-40 bg-ch-dark border-b border-gray-800 px-4 py-3 flex items-center justify-between safe-top">
+        <button @click="sidebarOpen = true" class="mobile-menu-btn p-2 rounded-lg hover:bg-ch-gray transition">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+        </button>
+        <h1 class="text-lg font-bold text-ch-gold">Aria WA</h1>
+        <div class="w-10"></div>
+    </header>
+
+    <!-- Mobile Sidebar Overlay -->
+    <div x-show="sidebarOpen"
+         x-transition:enter="transition-opacity ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition-opacity ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         @click="sidebarOpen = false"
+         class="md:hidden fixed inset-0 z-40 sidebar-overlay"
+         style="display: none;">
+    </div>
+
+    <!-- Mobile Sidebar -->
+    <aside x-show="sidebarOpen"
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="-translate-x-full"
+           x-transition:enter-end="translate-x-0"
+           x-transition:leave="transition ease-in duration-200"
+           x-transition:leave-start="translate-x-0"
+           x-transition:leave-end="-translate-x-full"
+           class="md:hidden fixed left-0 top-0 h-full w-72 bg-ch-dark border-r border-gray-800 p-6 flex flex-col z-50 transform"
+           style="display: none;">
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-xl font-bold text-ch-gold tracking-wide">Cherry Hills</h1>
+                <p class="text-sm text-gray-400">Worship Arts Assistant</p>
+            </div>
+            <button @click="sidebarOpen = false" class="p-2 rounded-lg hover:bg-ch-gray transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <nav class="space-y-2 flex-1">
+            <a href="{% url 'dashboard' %}" @click="sidebarOpen = false" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                </svg>
+                Dashboard
+            </a>
+            <a href="{% url 'interaction_list' %}" @click="sidebarOpen = false" class="nav-link {% if 'interaction' in request.resolver_match.url_name %}active{% endif %}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Interactions
+            </a>
+            <a href="{% url 'volunteer_list' %}" @click="sidebarOpen = false" class="nav-link {% if 'volunteer' in request.resolver_match.url_name %}active{% endif %}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                Volunteers
+            </a>
+            <a href="{% url 'followup_list' %}" @click="sidebarOpen = false" class="nav-link {% if 'followup' in request.resolver_match.url_name %}active{% endif %}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                </svg>
+                Follow-ups
+            </a>
+        </nav>
+        <div class="pt-4 border-t border-gray-800">
+            <p class="text-sm text-gray-500 mb-1">{{ user.display_name|default:user.username }}</p>
+            <a href="{% url 'logout' %}" class="text-sm text-gray-400 hover:text-white transition">Logout</a>
+        </div>
+    </aside>
+
+    <!-- Desktop Sidebar Navigation -->
+    <aside class="desktop-sidebar hidden md:flex fixed left-0 top-0 h-full w-64 bg-ch-dark border-r border-gray-800 p-6 flex-col">
         <div class="mb-8">
             <h1 class="text-xl font-bold text-ch-gold tracking-wide">Cherry Hills</h1>
             <p class="text-sm text-gray-400">Worship Arts Assistant</p>
@@ -247,7 +401,7 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="ml-64 p-8 min-h-screen">
+    <main class="md:ml-64 p-4 md:p-8 min-h-screen pt-16 md:pt-8">
         {% if messages %}
         <div class="mb-4">
             {% for message in messages %}
@@ -267,5 +421,33 @@
     {% endif %}
 
     {% block extra_js %}{% endblock %}
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                    .then(function(registration) {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(function(err) {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+
+        // Handle PWA install prompt
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            // Optionally show install button here
+        });
+
+        // Detect if running as PWA
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            document.body.classList.add('pwa-mode');
+        }
+    </script>
 </body>
 </html>
