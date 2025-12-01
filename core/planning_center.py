@@ -203,7 +203,8 @@ class PlanningCenterAPI:
             'addresses': [],
             'teams': [],
             'recent_schedules': [],
-            'last_served': None
+            'last_served': None,
+            'in_services': False  # Flag to indicate if person was found in Services API
         }
 
         # Get emails
@@ -244,6 +245,7 @@ class PlanningCenterAPI:
         # First, search for this person in Services
         services_person = self._find_services_person(person_id)
         if services_person:
+            details['in_services'] = True
             services_person_id = services_person.get('id')
             logger.info(f"Found Services person ID: {services_person_id}")
 
@@ -343,13 +345,24 @@ class PlanningCenterAPI:
         search_name = f"{first_name} {last_name}"
         logger.info(f"Searching Services for '{search_name}' (has {len(person_emails)} emails)")
 
-        # Get services people - need to search through them
-        all_services = self._get("/services/v2/people", params={'per_page': 100})
-        all_data = all_services.get('data', [])
+        # First, try searching by name in Services API (more efficient than pagination)
+        # PCO Services supports searching by name
+        search_result = self._get("/services/v2/people", params={
+            'where[name]': search_name,
+            'per_page': 25
+        })
+
+        candidates = search_result.get('data', [])
+        logger.info(f"Services name search returned {len(candidates)} candidates for '{search_name}'")
+
+        # If no results from name search, try paginating through all services people
+        if not candidates:
+            logger.info(f"Name search returned no results, fetching all services people with pagination")
+            candidates = self._get_all_services_people()
 
         # Method 1: Match by email (most reliable - emails are unique)
         if person_emails:
-            for services_person in all_data:
+            for services_person in candidates:
                 sp_attrs = services_person.get('attributes', {})
                 # Services person records have email directly in attributes
                 sp_email = (sp_attrs.get('email') or '').lower().strip()
@@ -362,7 +375,7 @@ class PlanningCenterAPI:
         target_first = first_name.lower().strip()
         target_last = last_name.lower().strip()
 
-        for services_person in all_data:
+        for services_person in candidates:
             sp_attrs = services_person.get('attributes', {})
             sp_first = (sp_attrs.get('first_name') or '').lower().strip()
             sp_last = (sp_attrs.get('last_name') or '').lower().strip()
@@ -373,6 +386,41 @@ class PlanningCenterAPI:
 
         logger.info(f"No Services person found for {first_name} {last_name}")
         return None
+
+    def _get_all_services_people(self, max_pages: int = 10) -> list:
+        """
+        Fetch all services people with pagination.
+
+        Args:
+            max_pages: Maximum number of pages to fetch (safety limit)
+
+        Returns:
+            List of all services person records
+        """
+        all_people = []
+        offset = 0
+        per_page = 100
+
+        for page in range(max_pages):
+            result = self._get("/services/v2/people", params={
+                'per_page': per_page,
+                'offset': offset
+            })
+
+            data = result.get('data', [])
+            if not data:
+                break
+
+            all_people.extend(data)
+            logger.info(f"Fetched page {page + 1} of services people: {len(data)} records (total: {len(all_people)})")
+
+            # Check if there are more pages
+            if len(data) < per_page:
+                break
+
+            offset += per_page
+
+        return all_people
 
     def search_person_with_details(self, name: str) -> Optional[dict]:
         """
