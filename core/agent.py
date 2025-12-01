@@ -185,13 +185,17 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
     message_lower = message.lower().strip()
 
     # Patterns for song/setlist queries
+    # IMPORTANT: Order matters! More specific patterns must come before general ones.
+    # song_history must come before setlist because setlist's "was played" pattern
+    # would incorrectly match "when was X played" queries.
     song_query_patterns = {
         # Team/volunteer schedule - check this BEFORE setlist to catch volunteer-specific queries
         # Include both present (is/are) and past (was/were) tense for queries like "who was on the team last Sunday"
         # Also match simple past tense "who served" without auxiliary verb
         'team_schedule': r'(who\s+(is|are|was|were)\s+(on|serving|scheduled|playing|singing)|who\s+served|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled\s+volunteer|serving\s+(on|this|next|last)|band\s+for|vocals?\s+for|tech\s+for|who\s+(do|did)\s+we\s+have)',
-        'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|songs?\s+(from|for|on|we\s+(play|sang|did))|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?)\s+(that|on\s+that)\s+(day|date|service|sunday|easter)|(songs?|play|sang|played)\s+.*(easter|christmas|good\s+friday))',
+        # Song history - check BEFORE setlist to catch "when was [song] played" queries
         'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|played)|(?:the\s+)?(?:title|song|name)\s+is\s+|it\'?s\s+called',
+        'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|songs?\s+(from|for|on|we\s+(play|sang|did))|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?)\s+(that|on\s+that)\s+(day|date|service|sunday|easter)|(songs?|play|sang|played)\s+.*(easter|christmas|good\s+friday))',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
         # Lyrics patterns - include section requests like "lyrics to the bridge" or just "the lyrics"
         'lyrics': r'lyrics?\s+(for|to)|words?\s+(for|to)|(give|show|get)\s+(me\s+)?(the\s+)?lyrics|(what\s+are\s+)?the\s+lyrics|lyrics?\s+to\s+the\s+(verse|chorus|bridge|intro|outro|pre-?chorus)',
