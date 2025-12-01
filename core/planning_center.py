@@ -203,7 +203,8 @@ class PlanningCenterAPI:
             'addresses': [],
             'teams': [],
             'recent_schedules': [],
-            'last_served': None
+            'last_served': None,
+            'in_services': False  # Flag to indicate if person was found in Services API
         }
 
         # Get emails
@@ -244,6 +245,7 @@ class PlanningCenterAPI:
         # First, search for this person in Services
         services_person = self._find_services_person(person_id)
         if services_person:
+            details['in_services'] = True
             services_person_id = services_person.get('id')
             logger.info(f"Found Services person ID: {services_person_id}")
 

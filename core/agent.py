@@ -897,6 +897,15 @@ def format_pco_details(details: dict, query_type: str = None) -> str:
     if details.get('last_served'):
         parts.append(f"Last Served: {details.get('last_served')}")
 
+    # Check if person is in Services (worship scheduling system)
+    if not details.get('in_services'):
+        parts.append("")
+        parts.append("NOTE: This person was NOT found in Planning Center Services (worship scheduling).")
+        parts.append("They may not be a scheduled worship volunteer, or their Services record")
+        parts.append("may not be linked to their People record. To check their schedule,")
+        parts.append("they would need to be added to a team in PCO Services.")
+        parts.append("")
+
     # Service schedule - separate future and past
     if details.get('recent_schedules'):
         from datetime import datetime
