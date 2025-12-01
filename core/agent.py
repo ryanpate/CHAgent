@@ -179,6 +179,99 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
     return is_pco_query, query_type, person_name
 
 
+def is_blockout_query(message: str) -> Tuple[bool, str, Optional[str], Optional[str]]:
+    """
+    Detect if a question is asking about volunteer blockouts/availability.
+
+    Args:
+        message: The user's question.
+
+    Returns:
+        Tuple of (is_blockout_query, query_type, person_name, date_reference) where:
+        - is_blockout_query: True if asking about blockouts/availability
+        - query_type: Type of query (person_blockouts, date_blockouts, availability_check, team_availability)
+        - person_name: Extracted person name if found
+        - date_reference: Extracted date reference if found
+    """
+    message_lower = message.lower().strip()
+
+    # Patterns that indicate blockout/availability queries
+    blockout_patterns = {
+        # "When is [person] blocked out?" or "What are [person]'s blockouts?"
+        'person_blockouts': r'when\s+(?:is|are)\s+.+\s+blocked?\s*out|block\s*out(?:s|ed)?\s+(?:for|of)\s+|what\s+(?:are|is)\s+.+[\'s]*\s+block\s*out|.+[\'s]*\s+block\s*out(?:s|ed)?|(?:show|list|get)\s+(?:me\s+)?.+[\'s]*\s+block\s*out',
+        # "Who is blocked out on [date]?" or "Who has blockouts on [date]?"
+        'date_blockouts': r'who\s+(?:is|are|has|have)\s+blocked?\s*out\s+(?:on|for|this|next)|who\s+can\'?t\s+(?:make\s+it|serve|be\s+there)\s+(?:on|for|this|next)|blocked?\s*out\s+(?:on|this|next)',
+        # "Is [person] available on [date]?" or "Can [person] serve on [date]?"
+        'availability_check': r'(?:is|are)\s+.+\s+(?:available|free|able\s+to\s+serve)\s+(?:on|for|this|next)|can\s+.+\s+(?:serve|make\s+it|be\s+there)\s+(?:on|for|this|next)|.+\s+availability\s+(?:on|for)',
+        # "Team availability for [date]" or "Who's available on [date]?"
+        'team_availability': r'team\s+availability|who\'?s?\s+(?:is\s+)?available\s+(?:on|for|this|next)|availability\s+(?:on|for)\s+(?:the\s+)?(?:team|this|next)',
+    }
+
+    is_blockout = False
+    query_type = None
+
+    for qtype, pattern in blockout_patterns.items():
+        if re.search(pattern, message_lower):
+            is_blockout = True
+            query_type = qtype
+            logger.info(f"Blockout query pattern matched: '{qtype}' for message: '{message[:50]}...'")
+            break
+
+    # Extract person name and date from the question
+    person_name = None
+    date_reference = None
+
+    if is_blockout:
+        # Extract person name
+        name_patterns = [
+            # "is [name] available/blocked out"
+            r"(?:is|are|can)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:available|blocked?\s*out|free|make\s+it|serve|able)",
+            # "when is [name] blocked out"
+            r"when\s+(?:is|are)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+blocked?\s*out",
+            # "[name]'s blockouts/availability"
+            r"([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'?s?\s+(?:block\s*out|availability)",
+            # "blockouts for/of [name]"
+            r"block\s*out(?:s|ed)?\s+(?:for|of)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
+            # "show [name]'s blockouts"
+            r"(?:show|list|get)\s+(?:me\s+)?([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'?s?\s+block\s*out",
+        ]
+
+        for pattern in name_patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                extracted = match.group(1).strip()
+                person_name = extracted.title()
+                # Filter out false positives
+                false_positives = ['I', 'What', 'Where', 'When', 'How', 'Can', 'Do', 'Does', 'Is', 'Are',
+                                   'The', 'Who', 'Team', 'Everyone', 'Anyone', 'Someone', 'They']
+                if person_name not in false_positives and len(person_name) > 1:
+                    logger.info(f"Blockout name extraction successful: '{person_name}'")
+                    break
+                else:
+                    person_name = None
+
+        # Extract date reference
+        date_patterns = [
+            r'(?:on|for)\s+((?:last|this|next)\s+(?:sunday|week|month|service))',
+            r'(?:on|for)\s+((?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)',
+            r'(?:on|for)\s+(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
+            r'(?:on|for)\s+(\d{1,2}-\d{1,2}(?:-\d{2,4})?)',
+            r'((?:last|this|next)\s+(?:sunday|week|month|service))',
+            r'((?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)',
+            r'(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
+        ]
+
+        for pattern in date_patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                date_reference = match.group(1).strip()
+                logger.info(f"Blockout date extraction successful: '{date_reference}'")
+                break
+
+    logger.info(f"is_blockout_query result: blockout_query={is_blockout}, type={query_type}, name={person_name}, date={date_reference}")
+    return is_blockout, query_type, person_name, date_reference
+
+
 def _has_date_reference(message_lower: str) -> bool:
     """
     Check if a message contains a date reference (for disambiguation).
@@ -499,6 +592,225 @@ def format_team_schedule(plan: dict) -> str:
             parts.append(song_line)
 
     parts.append("[END SERVICE TEAM SCHEDULE]\n")
+    return '\n'.join(parts)
+
+
+def format_person_blockouts(blockout_data: dict) -> str:
+    """
+    Format a person's blockout dates for the AI context.
+
+    Args:
+        blockout_data: Dict with person info and blockouts from PCO API.
+
+    Returns:
+        Formatted string with blockout information.
+    """
+    if not blockout_data:
+        return ""
+
+    parts = ["\n[VOLUNTEER BLOCKOUTS]"]
+
+    if not blockout_data.get('found'):
+        person_name = blockout_data.get('person_name', 'Unknown')
+        error = blockout_data.get('error', 'Person not found in Planning Center Services')
+        parts.append(f"Person: {person_name}")
+        parts.append(f"Status: {error}")
+        parts.append("[END VOLUNTEER BLOCKOUTS]\n")
+        return '\n'.join(parts)
+
+    parts.append(f"Person: {blockout_data.get('person_name', 'Unknown')}")
+
+    blockouts = blockout_data.get('blockouts', [])
+    if blockouts:
+        # Separate active and expired blockouts
+        from datetime import date
+        today = date.today()
+        active_blockouts = []
+        past_blockouts = []
+
+        for b in blockouts:
+            ends_at = b.get('ends_at')
+            if ends_at:
+                # Parse the end date
+                try:
+                    end_date = date.fromisoformat(ends_at.split('T')[0]) if 'T' in str(ends_at) else date.fromisoformat(str(ends_at))
+                    if end_date >= today:
+                        active_blockouts.append(b)
+                    else:
+                        past_blockouts.append(b)
+                except (ValueError, AttributeError):
+                    active_blockouts.append(b)  # If can't parse, assume active
+            else:
+                active_blockouts.append(b)
+
+        if active_blockouts:
+            parts.append(f"\nActive/Upcoming Blockouts ({len(active_blockouts)}):")
+            for b in active_blockouts:
+                starts = b.get('starts_at', 'Unknown')
+                ends = b.get('ends_at', 'Unknown')
+                reason = b.get('reason', '')
+
+                # Format dates nicely
+                if starts and 'T' in str(starts):
+                    starts = starts.split('T')[0]
+                if ends and 'T' in str(ends):
+                    ends = ends.split('T')[0]
+
+                line = f"  - {starts} to {ends}"
+                if reason:
+                    line += f" ({reason})"
+                parts.append(line)
+        else:
+            parts.append("\nNo active or upcoming blockouts.")
+
+        if past_blockouts:
+            parts.append(f"\nPast Blockouts ({len(past_blockouts)}):")
+            for b in past_blockouts[:5]:  # Show only recent 5
+                starts = b.get('starts_at', 'Unknown')
+                ends = b.get('ends_at', 'Unknown')
+                if starts and 'T' in str(starts):
+                    starts = starts.split('T')[0]
+                if ends and 'T' in str(ends):
+                    ends = ends.split('T')[0]
+                parts.append(f"  - {starts} to {ends}")
+    else:
+        parts.append("\nNo blockouts on record for this person.")
+
+    parts.append("[END VOLUNTEER BLOCKOUTS]\n")
+    return '\n'.join(parts)
+
+
+def format_date_blockouts(blockout_data: dict) -> str:
+    """
+    Format blockout information for a specific date for the AI context.
+
+    Args:
+        blockout_data: Dict with date and blocked people from PCO API.
+
+    Returns:
+        Formatted string with who is blocked out on that date.
+    """
+    if not blockout_data:
+        return ""
+
+    parts = ["\n[BLOCKOUTS FOR DATE]"]
+    parts.append(f"Date: {blockout_data.get('date', 'Unknown')}")
+
+    blocked_people = blockout_data.get('blocked_people', [])
+    if blocked_people:
+        parts.append(f"\nBlocked Out ({len(blocked_people)} people):")
+        for person in blocked_people:
+            name = person.get('name', 'Unknown')
+            reason = person.get('reason', '')
+            line = f"  - {name}"
+            if reason:
+                line += f" ({reason})"
+            parts.append(line)
+    else:
+        parts.append("\nNo one is blocked out on this date.")
+
+    total_checked = blockout_data.get('total_people_checked', 0)
+    if total_checked:
+        available_count = total_checked - len(blocked_people)
+        parts.append(f"\n{available_count} of {total_checked} team members available.")
+
+    parts.append("[END BLOCKOUTS FOR DATE]\n")
+    return '\n'.join(parts)
+
+
+def format_availability_check(availability_data: dict) -> str:
+    """
+    Format availability check result for a specific person on a date.
+
+    Args:
+        availability_data: Dict with availability check result from PCO API.
+
+    Returns:
+        Formatted string with availability status.
+    """
+    if not availability_data:
+        return ""
+
+    parts = ["\n[AVAILABILITY CHECK]"]
+
+    if not availability_data.get('found'):
+        person_name = availability_data.get('person_name', 'Unknown')
+        error = availability_data.get('error', 'Person not found')
+        parts.append(f"Person: {person_name}")
+        parts.append(f"Status: {error}")
+        parts.append("[END AVAILABILITY CHECK]\n")
+        return '\n'.join(parts)
+
+    parts.append(f"Person: {availability_data.get('person_name', 'Unknown')}")
+    parts.append(f"Date: {availability_data.get('date', 'Unknown')}")
+
+    is_available = availability_data.get('available', True)
+    if is_available:
+        parts.append("Status: AVAILABLE")
+        parts.append("This person has no blockouts for this date.")
+    else:
+        parts.append("Status: BLOCKED OUT")
+        blockout = availability_data.get('blockout', {})
+        starts = blockout.get('starts_at', '')
+        ends = blockout.get('ends_at', '')
+        reason = blockout.get('reason', '')
+
+        if starts and 'T' in str(starts):
+            starts = starts.split('T')[0]
+        if ends and 'T' in str(ends):
+            ends = ends.split('T')[0]
+
+        parts.append(f"Blockout Period: {starts} to {ends}")
+        if reason:
+            parts.append(f"Reason: {reason}")
+
+    parts.append("[END AVAILABILITY CHECK]\n")
+    return '\n'.join(parts)
+
+
+def format_team_availability(availability_data: dict) -> str:
+    """
+    Format team availability for a specific date.
+
+    Args:
+        availability_data: Dict with team availability info from PCO API.
+
+    Returns:
+        Formatted string with team availability summary.
+    """
+    if not availability_data:
+        return ""
+
+    parts = ["\n[TEAM AVAILABILITY]"]
+    parts.append(f"Date: {availability_data.get('date', 'Unknown')}")
+
+    if availability_data.get('team_name'):
+        parts.append(f"Team: {availability_data.get('team_name')}")
+
+    available = availability_data.get('available', [])
+    blocked = availability_data.get('blocked', [])
+
+    total = len(available) + len(blocked)
+    parts.append(f"\nSummary: {len(available)} available, {len(blocked)} blocked out of {total} total")
+
+    if blocked:
+        parts.append(f"\nBlocked Out ({len(blocked)}):")
+        for person in blocked:
+            name = person.get('name', 'Unknown')
+            reason = person.get('reason', '')
+            line = f"  - {name}"
+            if reason:
+                line += f" ({reason})"
+            parts.append(line)
+
+    if available:
+        parts.append(f"\nAvailable ({len(available)}):")
+        for person in available[:20]:  # Limit to 20 to avoid huge output
+            parts.append(f"  - {person.get('name', 'Unknown')}")
+        if len(available) > 20:
+            parts.append(f"  ... and {len(available) - 20} more")
+
+    parts.append("[END TEAM AVAILABILITY]\n")
     return '\n'.join(parts)
 
 
@@ -2327,6 +2639,59 @@ def query_agent(question: str, user, session_id: str) -> str:
         logger.info(f"PCO query type '{pco_query_type}' detected but no person name extracted from: '{question[:100]}...'")
         pco_data_context = f"\n[PLANNING CENTER: Unable to determine which volunteer you're asking about. Please include the volunteer's name in your question.]\n"
 
+    # Check if this is a blockout/availability query
+    blockout_query, blockout_query_type, blockout_person, blockout_date = is_blockout_query(question)
+    blockout_data_context = ""
+
+    if blockout_query:
+        logger.info(f"Blockout query detected: {blockout_query_type} for person='{blockout_person}', date='{blockout_date}'")
+        from .planning_center import PlanningCenterServicesAPI
+        services_api = PlanningCenterServicesAPI()
+
+        if services_api.is_configured:
+            if blockout_query_type == 'person_blockouts':
+                # Looking for a person's blockout dates
+                if blockout_person:
+                    blockout_data = services_api.get_person_blockouts(blockout_person)
+                    blockout_data_context = format_person_blockouts(blockout_data)
+                    logger.info(f"Fetched blockouts for '{blockout_person}': found={blockout_data.get('found')}")
+                else:
+                    blockout_data_context = "\n[BLOCKOUT QUERY: Please specify which volunteer's blockouts you want to see.]\n"
+
+            elif blockout_query_type == 'date_blockouts':
+                # Looking for who is blocked out on a specific date
+                if blockout_date:
+                    blockout_data = services_api.get_blockouts_for_date(blockout_date)
+                    blockout_data_context = format_date_blockouts(blockout_data)
+                    logger.info(f"Fetched blockouts for date '{blockout_date}': {len(blockout_data.get('blocked_people', []))} people blocked")
+                else:
+                    blockout_data_context = "\n[BLOCKOUT QUERY: Please specify which date you want to check blockouts for (e.g., 'this Sunday', 'December 15', '12/15').]\n"
+
+            elif blockout_query_type == 'availability_check':
+                # Checking if a specific person is available on a specific date
+                if blockout_person and blockout_date:
+                    availability_data = services_api.check_person_availability(blockout_person, blockout_date)
+                    blockout_data_context = format_availability_check(availability_data)
+                    logger.info(f"Checked availability for '{blockout_person}' on '{blockout_date}': available={availability_data.get('available')}")
+                elif blockout_person:
+                    blockout_data_context = "\n[AVAILABILITY CHECK: Please specify which date to check availability for (e.g., 'this Sunday', 'December 15').]\n"
+                elif blockout_date:
+                    blockout_data_context = "\n[AVAILABILITY CHECK: Please specify which volunteer's availability you want to check.]\n"
+                else:
+                    blockout_data_context = "\n[AVAILABILITY CHECK: Please specify both the volunteer name and date to check availability.]\n"
+
+            elif blockout_query_type == 'team_availability':
+                # Looking for team availability on a specific date
+                if blockout_date:
+                    availability_data = services_api.get_team_availability_for_date(blockout_date)
+                    blockout_data_context = format_team_availability(availability_data)
+                    logger.info(f"Fetched team availability for '{blockout_date}'")
+                else:
+                    blockout_data_context = "\n[TEAM AVAILABILITY: Please specify which date to check team availability for (e.g., 'this Sunday', 'December 15').]\n"
+        else:
+            logger.warning("Blockout query detected but Planning Center Services is not configured")
+            blockout_data_context = "\n[BLOCKOUT QUERY: Planning Center Services integration is not configured. Please ask an administrator to configure the API credentials.]\n"
+
     # Check if this is a song/setlist query
     song_query, song_query_type, song_value = is_song_or_setlist_query(question)
     song_data_context = ""
@@ -2655,6 +3020,10 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
     # Add song/setlist data to context if available
     if song_data_context:
         context = song_data_context + "\n" + context
+
+    # Add blockout/availability data to context if available
+    if blockout_data_context:
+        context = blockout_data_context + "\n" + context
 
     # Step 3: Get chat history for this session
     all_history = ChatMessage.objects.filter(
