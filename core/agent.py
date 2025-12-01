@@ -169,6 +169,42 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
     return is_pco_query, query_type, person_name
 
 
+def _has_date_reference(message_lower: str) -> bool:
+    """
+    Check if a message contains a date reference (for disambiguation).
+
+    This is used to distinguish between:
+    - song_history: "when was [song] played" (no date, asking for when)
+    - setlist: "what was played on [date]" (has date, asking for songs)
+    """
+    date_patterns = [
+        r'(last|this|next)\s+(sunday|week|month|service)',
+        r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}',
+        r'\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?',  # MM/DD or MM-DD format
+        r'(yesterday|today|tomorrow)',
+        r'(easter|christmas|thanksgiving|good\s+friday)(\s+\d{4})?',
+        r'(that|the)\s+(day|date|sunday|service)',
+    ]
+    return any(re.search(p, message_lower) for p in date_patterns)
+
+
+def _has_song_history_indicators(message_lower: str) -> bool:
+    """
+    Check if a message is asking about song history (when was a song played).
+
+    These patterns indicate the user wants to know WHEN a song was played,
+    not WHAT songs were played on a date.
+    """
+    history_patterns = [
+        r'last\s+time\s+.+\s+(was\s+)?(played|used|scheduled|performed)',
+        r'when\s+(was|did|is)\s+.+\s+(played|used|scheduled|performed)',
+        r'how\s+(often|many\s+times|frequently)',
+        r'song\s+(usage|history)',
+        r'have\s+we\s+(ever\s+)?(played|used|done)',
+    ]
+    return any(re.search(p, message_lower) for p in history_patterns)
+
+
 def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
     """
     Detect if a question is asking about songs, setlists, or chord charts.
@@ -185,16 +221,16 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
     message_lower = message.lower().strip()
 
     # Patterns for song/setlist queries
-    # IMPORTANT: Order matters! More specific patterns must come before general ones.
-    # song_history must come before setlist because setlist's "was played" pattern
-    # would incorrectly match "when was X played" queries.
+    # Note: These patterns are used for initial detection. Disambiguation between
+    # song_history and setlist happens separately based on context (date presence, etc.)
     song_query_patterns = {
         # Team/volunteer schedule - check this BEFORE setlist to catch volunteer-specific queries
         # Include both present (is/are) and past (was/were) tense for queries like "who was on the team last Sunday"
         # Also match simple past tense "who served" without auxiliary verb
         'team_schedule': r'(who\s+(is|are|was|were)\s+(on|serving|scheduled|playing|singing)|who\s+served|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled\s+volunteer|serving\s+(on|this|next|last)|band\s+for|vocals?\s+for|tech\s+for|who\s+(do|did)\s+we\s+have)',
-        # Song history - check BEFORE setlist to catch "when was [song] played" queries
-        'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|played)|(?:the\s+)?(?:title|song|name)\s+is\s+|it\'?s\s+called',
+        # Song history - asking WHEN a song was played
+        'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|play)|have\s+we\s+(ever\s+)?(played|done|used)|(?:the\s+)?(?:title|song|name)\s+is\s+|it\'?s\s+called',
+        # Setlist - asking WHAT songs were played on a date
         'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|songs?\s+(from|for|on|we\s+(play|sang|did))|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?)\s+(that|on\s+that)\s+(day|date|service|sunday|easter)|(songs?|play|sang|played)\s+.*(easter|christmas|good\s+friday))',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
         # Lyrics patterns - include section requests like "lyrics to the bridge" or just "the lyrics"
@@ -203,18 +239,52 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
         'song_info': r'(what\s+key|which\s+key|bpm|tempo|how\s+(long|fast))\s+.*(song|play)',
     }
 
-    # Also check for date patterns that suggest a service query
-    date_pattern = r'(last|this|next)\s+sunday|(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}'
-    has_date_reference = bool(re.search(date_pattern, message_lower))
+    # Check for date and song history indicators (used for disambiguation)
+    has_date_reference = _has_date_reference(message_lower)
+    has_song_history_indicators = _has_song_history_indicators(message_lower)
 
     is_song_query = False
     query_type = None
 
+    # Collect all matching patterns for disambiguation
+    matching_types = []
     for qtype, pattern in song_query_patterns.items():
         if re.search(pattern, message_lower):
-            is_song_query = True
-            query_type = qtype
-            break
+            matching_types.append(qtype)
+
+    if matching_types:
+        is_song_query = True
+
+        # Disambiguation logic: choose the most appropriate query type
+        if 'team_schedule' in matching_types:
+            # Team schedule takes priority when explicitly asking about volunteers/team
+            query_type = 'team_schedule'
+        elif 'chord_chart' in matching_types:
+            query_type = 'chord_chart'
+        elif 'lyrics' in matching_types:
+            query_type = 'lyrics'
+        elif 'song_search' in matching_types:
+            query_type = 'song_search'
+        elif 'song_info' in matching_types:
+            query_type = 'song_info'
+        elif 'song_history' in matching_types or 'setlist' in matching_types:
+            # Key disambiguation: song_history vs setlist
+            # - song_history: "when was [song] played" - asking for a DATE, no date in query
+            # - setlist: "what was played on [date]" - asking for SONGS, has date in query
+            if has_song_history_indicators and not has_date_reference:
+                # Asking about when a song was played (no date provided)
+                query_type = 'song_history'
+            elif has_date_reference and not has_song_history_indicators:
+                # Has a date, asking what was played on that date
+                query_type = 'setlist'
+            elif 'song_history' in matching_types:
+                # If song_history pattern matched explicitly, prefer it
+                query_type = 'song_history'
+            else:
+                query_type = 'setlist'
+        else:
+            # Fallback to first match
+            query_type = matching_types[0]
 
     # Extract song title or date from the question
     extracted_value = None
