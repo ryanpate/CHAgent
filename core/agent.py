@@ -222,7 +222,9 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
             r"'([^']+)'",  # Single-quoted title
             r'(?:chord\s*chart|chords?|lyrics?|song)\s+(?:for|to)\s+["\']?([^"\'?]+)["\']?',
             r'(?:find|search|look\s*up|get)\s+(?:the\s+)?(?:song\s+)?["\']?([^"\'?]+)["\']?',
-            # Song history patterns - match "when was the song [title] played last?"
+            # Song history patterns - "when is/was the last time [song] was played"
+            r'(?:when\s+(?:is|was)\s+)?(?:the\s+)?last\s+time\s+(.+?)\s+was\s+(?:played|used|scheduled|performed)',
+            # "when was the song [title] played last?"
             r'when\s+(?:was|did)\s+(?:the\s+)?song\s+["\']?(.+?)["\']?\s+(?:last\s+)?(?:used|played|performed|scheduled)',
             r'when\s+(?:was|did)\s+(?:the\s+)?song\s+["\']?(.+?)["\']?\s+(?:used|played|performed|scheduled)\s+(?:last|most\s+recently)',
             r'when\s+(?:was|did)\s+["\']?([^"\'?]+?)["\']?\s+(?:last\s+)?(?:used|played|performed|scheduled)',
