@@ -121,6 +121,7 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
         if re.search(pattern, message_lower):
             is_pco_query = True
             query_type = qtype
+            logger.info(f"PCO query pattern matched: '{qtype}' for message: '{message[:50]}...'")
             break
 
     # Extract person name from the question
@@ -152,10 +153,11 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
             r"(?:where\s+does|when\s+(?:was|is|did))\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
         ]
 
-        for pattern in name_patterns:
+        for i, pattern in enumerate(name_patterns):
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
                 extracted = match.group(1).strip()
+                logger.info(f"Name pattern {i} matched, extracted: '{extracted}' from pattern: '{pattern[:50]}...'")
                 # Remove trailing 's' if it's a possessive without apostrophe (e.g., "strucks" -> "struck")
                 if extracted.lower().endswith('s') and len(extracted) > 2:
                     # Check if this looks like a possessive (followed by contact/email/phone in original)
@@ -166,10 +168,13 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
                 false_positives = ['I', 'What', 'Where', 'When', 'How', 'Can', 'Do', 'Does', 'Is', 'Are',
                                    'The', 'Info', 'Information', 'Details', 'Contact', 'Their', 'My', 'Your']
                 if person_name not in false_positives and len(person_name) > 1:
+                    logger.info(f"Name extraction successful: '{person_name}'")
                     break
                 else:
+                    logger.info(f"Name '{person_name}' rejected as false positive")
                     person_name = None
 
+    logger.info(f"is_pco_data_query result: pco_query={is_pco_query}, type={query_type}, name={person_name}")
     return is_pco_query, query_type, person_name
 
 
@@ -2283,6 +2288,11 @@ def query_agent(question: str, user, session_id: str) -> str:
                 logger.info(f"No PCO match for '{pco_person_name}', providing {len(pco_suggestions)} PCO + {len(local_suggestions)} local suggestions")
         else:
             logger.warning("PCO query detected but Planning Center is not configured")
+            pco_data_context = f"\n[PLANNING CENTER: The Planning Center integration is not configured. Unable to look up volunteer details for '{pco_person_name}'. Please ask an administrator to configure the Planning Center API credentials.]\n"
+    elif pco_query:
+        # PCO query detected but name couldn't be extracted
+        logger.info(f"PCO query type '{pco_query_type}' detected but no person name extracted from: '{question[:100]}...'")
+        pco_data_context = f"\n[PLANNING CENTER: Unable to determine which volunteer you're asking about. Please include the volunteer's name in your question.]\n"
 
     # Check if this is a song/setlist query
     song_query, song_query_type, song_value = is_song_or_setlist_query(question)
