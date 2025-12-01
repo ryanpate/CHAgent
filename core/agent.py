@@ -2371,7 +2371,25 @@ def query_agent(question: str, user, session_id: str) -> str:
                 # Looking for song info or attachments - use fuzzy search with suggestions
                 # If no song title provided, check if we have a current song in context
                 song_to_lookup = song_value
-                if not song_to_lookup:
+
+                # Check if the extracted value is a reference to a previous song
+                # (e.g., "the song", "this song", "that song", "it")
+                song_reference_patterns = [
+                    r'^(the|this|that)\s+song$',
+                    r'^it$',
+                    r'^(the|this|that)\s+one$',
+                    r'^same\s+song$',
+                ]
+                is_song_reference = False
+                if song_to_lookup:
+                    for pattern in song_reference_patterns:
+                        if re.match(pattern, song_to_lookup.lower().strip()):
+                            is_song_reference = True
+                            logger.info(f"Detected song reference '{song_to_lookup}', will use context")
+                            break
+
+                # Use current song from context if no title provided OR if it's a reference
+                if not song_to_lookup or is_song_reference:
                     current_song_title = conversation_context.get_current_song_title()
                     if current_song_title:
                         song_to_lookup = current_song_title
