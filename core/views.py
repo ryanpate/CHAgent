@@ -231,8 +231,8 @@ def chat_feedback(request):
     """
     Handle feedback submission for AI responses.
 
-    Creates a ResponseFeedback record and optionally stores successful
-    query patterns for learning.
+    For positive feedback: Creates record directly
+    For negative feedback: Shows issue reporting form
     """
     message_id = request.POST.get('message_id')
     feedback_type = request.POST.get('feedback_type', 'positive')
@@ -245,55 +245,201 @@ def chat_feedback(request):
     except ChatMessage.DoesNotExist:
         return HttpResponse('<span class="text-red-500 text-xs">Error</span>')
 
-    # Check if feedback already exists
+    # For cancel, restore the feedback buttons
+    if feedback_type == 'cancel':
+        return render(request, 'core/partials/feedback_buttons.html', {
+            'message_id': message_id,
+        })
+
+    # For negative feedback, show the issue reporting form
+    if feedback_type == 'negative':
+        return render(request, 'core/partials/issue_report_form.html', {
+            'message_id': message_id,
+            'issue_types': ResponseFeedback.ISSUE_TYPE_CHOICES,
+        })
+
+    # For positive feedback, submit directly
     existing_feedback = ResponseFeedback.objects.filter(chat_message=chat_message).first()
     if existing_feedback:
-        # Update existing feedback
         existing_feedback.feedback_type = feedback_type
         existing_feedback.save()
     else:
-        # Create new feedback
         ResponseFeedback.objects.create(
             chat_message=chat_message,
             user=request.user,
             feedback_type=feedback_type
         )
 
-    # If positive feedback, store the query pattern for learning
-    if feedback_type == 'positive':
-        try:
-            from .models import QueryPattern
-            # Find the user's question that preceded this response
-            user_message = ChatMessage.objects.filter(
-                user=chat_message.user,
-                session_id=chat_message.session_id,
-                role='user',
-                created_at__lt=chat_message.created_at
-            ).order_by('-created_at').first()
+    # Store the query pattern for learning
+    try:
+        from .models import QueryPattern
+        user_message = ChatMessage.objects.filter(
+            user=chat_message.user,
+            session_id=chat_message.session_id,
+            role='user',
+            created_at__lt=chat_message.created_at
+        ).order_by('-created_at').first()
 
-            if user_message:
-                # Store the successful query pattern
-                normalized = QueryPattern.normalize_query(user_message.content)
-                # Check if similar pattern already exists
-                existing_pattern = QueryPattern.objects.filter(
-                    normalized_query=normalized
-                ).first()
+        if user_message:
+            normalized = QueryPattern.normalize_query(user_message.content)
+            existing_pattern = QueryPattern.objects.filter(
+                normalized_query=normalized
+            ).first()
 
-                if existing_pattern:
-                    existing_pattern.record_match(was_successful=True)
-                else:
-                    QueryPattern.objects.create(
-                        query_text=user_message.content,
-                        normalized_query=normalized,
-                        detected_intent='general',  # Could be enhanced to detect actual intent
-                        extracted_entities={}
-                    )
-        except Exception:
-            pass  # Don't fail feedback submission if pattern storage fails
+            if existing_pattern:
+                existing_pattern.record_match(was_successful=True)
+            else:
+                QueryPattern.objects.create(
+                    query_text=user_message.content,
+                    normalized_query=normalized,
+                    detected_intent='general',
+                    extracted_entities={}
+                )
+    except Exception:
+        pass
 
     return render(request, 'core/partials/feedback_response.html', {
         'feedback_type': feedback_type
     })
+
+
+@login_required
+@require_POST
+def chat_feedback_submit(request):
+    """
+    Handle issue report form submission for negative feedback.
+
+    Creates a ResponseFeedback record with issue details.
+    """
+    message_id = request.POST.get('message_id')
+    issue_type = request.POST.get('issue_type', '')
+    expected_result = request.POST.get('expected_result', '')
+    comment = request.POST.get('comment', '')
+
+    if not message_id:
+        return HttpResponse('<span class="text-red-500 text-xs">Error</span>')
+
+    try:
+        chat_message = ChatMessage.objects.get(pk=int(message_id), role='assistant')
+    except ChatMessage.DoesNotExist:
+        return HttpResponse('<span class="text-red-500 text-xs">Error</span>')
+
+    # Check if feedback already exists
+    existing_feedback = ResponseFeedback.objects.filter(chat_message=chat_message).first()
+    if existing_feedback:
+        existing_feedback.feedback_type = 'negative'
+        existing_feedback.issue_type = issue_type
+        existing_feedback.expected_result = expected_result
+        existing_feedback.comment = comment
+        existing_feedback.save()
+    else:
+        ResponseFeedback.objects.create(
+            chat_message=chat_message,
+            user=request.user,
+            feedback_type='negative',
+            issue_type=issue_type,
+            expected_result=expected_result,
+            comment=comment
+        )
+
+    return render(request, 'core/partials/feedback_response.html', {
+        'feedback_type': 'negative',
+        'submitted': True
+    })
+
+
+@login_required
+def feedback_dashboard(request):
+    """
+    Dashboard for admins to review feedback and reported issues.
+
+    Shows all feedback with filtering options for issue types and resolution status.
+    """
+    # Get filter parameters
+    filter_type = request.GET.get('type', 'all')  # all, positive, negative
+    filter_resolved = request.GET.get('resolved', 'all')  # all, yes, no
+    filter_issue = request.GET.get('issue', '')  # specific issue type
+
+    # Base queryset
+    feedbacks = ResponseFeedback.objects.select_related(
+        'chat_message', 'user', 'resolved_by'
+    ).order_by('-created_at')
+
+    # Apply filters
+    if filter_type == 'positive':
+        feedbacks = feedbacks.filter(feedback_type='positive')
+    elif filter_type == 'negative':
+        feedbacks = feedbacks.filter(feedback_type='negative')
+
+    if filter_resolved == 'yes':
+        feedbacks = feedbacks.filter(resolved=True)
+    elif filter_resolved == 'no':
+        feedbacks = feedbacks.filter(resolved=False)
+
+    if filter_issue:
+        feedbacks = feedbacks.filter(issue_type=filter_issue)
+
+    # Get counts for stats
+    total_count = ResponseFeedback.objects.count()
+    positive_count = ResponseFeedback.objects.filter(feedback_type='positive').count()
+    negative_count = ResponseFeedback.objects.filter(feedback_type='negative').count()
+    unresolved_count = ResponseFeedback.objects.filter(
+        feedback_type='negative', resolved=False
+    ).count()
+
+    # Get user questions for each feedback
+    feedback_with_questions = []
+    for feedback in feedbacks[:100]:  # Limit for performance
+        user_question = None
+        if feedback.chat_message:
+            user_msg = ChatMessage.objects.filter(
+                user=feedback.chat_message.user,
+                session_id=feedback.chat_message.session_id,
+                role='user',
+                created_at__lt=feedback.chat_message.created_at
+            ).order_by('-created_at').first()
+            if user_msg:
+                user_question = user_msg.content
+        feedback_with_questions.append({
+            'feedback': feedback,
+            'user_question': user_question,
+        })
+
+    context = {
+        'feedbacks': feedback_with_questions,
+        'filter_type': filter_type,
+        'filter_resolved': filter_resolved,
+        'filter_issue': filter_issue,
+        'issue_types': ResponseFeedback.ISSUE_TYPE_CHOICES,
+        'total_count': total_count,
+        'positive_count': positive_count,
+        'negative_count': negative_count,
+        'unresolved_count': unresolved_count,
+    }
+    return render(request, 'core/feedback_dashboard.html', context)
+
+
+@login_required
+@require_POST
+def feedback_resolve(request, pk):
+    """Mark a feedback item as resolved."""
+    from django.utils import timezone
+
+    feedback = get_object_or_404(ResponseFeedback, pk=pk)
+    feedback.resolved = True
+    feedback.resolved_by = request.user
+    feedback.resolved_at = timezone.now()
+    feedback.resolution_notes = request.POST.get('resolution_notes', '')
+    feedback.save()
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/feedback_row.html', {
+            'item': {
+                'feedback': feedback,
+                'user_question': None,  # Will be fetched if needed
+            }
+        })
+    return redirect('feedback_dashboard')
 
 
 @login_required

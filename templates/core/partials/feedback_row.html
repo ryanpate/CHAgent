@@ -1,0 +1,68 @@
+<div id="feedback-row-{{ item.feedback.id }}" class="bg-ch-dark rounded-lg p-4 border-l-4 {% if item.feedback.feedback_type == 'positive' %}border-green-500{% else %}{% if item.feedback.resolved %}border-gray-500{% else %}border-red-500{% endif %}{% endif %}">
+    <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div class="flex-1">
+            <!-- Header row -->
+            <div class="flex items-center gap-3 mb-3">
+                {% if item.feedback.feedback_type == 'positive' %}
+                <span class="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">Helpful</span>
+                {% else %}
+                <span class="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">Not Helpful</span>
+                {% endif %}
+
+                {% if item.feedback.issue_type %}
+                <span class="px-2 py-1 bg-ch-gray text-gray-300 text-xs rounded">{{ item.feedback.get_issue_type_display }}</span>
+                {% endif %}
+
+                {% if item.feedback.feedback_type == 'negative' %}
+                    {% if item.feedback.resolved %}
+                    <span class="px-2 py-1 bg-gray-500/20 text-gray-400 text-xs rounded">Resolved</span>
+                    {% else %}
+                    <span class="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded">Unresolved</span>
+                    {% endif %}
+                {% endif %}
+
+                <span class="text-gray-500 text-xs ml-auto">{{ item.feedback.created_at|timesince }} ago</span>
+            </div>
+
+            <!-- AI Response -->
+            <div class="mb-3">
+                <p class="text-xs text-gray-500 mb-1">AI responded:</p>
+                <p class="text-sm bg-ch-gray/50 rounded p-2 text-gray-300">{{ item.feedback.chat_message.content|truncatewords:50 }}</p>
+            </div>
+
+            <!-- Issue Details (for negative feedback) -->
+            {% if item.feedback.feedback_type == 'negative' %}
+                {% if item.feedback.expected_result %}
+                <div class="mb-3">
+                    <p class="text-xs text-gray-500 mb-1">Expected:</p>
+                    <p class="text-sm text-yellow-200 bg-yellow-900/20 rounded p-2">{{ item.feedback.expected_result }}</p>
+                </div>
+                {% endif %}
+
+                {% if item.feedback.comment %}
+                <div class="mb-3">
+                    <p class="text-xs text-gray-500 mb-1">Additional details:</p>
+                    <p class="text-sm text-gray-300">{{ item.feedback.comment }}</p>
+                </div>
+                {% endif %}
+
+                {% if item.feedback.resolved and item.feedback.resolution_notes %}
+                <div class="mb-3">
+                    <p class="text-xs text-gray-500 mb-1">Resolution notes:</p>
+                    <p class="text-sm text-green-200 bg-green-900/20 rounded p-2">{{ item.feedback.resolution_notes }}</p>
+                </div>
+                {% endif %}
+            {% endif %}
+
+            <!-- Meta info -->
+            <div class="flex items-center gap-4 text-xs text-gray-500">
+                <span>By: {{ item.feedback.user.display_name|default:item.feedback.user.username }}</span>
+                {% if item.feedback.resolved_by %}
+                <span>Resolved by: {{ item.feedback.resolved_by.display_name|default:item.feedback.resolved_by.username }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Actions - Hidden since resolved -->
+    </div>
+</div>
