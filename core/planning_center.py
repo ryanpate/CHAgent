@@ -2191,7 +2191,11 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
     def get_blockouts_for_date(self, date_str: str) -> dict:
         """
-        Get all team members who are blocked out on a specific date.
+        Get team members who are blocked out on a specific date.
+
+        Instead of checking all services people (which causes rate limits),
+        this method finds the service plan for that date and checks blockouts
+        only for team members associated with that service.
 
         Args:
             date_str: Date string to check (e.g., "December 14", "12/14/2025").
@@ -2200,13 +2204,16 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             Dict with:
             - 'date': The parsed date
             - 'blocked_people': List of people blocked out on that date
+            - 'total_people_checked': Number of people checked
         """
         from datetime import datetime, timedelta
+        import time
 
         result = {
             'date': date_str,
             'date_parsed': None,
-            'blocked_people': []
+            'blocked_people': [],
+            'total_people_checked': 0
         }
 
         # Parse the date
@@ -2217,35 +2224,96 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         result['date_parsed'] = target_date.isoformat()
 
-        # Get all services people and check their blockouts
-        services_people = self._get_all_services_people_list(max_pages=10)
-        logger.info(f"Checking blockouts for {len(services_people)} people on {target_date}")
+        # First, try to find the service plan for this date
+        # This gives us a scoped list of team members to check
+        plan = self.find_plan_by_date(date_str)
 
-        for person in services_people:
-            person_id = person.get('id')
-            attrs = person.get('attributes', {})
-            person_name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
+        team_member_ids = set()
+        team_member_names = {}  # Map ID to name
 
-            # Get blockouts for this person
-            blockouts_result = self._get(
-                f"/services/v2/people/{person_id}/blockouts",
-                params={'per_page': 50}
+        if plan and plan.get('plan_id'):
+            # Get team members from the plan
+            plan_id = plan.get('plan_id')
+            service_type_id = plan.get('service_type_id')
+
+            if service_type_id and plan_id:
+                team_result = self._get(
+                    f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/team_members",
+                    params={'per_page': 100}
+                )
+
+                for member in team_result.get('data', []):
+                    attrs = member.get('attributes', {})
+                    name = attrs.get('name', '')
+
+                    # Get person_id from relationships
+                    person_id = None
+                    relationships = member.get('relationships', {})
+                    person_data = relationships.get('person', {}).get('data', {})
+                    if person_data:
+                        person_id = person_data.get('id')
+
+                    if person_id:
+                        team_member_ids.add(person_id)
+                        team_member_names[person_id] = name
+
+                logger.info(f"Found {len(team_member_ids)} team members from plan for {date_str}")
+
+        # If no plan found or no team members, get a limited sample of active services people
+        if not team_member_ids:
+            logger.info(f"No plan found for {date_str}, checking recent active team members")
+            # Get only first page of services people (max 100)
+            services_people = self._get(
+                "/services/v2/people",
+                params={'per_page': 100, 'order': '-updated_at'}
             )
 
-            for blockout in blockouts_result.get('data', []):
-                b_attrs = blockout.get('attributes', {})
-                starts_at = b_attrs.get('starts_at')
-                ends_at = b_attrs.get('ends_at')
+            for person in services_people.get('data', []):
+                person_id = person.get('id')
+                attrs = person.get('attributes', {})
+                name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
+                if person_id:
+                    team_member_ids.add(person_id)
+                    team_member_names[person_id] = name
 
-                if self._date_in_blockout_range(target_date, starts_at, ends_at):
-                    result['blocked_people'].append({
-                        'name': person_name,
-                        'person_id': person_id,
-                        'reason': b_attrs.get('reason', ''),
-                        'starts_at': starts_at,
-                        'ends_at': ends_at
-                    })
-                    break  # Person is blocked, no need to check more blockouts
+            logger.info(f"Using {len(team_member_ids)} recently active services people")
+
+        result['total_people_checked'] = len(team_member_ids)
+
+        # Check blockouts for each team member with rate limiting
+        checked = 0
+        for person_id in team_member_ids:
+            person_name = team_member_names.get(person_id, 'Unknown')
+
+            # Add small delay every 20 requests to avoid rate limits
+            if checked > 0 and checked % 20 == 0:
+                time.sleep(0.5)
+
+            try:
+                blockouts_result = self._get(
+                    f"/services/v2/people/{person_id}/blockouts",
+                    params={'per_page': 50}
+                )
+
+                for blockout in blockouts_result.get('data', []):
+                    b_attrs = blockout.get('attributes', {})
+                    starts_at = b_attrs.get('starts_at')
+                    ends_at = b_attrs.get('ends_at')
+
+                    if self._date_in_blockout_range(target_date, starts_at, ends_at):
+                        result['blocked_people'].append({
+                            'name': person_name,
+                            'person_id': person_id,
+                            'reason': b_attrs.get('reason', ''),
+                            'starts_at': starts_at,
+                            'ends_at': ends_at
+                        })
+                        break  # Person is blocked, no need to check more blockouts
+
+                checked += 1
+            except Exception as e:
+                logger.warning(f"Error checking blockouts for {person_name}: {e}")
+                continue
 
         logger.info(f"Found {len(result['blocked_people'])} people blocked out on {target_date}")
         return result
@@ -2355,6 +2423,9 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         """
         Get availability status for team members on a specific date.
 
+        Instead of checking all services people, this method finds the service
+        plan for that date and checks only team members associated with that service.
+
         Args:
             date_str: Date to check.
             team_name: Optional team name to filter (e.g., "Band", "Vocals").
@@ -2362,10 +2433,12 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         Returns:
             Dict with available and unavailable team members.
         """
+        import time
+
         result = {
             'date': date_str,
             'date_parsed': None,
-            'team_filter': team_name,
+            'team_name': team_name,
             'available': [],
             'blocked': [],
             'total_checked': 0
@@ -2379,61 +2452,103 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         result['date_parsed'] = target_date.isoformat()
 
-        # Get team members - if team specified, try to get from a recent plan
-        services_people = []
+        # Get team members from the plan for this date
+        team_member_ids = set()
+        team_member_names = {}
 
-        if team_name:
-            # Get a recent plan to find team members
-            recent_plans = self.get_recent_plans(limit=1)
-            if recent_plans:
-                plan = recent_plans[0]
-                st_id = plan.get('relationships', {}).get('service_type', {}).get('data', {}).get('id')
-                if st_id:
-                    team_members = self.get_plan_team_members(st_id, plan.get('id'))
-                    team_name_lower = team_name.lower()
-                    for tm in team_members:
-                        if team_name_lower in (tm.get('team_name') or '').lower():
-                            # Find this person in services people
-                            person = self._find_services_person_by_name(tm.get('name'))
-                            if person and person not in services_people:
-                                services_people.append(person)
+        plan = self.find_plan_by_date(date_str)
 
-        if not services_people:
-            services_people = self._get_all_services_people_list(max_pages=10)
+        if plan and plan.get('plan_id'):
+            plan_id = plan.get('plan_id')
+            service_type_id = plan.get('service_type_id')
 
-        result['total_checked'] = len(services_people)
+            if service_type_id and plan_id:
+                team_result = self._get(
+                    f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/team_members",
+                    params={'per_page': 100}
+                )
 
-        # Check each person's availability
-        for person in services_people:
-            person_id = person.get('id')
-            attrs = person.get('attributes', {})
-            person_name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
+                team_name_lower = (team_name or '').lower()
 
-            # Get blockouts
-            blockouts_result = self._get(
-                f"/services/v2/people/{person_id}/blockouts",
-                params={'per_page': 50}
+                for member in team_result.get('data', []):
+                    attrs = member.get('attributes', {})
+                    name = attrs.get('name', '')
+                    member_team = attrs.get('team_position_name', '')
+
+                    # Filter by team name if specified
+                    if team_name_lower and team_name_lower not in (member_team or '').lower():
+                        continue
+
+                    # Get person_id from relationships
+                    person_id = None
+                    relationships = member.get('relationships', {})
+                    person_data = relationships.get('person', {}).get('data', {})
+                    if person_data:
+                        person_id = person_data.get('id')
+
+                    if person_id:
+                        team_member_ids.add(person_id)
+                        team_member_names[person_id] = name
+
+                logger.info(f"Found {len(team_member_ids)} team members from plan for {date_str}")
+
+        # If no plan found, use a limited sample
+        if not team_member_ids:
+            logger.info(f"No plan found for {date_str}, using recent active people")
+            services_people = self._get(
+                "/services/v2/people",
+                params={'per_page': 50, 'order': '-updated_at'}
             )
 
-            is_blocked = False
-            block_reason = ''
+            for person in services_people.get('data', []):
+                person_id = person.get('id')
+                attrs = person.get('attributes', {})
+                name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
+                if person_id:
+                    team_member_ids.add(person_id)
+                    team_member_names[person_id] = name
 
-            for blockout in blockouts_result.get('data', []):
-                b_attrs = blockout.get('attributes', {})
-                if self._date_in_blockout_range(target_date, b_attrs.get('starts_at'), b_attrs.get('ends_at')):
-                    is_blocked = True
-                    block_reason = b_attrs.get('reason', '')
-                    break
+        result['total_checked'] = len(team_member_ids)
 
-            if is_blocked:
-                result['blocked'].append({
-                    'name': person_name,
-                    'reason': block_reason
-                })
-            else:
-                result['available'].append({
-                    'name': person_name
-                })
+        # Check each person's availability with rate limiting
+        checked = 0
+        for person_id in team_member_ids:
+            person_name = team_member_names.get(person_id, 'Unknown')
+
+            # Rate limiting
+            if checked > 0 and checked % 20 == 0:
+                time.sleep(0.5)
+
+            try:
+                blockouts_result = self._get(
+                    f"/services/v2/people/{person_id}/blockouts",
+                    params={'per_page': 50}
+                )
+
+                is_blocked = False
+                block_reason = ''
+
+                for blockout in blockouts_result.get('data', []):
+                    b_attrs = blockout.get('attributes', {})
+                    if self._date_in_blockout_range(target_date, b_attrs.get('starts_at'), b_attrs.get('ends_at')):
+                        is_blocked = True
+                        block_reason = b_attrs.get('reason', '')
+                        break
+
+                if is_blocked:
+                    result['blocked'].append({
+                        'name': person_name,
+                        'reason': block_reason
+                    })
+                else:
+                    result['available'].append({
+                        'name': person_name
+                    })
+
+                checked += 1
+            except Exception as e:
+                logger.warning(f"Error checking availability for {person_name}: {e}")
+                continue
 
         logger.info(f"Availability check for {target_date}: {len(result['available'])} available, {len(result['blocked'])} blocked")
         return result
