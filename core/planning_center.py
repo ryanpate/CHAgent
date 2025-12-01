@@ -2034,3 +2034,491 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         plan = matching_plans[0]
         logger.info(f"Fallback to first plan: {plan.get('id')} ({plan.get('service_type_name')})")
         return get_plan_with_service_name(plan)
+
+    # ========== BLOCKOUT METHODS ==========
+
+    def get_person_blockouts(self, person_name: str) -> dict:
+        """
+        Get a person's blockout dates from Planning Center Services.
+
+        Args:
+            person_name: Name of the person to look up.
+
+        Returns:
+            Dict with:
+            - 'found': True if person was found
+            - 'person_name': The matched person's name
+            - 'blockouts': List of blockout records with dates and reasons
+        """
+        from difflib import SequenceMatcher
+
+        result = {
+            'found': False,
+            'person_name': person_name,
+            'blockouts': [],
+            'services_person_id': None
+        }
+
+        # First, find the person in Services
+        services_person = self._find_services_person_by_name(person_name)
+        if not services_person:
+            logger.info(f"Could not find '{person_name}' in Services for blockout lookup")
+            return result
+
+        person_id = services_person.get('id')
+        person_attrs = services_person.get('attributes', {})
+        actual_name = f"{person_attrs.get('first_name', '')} {person_attrs.get('last_name', '')}".strip()
+
+        result['found'] = True
+        result['person_name'] = actual_name or person_name
+        result['services_person_id'] = person_id
+
+        # Get blockouts for this person
+        blockouts_result = self._get(
+            f"/services/v2/people/{person_id}/blockouts",
+            params={'per_page': 50, 'order': 'starts_at'}
+        )
+
+        for blockout in blockouts_result.get('data', []):
+            attrs = blockout.get('attributes', {})
+            result['blockouts'].append({
+                'id': blockout.get('id'),
+                'starts_at': attrs.get('starts_at'),
+                'ends_at': attrs.get('ends_at'),
+                'reason': attrs.get('reason', ''),
+                'repeat_frequency': attrs.get('repeat_frequency'),
+                'repeat_interval': attrs.get('repeat_interval'),
+                'repeat_period': attrs.get('repeat_period'),
+                'share': attrs.get('share', False),
+                'created_at': attrs.get('created_at')
+            })
+
+        logger.info(f"Found {len(result['blockouts'])} blockouts for {actual_name}")
+        return result
+
+    def _find_services_person_by_name(self, person_name: str) -> Optional[dict]:
+        """
+        Find a Services person record by name.
+
+        Args:
+            person_name: Name to search for.
+
+        Returns:
+            Services person record or None.
+        """
+        from difflib import SequenceMatcher
+
+        if not person_name:
+            return None
+
+        # Parse the name
+        name_parts = person_name.strip().split()
+        first_name = name_parts[0] if name_parts else ''
+        last_name = name_parts[-1] if len(name_parts) > 1 else ''
+
+        # Try searching by first name
+        search_result = self._get("/services/v2/people", params={
+            'where[first_name]': first_name,
+            'per_page': 50
+        })
+        candidates = search_result.get('data', [])
+
+        # Also try last name search if first name didn't find enough
+        if len(candidates) < 3:
+            last_search = self._get("/services/v2/people", params={
+                'where[last_name]': last_name,
+                'per_page': 50
+            })
+            for p in last_search.get('data', []):
+                if p not in candidates:
+                    candidates.append(p)
+
+        # If still no results, paginate through all
+        if not candidates:
+            candidates = self._get_all_services_people_list()
+
+        # Find best match
+        search_full = person_name.lower().strip()
+        best_match = None
+        best_score = 0
+
+        for person in candidates:
+            attrs = person.get('attributes', {})
+            p_first = (attrs.get('first_name') or '').lower()
+            p_last = (attrs.get('last_name') or '').lower()
+            p_full = f"{p_first} {p_last}".strip()
+
+            # Exact match
+            if p_first == first_name.lower() and p_last == last_name.lower():
+                return person
+
+            # Fuzzy match
+            score = SequenceMatcher(None, search_full, p_full).ratio()
+            if score > best_score and score > 0.7:
+                best_score = score
+                best_match = person
+
+        return best_match
+
+    def _get_all_services_people_list(self, max_pages: int = 5) -> list:
+        """
+        Fetch services people with pagination for name matching.
+
+        Args:
+            max_pages: Maximum pages to fetch.
+
+        Returns:
+            List of services person records.
+        """
+        all_people = []
+        offset = 0
+        per_page = 100
+
+        for _ in range(max_pages):
+            result = self._get("/services/v2/people", params={
+                'per_page': per_page,
+                'offset': offset
+            })
+            data = result.get('data', [])
+            if not data:
+                break
+            all_people.extend(data)
+            if len(data) < per_page:
+                break
+            offset += per_page
+
+        return all_people
+
+    def get_blockouts_for_date(self, date_str: str) -> dict:
+        """
+        Get all team members who are blocked out on a specific date.
+
+        Args:
+            date_str: Date string to check (e.g., "December 14", "12/14/2025").
+
+        Returns:
+            Dict with:
+            - 'date': The parsed date
+            - 'blocked_people': List of people blocked out on that date
+        """
+        from datetime import datetime, timedelta
+
+        result = {
+            'date': date_str,
+            'date_parsed': None,
+            'blocked_people': []
+        }
+
+        # Parse the date
+        target_date = self._parse_date_string(date_str)
+        if not target_date:
+            logger.warning(f"Could not parse date: {date_str}")
+            return result
+
+        result['date_parsed'] = target_date.isoformat()
+
+        # Get all services people and check their blockouts
+        services_people = self._get_all_services_people_list(max_pages=10)
+        logger.info(f"Checking blockouts for {len(services_people)} people on {target_date}")
+
+        for person in services_people:
+            person_id = person.get('id')
+            attrs = person.get('attributes', {})
+            person_name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
+
+            # Get blockouts for this person
+            blockouts_result = self._get(
+                f"/services/v2/people/{person_id}/blockouts",
+                params={'per_page': 50}
+            )
+
+            for blockout in blockouts_result.get('data', []):
+                b_attrs = blockout.get('attributes', {})
+                starts_at = b_attrs.get('starts_at')
+                ends_at = b_attrs.get('ends_at')
+
+                if self._date_in_blockout_range(target_date, starts_at, ends_at):
+                    result['blocked_people'].append({
+                        'name': person_name,
+                        'person_id': person_id,
+                        'reason': b_attrs.get('reason', ''),
+                        'starts_at': starts_at,
+                        'ends_at': ends_at
+                    })
+                    break  # Person is blocked, no need to check more blockouts
+
+        logger.info(f"Found {len(result['blocked_people'])} people blocked out on {target_date}")
+        return result
+
+    def _date_in_blockout_range(self, check_date, starts_at: str, ends_at: str) -> bool:
+        """
+        Check if a date falls within a blockout range.
+
+        Args:
+            check_date: Date to check (datetime.date object).
+            starts_at: Blockout start date string.
+            ends_at: Blockout end date string.
+
+        Returns:
+            True if the date is within the blockout range.
+        """
+        from datetime import datetime
+
+        if not starts_at:
+            return False
+
+        try:
+            # Parse ISO format dates (YYYY-MM-DDTHH:MM:SS)
+            start_date = datetime.fromisoformat(starts_at.replace('Z', '+00:00')).date()
+
+            if ends_at:
+                end_date = datetime.fromisoformat(ends_at.replace('Z', '+00:00')).date()
+            else:
+                end_date = start_date
+
+            return start_date <= check_date <= end_date
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Error parsing blockout dates: {e}")
+            return False
+
+    def check_person_availability(self, person_name: str, date_str: str) -> dict:
+        """
+        Check if a specific person is available on a given date.
+
+        Args:
+            person_name: Name of the person to check.
+            date_str: Date to check availability for.
+
+        Returns:
+            Dict with:
+            - 'person_name': The matched person's name
+            - 'date': The date checked
+            - 'available': True if available, False if blocked
+            - 'blockout_reason': Reason for blockout if blocked
+        """
+        result = {
+            'found': False,
+            'person_name': person_name,
+            'date': date_str,
+            'date_parsed': None,
+            'available': True,
+            'blockout_reason': '',
+            'blockout_dates': None
+        }
+
+        # Parse the date
+        target_date = self._parse_date_string(date_str)
+        if not target_date:
+            logger.warning(f"Could not parse date: {date_str}")
+            return result
+
+        result['date_parsed'] = target_date.isoformat()
+
+        # Find the person
+        services_person = self._find_services_person_by_name(person_name)
+        if not services_person:
+            logger.info(f"Could not find '{person_name}' in Services")
+            return result
+
+        person_id = services_person.get('id')
+        attrs = services_person.get('attributes', {})
+        actual_name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
+
+        result['found'] = True
+        result['person_name'] = actual_name
+
+        # Check their blockouts
+        blockouts_result = self._get(
+            f"/services/v2/people/{person_id}/blockouts",
+            params={'per_page': 50}
+        )
+
+        for blockout in blockouts_result.get('data', []):
+            b_attrs = blockout.get('attributes', {})
+            starts_at = b_attrs.get('starts_at')
+            ends_at = b_attrs.get('ends_at')
+
+            if self._date_in_blockout_range(target_date, starts_at, ends_at):
+                result['available'] = False
+                result['blockout_reason'] = b_attrs.get('reason', 'No reason provided')
+                result['blockout_dates'] = {
+                    'starts_at': starts_at,
+                    'ends_at': ends_at
+                }
+                break
+
+        status = "available" if result['available'] else f"blocked out ({result['blockout_reason']})"
+        logger.info(f"{actual_name} is {status} on {target_date}")
+        return result
+
+    def get_team_availability_for_date(self, date_str: str, team_name: str = None) -> dict:
+        """
+        Get availability status for team members on a specific date.
+
+        Args:
+            date_str: Date to check.
+            team_name: Optional team name to filter (e.g., "Band", "Vocals").
+
+        Returns:
+            Dict with available and unavailable team members.
+        """
+        result = {
+            'date': date_str,
+            'date_parsed': None,
+            'team_filter': team_name,
+            'available': [],
+            'blocked': [],
+            'total_checked': 0
+        }
+
+        # Parse the date
+        target_date = self._parse_date_string(date_str)
+        if not target_date:
+            logger.warning(f"Could not parse date: {date_str}")
+            return result
+
+        result['date_parsed'] = target_date.isoformat()
+
+        # Get team members - if team specified, try to get from a recent plan
+        services_people = []
+
+        if team_name:
+            # Get a recent plan to find team members
+            recent_plans = self.get_recent_plans(limit=1)
+            if recent_plans:
+                plan = recent_plans[0]
+                st_id = plan.get('relationships', {}).get('service_type', {}).get('data', {}).get('id')
+                if st_id:
+                    team_members = self.get_plan_team_members(st_id, plan.get('id'))
+                    team_name_lower = team_name.lower()
+                    for tm in team_members:
+                        if team_name_lower in (tm.get('team_name') or '').lower():
+                            # Find this person in services people
+                            person = self._find_services_person_by_name(tm.get('name'))
+                            if person and person not in services_people:
+                                services_people.append(person)
+
+        if not services_people:
+            services_people = self._get_all_services_people_list(max_pages=10)
+
+        result['total_checked'] = len(services_people)
+
+        # Check each person's availability
+        for person in services_people:
+            person_id = person.get('id')
+            attrs = person.get('attributes', {})
+            person_name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
+
+            # Get blockouts
+            blockouts_result = self._get(
+                f"/services/v2/people/{person_id}/blockouts",
+                params={'per_page': 50}
+            )
+
+            is_blocked = False
+            block_reason = ''
+
+            for blockout in blockouts_result.get('data', []):
+                b_attrs = blockout.get('attributes', {})
+                if self._date_in_blockout_range(target_date, b_attrs.get('starts_at'), b_attrs.get('ends_at')):
+                    is_blocked = True
+                    block_reason = b_attrs.get('reason', '')
+                    break
+
+            if is_blocked:
+                result['blocked'].append({
+                    'name': person_name,
+                    'reason': block_reason
+                })
+            else:
+                result['available'].append({
+                    'name': person_name
+                })
+
+        logger.info(f"Availability check for {target_date}: {len(result['available'])} available, {len(result['blocked'])} blocked")
+        return result
+
+    def _parse_date_string(self, date_str: str):
+        """
+        Parse various date string formats into a date object.
+
+        Args:
+            date_str: Date string to parse.
+
+        Returns:
+            datetime.date object or None if parsing fails.
+        """
+        from datetime import datetime, timedelta
+        import re
+
+        if not date_str:
+            return None
+
+        date_str_lower = date_str.lower().strip()
+        today = datetime.now().date()
+
+        # Handle relative dates
+        if date_str_lower in ['today', 'tonight']:
+            return today
+        elif date_str_lower == 'tomorrow':
+            return today + timedelta(days=1)
+        elif date_str_lower == 'yesterday':
+            return today - timedelta(days=1)
+
+        # Handle "this/next/last Sunday" etc.
+        day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        for i, day_name in enumerate(day_names):
+            if day_name in date_str_lower:
+                current_weekday = today.weekday()
+                target_weekday = i
+
+                if 'next' in date_str_lower:
+                    days_ahead = (target_weekday - current_weekday + 7) % 7
+                    if days_ahead == 0:
+                        days_ahead = 7
+                    return today + timedelta(days=days_ahead)
+                elif 'last' in date_str_lower:
+                    days_back = (current_weekday - target_weekday + 7) % 7
+                    if days_back == 0:
+                        days_back = 7
+                    return today - timedelta(days=days_back)
+                else:  # "this Sunday" or just "Sunday"
+                    days_ahead = (target_weekday - current_weekday + 7) % 7
+                    return today + timedelta(days=days_ahead)
+
+        # Handle MM/DD/YYYY or MM-DD-YYYY
+        date_patterns = [
+            (r'(\d{1,2})/(\d{1,2})/(\d{4})', '%m/%d/%Y'),
+            (r'(\d{1,2})-(\d{1,2})-(\d{4})', '%m-%d-%Y'),
+            (r'(\d{4})-(\d{1,2})-(\d{1,2})', '%Y-%m-%d'),
+        ]
+
+        for pattern, fmt in date_patterns:
+            match = re.search(pattern, date_str)
+            if match:
+                try:
+                    return datetime.strptime(match.group(0), fmt).date()
+                except ValueError:
+                    continue
+
+        # Handle "December 14" or "December 14, 2025" or "Dec 14"
+        month_names = {
+            'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+            'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6,
+            'jul': 7, 'july': 7, 'aug': 8, 'august': 8, 'sep': 9, 'september': 9,
+            'oct': 10, 'october': 10, 'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+        }
+
+        for month_str, month_num in month_names.items():
+            pattern = rf'{month_str}\w*\s+(\d{{1,2}})(?:st|nd|rd|th)?(?:,?\s*(\d{{4}}))?'
+            match = re.search(pattern, date_str_lower)
+            if match:
+                day = int(match.group(1))
+                year = int(match.group(2)) if match.group(2) else today.year
+                try:
+                    return datetime(year, month_num, day).date()
+                except ValueError:
+                    continue
+
+        logger.warning(f"Could not parse date string: {date_str}")
+        return None
