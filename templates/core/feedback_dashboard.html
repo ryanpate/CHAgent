@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block title %}Feedback Dashboard{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-ch-gold">Feedback Dashboard</h2>
+            <p class="text-gray-400 text-sm mt-1">Review and manage user feedback on AI responses</p>
+        </div>
+        <a href="{% url 'chat' %}" class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition text-center">
+            Back to Chat
+        </a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-ch-dark rounded-lg p-4">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Total Feedback</p>
+            <p class="text-2xl font-bold mt-1">{{ total_count }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Positive</p>
+            <p class="text-2xl font-bold text-green-400 mt-1">{{ positive_count }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Negative</p>
+            <p class="text-2xl font-bold text-red-400 mt-1">{{ negative_count }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Unresolved Issues</p>
+            <p class="text-2xl font-bold text-yellow-400 mt-1">{{ unresolved_count }}</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-ch-dark rounded-lg p-4 mb-6">
+        <form method="get" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label class="block text-xs text-gray-400 mb-1">Type</label>
+                <select name="type" class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                    <option value="all" {% if filter_type == 'all' %}selected{% endif %}>All</option>
+                    <option value="positive" {% if filter_type == 'positive' %}selected{% endif %}>Positive</option>
+                    <option value="negative" {% if filter_type == 'negative' %}selected{% endif %}>Negative</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-400 mb-1">Resolved</label>
+                <select name="resolved" class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                    <option value="all" {% if filter_resolved == 'all' %}selected{% endif %}>All</option>
+                    <option value="no" {% if filter_resolved == 'no' %}selected{% endif %}>Unresolved</option>
+                    <option value="yes" {% if filter_resolved == 'yes' %}selected{% endif %}>Resolved</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-400 mb-1">Issue Type</label>
+                <select name="issue" class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                    <option value="">All Issues</option>
+                    {% for value, label in issue_types %}
+                    <option value="{{ value }}" {% if filter_issue == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="px-4 py-2 bg-ch-gold text-black rounded hover:bg-yellow-500 transition text-sm">
+                Filter
+            </button>
+            <a href="{% url 'feedback_dashboard' %}" class="px-4 py-2 text-gray-400 hover:text-white transition text-sm">
+                Clear
+            </a>
+        </form>
+    </div>
+
+    <!-- Feedback List -->
+    <div class="space-y-4">
+        {% for item in feedbacks %}
+        <div id="feedback-row-{{ item.feedback.id }}" class="bg-ch-dark rounded-lg p-4 border-l-4 {% if item.feedback.feedback_type == 'positive' %}border-green-500{% else %}{% if item.feedback.resolved %}border-gray-500{% else %}border-red-500{% endif %}{% endif %}">
+            <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div class="flex-1">
+                    <!-- Header row -->
+                    <div class="flex items-center gap-3 mb-3">
+                        {% if item.feedback.feedback_type == 'positive' %}
+                        <span class="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">Helpful</span>
+                        {% else %}
+                        <span class="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">Not Helpful</span>
+                        {% endif %}
+
+                        {% if item.feedback.issue_type %}
+                        <span class="px-2 py-1 bg-ch-gray text-gray-300 text-xs rounded">{{ item.feedback.get_issue_type_display }}</span>
+                        {% endif %}
+
+                        {% if item.feedback.feedback_type == 'negative' %}
+                            {% if item.feedback.resolved %}
+                            <span class="px-2 py-1 bg-gray-500/20 text-gray-400 text-xs rounded">Resolved</span>
+                            {% else %}
+                            <span class="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded">Unresolved</span>
+                            {% endif %}
+                        {% endif %}
+
+                        <span class="text-gray-500 text-xs ml-auto">{{ item.feedback.created_at|timesince }} ago</span>
+                    </div>
+
+                    <!-- User Question -->
+                    {% if item.user_question %}
+                    <div class="mb-3">
+                        <p class="text-xs text-gray-500 mb-1">User asked:</p>
+                        <p class="text-sm bg-ch-gray/50 rounded p-2">{{ item.user_question|truncatewords:50 }}</p>
+                    </div>
+                    {% endif %}
+
+                    <!-- AI Response -->
+                    <div class="mb-3">
+                        <p class="text-xs text-gray-500 mb-1">AI responded:</p>
+                        <p class="text-sm bg-ch-gray/50 rounded p-2 text-gray-300">{{ item.feedback.chat_message.content|truncatewords:50 }}</p>
+                    </div>
+
+                    <!-- Issue Details (for negative feedback) -->
+                    {% if item.feedback.feedback_type == 'negative' %}
+                        {% if item.feedback.expected_result %}
+                        <div class="mb-3">
+                            <p class="text-xs text-gray-500 mb-1">Expected:</p>
+                            <p class="text-sm text-yellow-200 bg-yellow-900/20 rounded p-2">{{ item.feedback.expected_result }}</p>
+                        </div>
+                        {% endif %}
+
+                        {% if item.feedback.comment %}
+                        <div class="mb-3">
+                            <p class="text-xs text-gray-500 mb-1">Additional details:</p>
+                            <p class="text-sm text-gray-300">{{ item.feedback.comment }}</p>
+                        </div>
+                        {% endif %}
+
+                        {% if item.feedback.resolved and item.feedback.resolution_notes %}
+                        <div class="mb-3">
+                            <p class="text-xs text-gray-500 mb-1">Resolution notes:</p>
+                            <p class="text-sm text-green-200 bg-green-900/20 rounded p-2">{{ item.feedback.resolution_notes }}</p>
+                        </div>
+                        {% endif %}
+                    {% endif %}
+
+                    <!-- Meta info -->
+                    <div class="flex items-center gap-4 text-xs text-gray-500">
+                        <span>By: {{ item.feedback.user.display_name|default:item.feedback.user.username }}</span>
+                        {% if item.feedback.resolved_by %}
+                        <span>Resolved by: {{ item.feedback.resolved_by.display_name|default:item.feedback.resolved_by.username }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                {% if item.feedback.feedback_type == 'negative' and not item.feedback.resolved %}
+                <div class="flex-shrink-0">
+                    <div x-data="{ showResolve: false }" class="relative">
+                        <button @click="showResolve = !showResolve"
+                                class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition">
+                            Mark Resolved
+                        </button>
+
+                        <!-- Resolve form dropdown -->
+                        <div x-show="showResolve"
+                             @click.away="showResolve = false"
+                             x-transition
+                             class="absolute right-0 mt-2 w-72 bg-ch-dark border border-gray-700 rounded-lg shadow-lg p-4 z-10"
+                             style="display: none;">
+                            <form hx-post="{% url 'feedback_resolve' item.feedback.id %}"
+                                  hx-target="#feedback-row-{{ item.feedback.id }}"
+                                  hx-swap="outerHTML">
+                                {% csrf_token %}
+                                <label class="block text-xs text-gray-400 mb-1">Resolution notes (optional)</label>
+                                <textarea name="resolution_notes"
+                                          rows="3"
+                                          placeholder="How was this resolved?"
+                                          class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-green-400 resize-none mb-3"></textarea>
+                                <div class="flex gap-2 justify-end">
+                                    <button type="button" @click="showResolve = false" class="px-3 py-1.5 text-gray-400 text-sm hover:text-white">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded">
+                                        Confirm
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <div class="bg-ch-dark rounded-lg p-8 text-center">
+            <svg class="w-12 h-12 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-gray-400">No feedback found matching your filters.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

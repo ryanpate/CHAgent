@@ -473,10 +473,21 @@ class ResponseFeedback(models.Model):
     - Tracking which responses were helpful
     - Using highly-rated responses as few-shot examples
     - Identifying areas where Aria needs improvement
+    - Capturing detailed issue reports for negative feedback
     """
     FEEDBACK_CHOICES = [
         ('positive', 'Helpful'),
         ('negative', 'Not Helpful'),
+    ]
+
+    ISSUE_TYPE_CHOICES = [
+        ('missing_info', 'Information was missing'),
+        ('wrong_info', 'Information was incorrect'),
+        ('wrong_volunteer', 'Wrong volunteer identified'),
+        ('no_response', 'No useful response'),
+        ('slow_response', 'Response was too slow'),
+        ('formatting', 'Response formatting issue'),
+        ('other', 'Other issue'),
     ]
 
     # The chat message this feedback is for
@@ -500,6 +511,19 @@ class ResponseFeedback(models.Model):
         help_text="Whether the response was helpful or not"
     )
 
+    # Issue tracking fields for negative feedback
+    issue_type = models.CharField(
+        max_length=20,
+        choices=ISSUE_TYPE_CHOICES,
+        blank=True,
+        help_text="Category of issue (for negative feedback)"
+    )
+
+    expected_result = models.TextField(
+        blank=True,
+        help_text="What the user expected to see"
+    )
+
     # Optional comment explaining the feedback
     comment = models.TextField(
         blank=True,
@@ -511,6 +535,32 @@ class ResponseFeedback(models.Model):
         max_length=50,
         blank=True,
         help_text="Type of query (e.g., 'volunteer_info', 'setlist', 'lyrics')"
+    )
+
+    # Resolution tracking
+    resolved = models.BooleanField(
+        default=False,
+        help_text="Whether this issue has been addressed"
+    )
+
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resolved_feedbacks',
+        help_text="Admin who resolved this issue"
+    )
+
+    resolved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the issue was resolved"
+    )
+
+    resolution_notes = models.TextField(
+        blank=True,
+        help_text="Notes about how the issue was resolved"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

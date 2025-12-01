@@ -1,0 +1,62 @@
+<div class="bg-ch-dark border border-red-500/30 rounded-lg p-3 mt-2">
+    <div class="flex items-center gap-2 mb-3">
+        <svg class="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M18 9.5a1.5 1.5 0 11-3 0v-6a1.5 1.5 0 013 0v6zM14 9.667v-5.43a2 2 0 00-1.106-1.79l-.05-.025A4 4 0 0011.057 2H5.64a2 2 0 00-1.962 1.608l-1.2 6A2 2 0 004.44 12H8v4a2 2 0 002 2 1 1 0 001-1v-.667a4 4 0 01.8-2.4l1.4-1.866a4 4 0 00.8-2.4z"></path>
+        </svg>
+        <span class="text-sm font-medium text-red-400">Report Issue</span>
+    </div>
+
+    <form hx-post="{% url 'chat_feedback_submit' %}"
+          hx-target="#feedback-{{ message_id }}"
+          hx-swap="innerHTML"
+          class="space-y-3">
+        {% csrf_token %}
+        <input type="hidden" name="message_id" value="{{ message_id }}">
+
+        <!-- Issue Type -->
+        <div>
+            <label class="block text-xs text-gray-400 mb-1">What went wrong?</label>
+            <select name="issue_type"
+                    class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-red-400">
+                <option value="">Select an issue type...</option>
+                {% for value, label in issue_types %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Expected Result -->
+        <div>
+            <label class="block text-xs text-gray-400 mb-1">What did you expect? (optional)</label>
+            <textarea name="expected_result"
+                      rows="2"
+                      placeholder="Describe what you expected to see..."
+                      class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-red-400 resize-none"></textarea>
+        </div>
+
+        <!-- Additional Comments -->
+        <div>
+            <label class="block text-xs text-gray-400 mb-1">Additional details (optional)</label>
+            <textarea name="comment"
+                      rows="2"
+                      placeholder="Any other details that might help..."
+                      class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-red-400 resize-none"></textarea>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex gap-2 justify-end">
+            <button type="button"
+                    hx-post="{% url 'chat_feedback' %}"
+                    hx-vals='{"message_id": "{{ message_id }}", "feedback_type": "cancel"}'
+                    hx-target="#feedback-{{ message_id }}"
+                    hx-swap="innerHTML"
+                    class="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition">
+                Cancel
+            </button>
+            <button type="submit"
+                    class="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm rounded transition">
+                Submit Report
+            </button>
+        </div>
+    </form>
+</div>
