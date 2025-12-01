@@ -111,7 +111,8 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
         'birthday': r'birthday|birth\s*date|when\s+(was|is)\s+.+\s+born|how\s+old',
         'anniversary': r'anniversary',
         'teams': r'what\s+team|which\s+team|team\s+(position|role)|serve\s+on|part\s+of',
-        'service_history': r'when\s+did\s+.+\s+(last\s+)?serve|last\s+(time|served)|service\s+history|schedule|scheduled|serving',
+        # service_history: when does/did someone serve, their schedule, etc.
+        'service_history': r'when\s+(does|did|is|will)\s+.+\s+serv(e|ing)|serv(e|ing|es?)\s+next|last\s+(time|served)|service\s+history|schedule|scheduled|serving',
     }
 
     is_pco_query = False
@@ -133,8 +134,8 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
         name_patterns = [
             # "is [name] scheduled/serving" - schedule check format
             r"(?:is|are)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:scheduled|serving|on\s+the\s+(?:schedule|team))",
-            # "when is [name] scheduled/serving" - future schedule check
-            r"when\s+(?:is|are)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:scheduled|serving|next)",
+            # "when is/does [name] scheduled/serving/serve" - future schedule check
+            r"when\s+(?:is|are|does|do|will)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:scheduled?|serving?|serve|next)",
             # "what is [name]'s contact" - with apostrophe
             r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s",
             # "what is [name] contact info" - without apostrophe (name before contact)
@@ -149,8 +150,8 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
             r"(?:for|of|about)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
             # "reach/call/email [name]"
             r"(?:reach|call|email)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
-            # "where does/when was/when did [name]"
-            r"(?:where\s+does|when\s+(?:was|is|did))\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
+            # "where does/when was/when did/when does [name]"
+            r"(?:where\s+does|when\s+(?:was|is|did|does|will))\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
         ]
 
         for i, pattern in enumerate(name_patterns):
@@ -237,7 +238,8 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
         # Include both present (is/are) and past (was/were) tense for queries like "who was on the team last Sunday"
         # Also match simple past tense "who served" without auxiliary verb
         # Added "schedule" (without 'd') to handle common typo, and "scheduled to serve" pattern
-        'team_schedule': r'(who\s+(is|are|was|were)\s+(on|serving|scheduled?|playing|singing)|who\s+is\s+scheduled?\s+to\s+serve|who\s+served|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled?\s+(to\s+serve\s+)?on|scheduled\s+volunteer|serving\s+(on|this|next|last)|band\s+for|vocals?\s+for|tech\s+for|who\s+(do|did)\s+we\s+have)',
+        # Also handles "servers" typo for "serves"
+        'team_schedule': r'(who\s+(is|are|was|were)\s+(on|serving|scheduled?|playing|singing)|who\s+is\s+scheduled?\s+to\s+serve|who\s+serve[sd]?|who\s+servers?|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled?\s+(to\s+serve\s+)?on|scheduled\s+volunteer|serving\s+(on|this|next|last)|band\s+for|vocals?\s+for|tech\s+for|who\s+(do|did)\s+we\s+have)',
         # Song history - asking WHEN a song was played
         'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|play)|have\s+we\s+(ever\s+)?(played|done|used)|(?:the\s+)?(?:title|song|name)\s+is\s+|it\'?s\s+called',
         # Setlist - asking WHAT songs were played on a date
