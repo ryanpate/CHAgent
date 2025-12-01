@@ -188,7 +188,8 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
     song_query_patterns = {
         # Team/volunteer schedule - check this BEFORE setlist to catch volunteer-specific queries
         # Include both present (is/are) and past (was/were) tense for queries like "who was on the team last Sunday"
-        'team_schedule': r'(who\s+(is|are|was|were)\s+(on|serving|scheduled|playing|singing)|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled\s+volunteer|serving\s+(on|this|next|last)|band\s+for|vocals?\s+for|tech\s+for|who\s+(do|did)\s+we\s+have)',
+        # Also match simple past tense "who served" without auxiliary verb
+        'team_schedule': r'(who\s+(is|are|was|were)\s+(on|serving|scheduled|playing|singing)|who\s+served|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled\s+volunteer|serving\s+(on|this|next|last)|band\s+for|vocals?\s+for|tech\s+for|who\s+(do|did)\s+we\s+have)',
         'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|songs?\s+(from|for|on|we\s+(play|sang|did))|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?)\s+(that|on\s+that)\s+(day|date|service|sunday|easter)|(songs?|play|sang|played)\s+.*(easter|christmas|good\s+friday))',
         'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|played)',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
