@@ -130,12 +130,16 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
         # Names will be title-cased after extraction
         # Order matters - more specific patterns first
         name_patterns = [
+            # "is [name] scheduled/serving" - schedule check format
+            r"(?:is|are)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:scheduled|serving|on\s+the\s+(?:schedule|team))",
+            # "when is [name] scheduled/serving" - future schedule check
+            r"when\s+(?:is|are)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:scheduled|serving|next)",
             # "what is [name]'s contact" - with apostrophe
             r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s",
             # "what is [name] contact info" - without apostrophe (name before contact)
             r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*?)\s+contact",
-            # "[name]'s contact/email/phone" - with apostrophe
-            r"([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s\s+(?:contact|email|phone|address|birthday)",
+            # "[name]'s contact/email/phone/schedule" - with apostrophe
+            r"([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s\s+(?:contact|email|phone|address|birthday|schedule|upcoming)",
             # "[name]s contact info" - possessive without apostrophe (e.g., "strucks contact")
             r"([a-zA-Z]+(?:\s+[a-zA-Z]+)*s)\s+contact\s+(?:info|information|details?)",
             # "contact info for [name]"
@@ -144,8 +148,8 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
             r"(?:for|of|about)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
             # "reach/call/email [name]"
             r"(?:reach|call|email)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
-            # "where does/when was [name]"
-            r"(?:where\s+does|when\s+(?:was|is))\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
+            # "where does/when was/when did [name]"
+            r"(?:where\s+does|when\s+(?:was|is|did))\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
         ]
 
         for pattern in name_patterns:
@@ -888,28 +892,54 @@ def format_pco_details(details: dict, query_type: str = None) -> str:
     if details.get('last_served'):
         parts.append(f"Last Served: {details.get('last_served')}")
 
-    # Recent service history
+    # Service schedule - separate future and past
     if details.get('recent_schedules'):
-        parts.append("Recent Service History:")
-        for schedule in details['recent_schedules'][:5]:  # Show up to 5 recent
+        from datetime import datetime
+        today_str = datetime.now().date().isoformat()
+
+        # Separate into future and past schedules
+        future_schedules = []
+        past_schedules = []
+        for schedule in details['recent_schedules']:
+            date = schedule.get('date', '')
+            schedule_date = date[:10] if len(date) >= 10 else date
+            if schedule_date >= today_str:
+                future_schedules.append(schedule)
+            else:
+                past_schedules.append(schedule)
+
+        # Convert status codes to readable text
+        status_map = {
+            'C': 'Confirmed',
+            'U': 'Unconfirmed',
+            'D': 'Declined',
+            'B': 'Blocked'
+        }
+
+        def format_schedule_entry(schedule):
             date = schedule.get('date', 'Unknown date')
             team = schedule.get('team_name', 'Unknown team')
             position = schedule.get('team_position_name', '')
             status = schedule.get('status', '')
-
-            # Convert status codes to readable text
-            status_map = {
-                'C': 'Confirmed',
-                'U': 'Unconfirmed',
-                'D': 'Declined',
-                'B': 'Blocked'
-            }
             status_text = status_map.get(status, status)
-
             if position:
-                parts.append(f"  - {date}: {team} ({position}) - {status_text}")
+                return f"  - {date}: {team} ({position}) - {status_text}"
             else:
-                parts.append(f"  - {date}: {team} - {status_text}")
+                return f"  - {date}: {team} - {status_text}"
+
+        # Show upcoming/future schedules first (most important for scheduling questions)
+        if future_schedules:
+            parts.append("UPCOMING SCHEDULED SERVICES:")
+            for schedule in future_schedules[:5]:
+                parts.append(format_schedule_entry(schedule))
+        else:
+            parts.append("UPCOMING SCHEDULED SERVICES: None scheduled")
+
+        # Then show recent past schedules
+        if past_schedules:
+            parts.append("PAST SERVICE HISTORY:")
+            for schedule in past_schedules[:5]:
+                parts.append(format_schedule_entry(schedule))
 
     parts.append("[END PLANNING CENTER DATA]\n")
 
