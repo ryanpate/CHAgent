@@ -2286,8 +2286,29 @@ def query_agent(question: str, user, session_id: str) -> str:
             search_result = pco_api.search_person_with_suggestions(pco_person_name)
 
             if search_result['found'] and search_result['details']:
-                pco_data_context = format_pco_details(search_result['details'], pco_query_type)
-                logger.info(f"Found PCO data for {search_result['details'].get('name')}")
+                details = search_result['details']
+
+                # If person not in Services and this is a schedule query, try searching upcoming plans
+                if not details.get('in_services') and pco_query_type == 'service_history':
+                    logger.info(f"Person not in Services people list, searching upcoming plans for '{details.get('name')}'")
+                    from .planning_center import PlanningCenterServicesAPI
+                    services_api = PlanningCenterServicesAPI()
+                    if services_api.is_configured:
+                        upcoming = services_api.find_person_upcoming_services(details.get('name', ''))
+                        if upcoming:
+                            details['in_services'] = True
+                            for svc in upcoming:
+                                details['recent_schedules'].append({
+                                    'date': svc.get('date'),
+                                    'team_name': svc.get('team_name'),
+                                    'team_position_name': svc.get('position'),
+                                    'status': svc.get('status'),
+                                    'plan_title': svc.get('service_type', '')
+                                })
+                            logger.info(f"Found {len(upcoming)} upcoming services via plan search")
+
+                pco_data_context = format_pco_details(details, pco_query_type)
+                logger.info(f"Found PCO data for {details.get('name')}")
             else:
                 # No exact match - get suggestions from both PCO and local database
                 pco_suggestions = search_result.get('suggestions', [])

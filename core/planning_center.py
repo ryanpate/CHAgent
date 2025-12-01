@@ -345,19 +345,29 @@ class PlanningCenterAPI:
         search_name = f"{first_name} {last_name}"
         logger.info(f"Searching Services for '{search_name}' (has {len(person_emails)} emails)")
 
-        # First, try searching by name in Services API (more efficient than pagination)
-        # PCO Services supports searching by name
+        candidates = []
+
+        # Method 1: Try searching by first_name in Services API
+        # PCO Services API uses where[first_name] not where[name]
         search_result = self._get("/services/v2/people", params={
-            'where[name]': search_name,
-            'per_page': 25
+            'where[first_name]': first_name,
+            'per_page': 50
         })
-
         candidates = search_result.get('data', [])
-        logger.info(f"Services name search returned {len(candidates)} candidates for '{search_name}'")
+        logger.info(f"Services first_name search returned {len(candidates)} candidates for '{first_name}'")
 
-        # If no results from name search, try paginating through all services people
+        # If that didn't work, try with last_name
         if not candidates:
-            logger.info(f"Name search returned no results, fetching all services people with pagination")
+            search_result = self._get("/services/v2/people", params={
+                'where[last_name]': last_name,
+                'per_page': 50
+            })
+            candidates = search_result.get('data', [])
+            logger.info(f"Services last_name search returned {len(candidates)} candidates for '{last_name}'")
+
+        # If still no results, paginate through all services people
+        if not candidates:
+            logger.info(f"Name searches returned no results, fetching all services people with pagination")
             candidates = self._get_all_services_people()
 
         # Method 1: Match by email (most reliable - emails are unique)
@@ -951,6 +961,114 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         team_members.sort(key=lambda x: (x['team_name'], x['name']))
 
         return team_members
+
+    def find_person_upcoming_services(self, person_name: str, max_plans: int = 8) -> list:
+        """
+        Find a person's upcoming scheduled services by searching through plans.
+
+        This is used when we can't find the person in the global Services people
+        list but they might still be scheduled for services.
+
+        Args:
+            person_name: Name of the person to search for.
+            max_plans: Maximum number of upcoming plans to check.
+
+        Returns:
+            List of scheduled services with date, team, position, and status.
+        """
+        from difflib import SequenceMatcher
+
+        # Normalize the search name
+        search_first = person_name.split()[0].lower() if person_name else ''
+        search_last = person_name.split()[-1].lower() if person_name and len(person_name.split()) > 1 else ''
+        search_full = person_name.lower()
+
+        logger.info(f"Searching upcoming plans for '{person_name}'")
+
+        upcoming_services = []
+
+        # Get upcoming plans for the main service type
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        future_date = today + timedelta(days=90)  # Look 90 days ahead
+
+        # Get the main service type
+        service_types = self._get("/services/v2/service_types")
+        main_service_type = None
+        for st in service_types.get('data', []):
+            st_name = st.get('attributes', {}).get('name', '')
+            if 'morning' in st_name.lower() and 'main' in st_name.lower():
+                main_service_type = st
+                break
+            elif 'sunday' in st_name.lower() and not any(x in st_name.lower() for x in ['hsm', 'msm', 'youth', 'student']):
+                main_service_type = st
+
+        if not main_service_type:
+            # Just use the first service type
+            if service_types.get('data'):
+                main_service_type = service_types['data'][0]
+
+        if not main_service_type:
+            logger.warning("No service types found")
+            return []
+
+        service_type_id = main_service_type.get('id')
+
+        # Get upcoming plans
+        plans_result = self._get(
+            f"/services/v2/service_types/{service_type_id}/plans",
+            params={
+                'filter': 'future',
+                'per_page': max_plans,
+                'order': 'sort_date'
+            }
+        )
+
+        plans = plans_result.get('data', [])
+        logger.info(f"Found {len(plans)} upcoming plans to search")
+
+        for plan in plans:
+            plan_id = plan.get('id')
+            plan_attrs = plan.get('attributes', {})
+            plan_date = plan_attrs.get('sort_date', plan_attrs.get('dates', ''))
+
+            # Get team members for this plan
+            team_members = self.get_plan_team_members(service_type_id, plan_id)
+
+            # Search for the person in team members
+            for tm in team_members:
+                tm_name = (tm.get('name') or '').lower()
+
+                # Check for match using fuzzy matching
+                # Match if first AND last name match, or if full name is very similar
+                tm_parts = tm_name.split()
+                tm_first = tm_parts[0] if tm_parts else ''
+                tm_last = tm_parts[-1] if len(tm_parts) > 1 else ''
+
+                is_match = False
+
+                # Exact first and last name match
+                if search_first and search_last:
+                    if tm_first == search_first and tm_last == search_last:
+                        is_match = True
+
+                # Fuzzy full name match
+                if not is_match:
+                    similarity = SequenceMatcher(None, search_full, tm_name).ratio()
+                    if similarity > 0.85:
+                        is_match = True
+
+                if is_match:
+                    logger.info(f"Found '{tm.get('name')}' scheduled for {plan_date}")
+                    upcoming_services.append({
+                        'date': plan_date,
+                        'team_name': tm.get('team_name', ''),
+                        'position': tm.get('position', ''),
+                        'status': tm.get('status', ''),
+                        'service_type': main_service_type.get('attributes', {}).get('name', '')
+                    })
+
+        return upcoming_services
 
     def get_plan_with_team(self, date_str: str, service_type: str = None) -> Optional[dict]:
         """
