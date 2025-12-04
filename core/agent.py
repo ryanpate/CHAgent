@@ -102,6 +102,20 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
     """
     message_lower = message.lower().strip()
 
+    # First, check if this is clearly a song query - exclude from person queries
+    # This prevents "when did we last play the song X" from being treated as a person query
+    song_keywords = [
+        r'\bthe\s+song\b', r'\bsong\s+called\b', r'\bsong\s+named\b',
+        r'\bsetlist\b', r'\bchord\s*chart\b', r'\blyrics\b',
+        r'\bwhat\s+songs?\b', r'\bwhich\s+songs?\b',
+        r'\bplay(ed)?\s+the\s+song\b', r'\bsing\s+the\s+song\b',
+        r'\bhave\s+we\s+(ever\s+)?(played|done|used)\b'
+    ]
+    for song_pattern in song_keywords:
+        if re.search(song_pattern, message_lower):
+            logger.info(f"Message appears to be a song query (matched '{song_pattern}'), skipping person query detection")
+            return False, None, None
+
     # Patterns that indicate PCO data queries
     pco_query_patterns = {
         'contact': r'contact\s+(info|information|details?)|how\s+(can\s+i|do\s+i|to)\s+(reach|contact|get\s+(in\s+)?touch)',
