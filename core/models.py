@@ -198,6 +198,13 @@ class ConversationContext(models.Model):
         help_text="Pending follow-up item waiting for date (title, description, volunteer_name, category)"
     )
 
+    # Store pending disambiguation when query could be song or person
+    pending_disambiguation = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Pending disambiguation when query is ambiguous (extracted_value, original_query)"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -309,6 +316,21 @@ class ConversationContext(models.Model):
     def clear_pending_followup(self):
         """Clear the pending follow-up after use."""
         self.pending_followup = {}
+
+    def set_pending_disambiguation(self, extracted_value: str, original_query: str):
+        """Store a pending disambiguation when query is ambiguous between song and person."""
+        self.pending_disambiguation = {
+            'extracted_value': extracted_value,
+            'original_query': original_query
+        }
+
+    def get_pending_disambiguation(self) -> dict:
+        """Get the pending disambiguation."""
+        return self.pending_disambiguation or {}
+
+    def clear_pending_disambiguation(self):
+        """Clear the pending disambiguation after use."""
+        self.pending_disambiguation = {}
 
 
 class FollowUp(models.Model):
