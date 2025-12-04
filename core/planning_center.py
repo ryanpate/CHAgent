@@ -776,6 +776,67 @@ def clear_pco_cache():
 class PlanningCenterServicesAPI(PlanningCenterAPI):
     """Extended API client with Services-specific methods for songs and plans."""
 
+    def search_services_by_first_name(self, first_name: str, limit: int = 15) -> dict:
+        """
+        Search for services people by first name only, returning all matches.
+
+        This is used when a user provides only a first name and we need
+        to ask them to clarify which person they mean for service-related queries.
+
+        Args:
+            first_name: First name to search for.
+            limit: Maximum number of matches to return.
+
+        Returns:
+            Dict with:
+            - 'matches': List of people with this first name in Services
+            - 'count': Number of matches found
+            - 'search_name': The original search name
+        """
+        result = {
+            'matches': [],
+            'count': 0,
+            'search_name': first_name
+        }
+
+        if not self.is_configured:
+            return result
+
+        first_name_lower = first_name.lower().strip()
+
+        # First try the PCO first_name search (more efficient)
+        search_result = self._get("/services/v2/people", params={
+            'where[first_name]': first_name,
+            'per_page': 100
+        })
+
+        candidates = search_result.get('data', [])
+        logger.info(f"Services first_name search for disambiguation returned {len(candidates)} candidates for '{first_name}'")
+
+        matches = []
+        for person in candidates:
+            attrs = person.get('attributes', {})
+            pco_first = (attrs.get('first_name') or '').lower().strip()
+
+            # Check for exact first name match or close match
+            if pco_first == first_name_lower or pco_first.startswith(first_name_lower):
+                full_name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
+                matches.append({
+                    'name': full_name,
+                    'first_name': attrs.get('first_name', ''),
+                    'last_name': attrs.get('last_name', ''),
+                    'pco_id': person.get('id')
+                })
+
+        # Sort by last name for consistent ordering
+        matches.sort(key=lambda x: x.get('last_name', '').lower())
+
+        result['matches'] = matches[:limit]
+        result['count'] = len(matches)
+
+        logger.info(f"Services first name search for '{first_name}': found {len(matches)} matches")
+        return result
+
     def get_service_types(self) -> list:
         """
         Get all service types (e.g., Sunday AM, Wednesday PM).

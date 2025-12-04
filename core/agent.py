@@ -154,11 +154,28 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
             r"(?:where\s+does|when\s+(?:was|is|did|does|will))\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
         ]
 
+        # Action words that should not be part of a name
+        action_words = ['play', 'plays', 'playing', 'sing', 'sings', 'singing',
+                        'serve', 'serves', 'serving', 'served', 'schedule', 'scheduled',
+                        'next', 'last', 'upcoming', 'on', 'the', 'team']
+
         for i, pattern in enumerate(name_patterns):
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
                 extracted = match.group(1).strip()
                 logger.info(f"Name pattern {i} matched, extracted: '{extracted}' from pattern: '{pattern[:50]}...'")
+
+                # Strip action words from the end of the extracted name
+                words = extracted.split()
+                while words and words[-1].lower() in action_words:
+                    logger.info(f"Stripping action word '{words[-1]}' from extracted name")
+                    words.pop()
+                extracted = ' '.join(words)
+
+                if not extracted:
+                    logger.info(f"Name became empty after stripping action words, trying next pattern")
+                    continue
+
                 # Remove trailing 's' if it's a possessive without apostrophe (e.g., "strucks" -> "struck")
                 if extracted.lower().endswith('s') and len(extracted) > 2:
                     # Check if this looks like a possessive (followed by contact/email/phone in original)
@@ -2650,15 +2667,22 @@ def query_agent(question: str, user, session_id: str) -> str:
 
     if pco_query and pco_person_name:
         logger.info(f"PCO data query detected: {pco_query_type} for '{pco_person_name}'")
-        from .planning_center import PlanningCenterAPI
+        from .planning_center import PlanningCenterAPI, PlanningCenterServicesAPI
         pco_api = PlanningCenterAPI()
+        services_api = PlanningCenterServicesAPI()
 
         if pco_api.is_configured:
             # Check if this is a first-name-only query
             if is_first_name_only(pco_person_name):
                 logger.info(f"First-name-only query detected for '{pco_person_name}'")
-                # Search for all people with this first name
-                first_name_results = pco_api.search_by_first_name(pco_person_name)
+
+                # For service-related queries, search Services people (worship volunteers)
+                # For other queries, search People API
+                if pco_query_type == 'service_history' and services_api.is_configured:
+                    logger.info(f"Using Services API for first-name search (service_history query)")
+                    first_name_results = services_api.search_services_by_first_name(pco_person_name)
+                else:
+                    first_name_results = pco_api.search_by_first_name(pco_person_name)
 
                 if first_name_results['count'] == 1:
                     # Only one match - use it directly
@@ -2687,8 +2711,6 @@ def query_agent(question: str, user, session_id: str) -> str:
                 # If person not in Services and this is a schedule query, try searching upcoming plans
                 if not details.get('in_services') and pco_query_type == 'service_history':
                     logger.info(f"Person not in Services people list, searching upcoming plans for '{details.get('name')}'")
-                    from .planning_center import PlanningCenterServicesAPI
-                    services_api = PlanningCenterServicesAPI()
                     if services_api.is_configured:
                         upcoming = services_api.find_person_upcoming_services(details.get('name', ''))
                         if upcoming:
