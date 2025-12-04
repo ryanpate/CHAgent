@@ -111,8 +111,8 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
         'birthday': r'birthday|birth\s*date|when\s+(was|is)\s+.+\s+born|how\s+old',
         'anniversary': r'anniversary',
         'teams': r'what\s+team|which\s+team|team\s+(position|role)|serve\s+on|part\s+of',
-        # service_history: when does/did someone serve, their schedule, etc.
-        'service_history': r'when\s+(does|did|is|will)\s+.+\s+serv(e|ing)|serv(e|ing|es?)\s+next|last\s+(time|served)|service\s+history|schedule|scheduled|serving',
+        # service_history: when does/did someone serve/play/sing, their schedule, etc.
+        'service_history': r'when\s+(does|did|is|will)\s+.+\s+(serv(e|ing)|play(s|ing)?|sing(s|ing)?)|serv(e|ing|es?)\s+next|play(s|ing)?\s+next|sing(s|ing)?\s+next|last\s+(time|served|played|sang)|service\s+history|schedule|scheduled|serving|playing|singing',
     }
 
     is_pco_query = False
@@ -132,10 +132,10 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
         # Names will be title-cased after extraction
         # Order matters - more specific patterns first
         name_patterns = [
-            # "is [name] scheduled/serving" - schedule check format
-            r"(?:is|are)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:scheduled|serving|on\s+the\s+(?:schedule|team))",
-            # "when is/does [name] scheduled/serving/serve" - future schedule check
-            r"when\s+(?:is|are|does|do|will)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:scheduled?|serving?|serve|next)",
+            # "is [name] scheduled/serving/playing/singing" - schedule check format
+            r"(?:is|are)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:scheduled|serving|playing|singing|on\s+the\s+(?:schedule|team))",
+            # "when is/does [name] scheduled/serving/serve/play/sing" - future schedule check
+            r"when\s+(?:is|are|does|do|will)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:scheduled?|serving?|serve|play(?:ing)?|sing(?:ing)?|next)",
             # "what is [name]'s contact" - with apostrophe
             r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s",
             # "what is [name] contact info" - without apostrophe (name before contact)
