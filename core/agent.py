@@ -1079,6 +1079,66 @@ def format_pco_suggestions(search_name: str, suggestions: list, local_suggestion
     return '\n'.join(parts)
 
 
+def format_first_name_matches(first_name: str, matches: list, query_type: str = None) -> str:
+    """
+    Format first name matches into a clarification prompt for the AI.
+
+    Args:
+        first_name: The first name that was searched for.
+        matches: List of match dicts with 'name', 'first_name', 'last_name'.
+        query_type: The type of query (for context in the response).
+
+    Returns:
+        Formatted string prompting the AI to ask user for clarification.
+    """
+    if not matches:
+        return f"\n[PLANNING CENTER: No one found with the first name '{first_name}'.]\n"
+
+    parts = [f"\n[FIRST NAME CLARIFICATION NEEDED]"]
+    parts.append(f"Multiple people found with the first name '{first_name}':")
+    parts.append("")
+
+    for i, match in enumerate(matches[:10], 1):
+        parts.append(f"  {i}. {match.get('name', 'Unknown')}")
+
+    if len(matches) > 10:
+        parts.append(f"  ... and {len(matches) - 10} more")
+
+    parts.append("")
+
+    # Customize the ask based on query type
+    if query_type == 'service_history':
+        parts.append(f"ASK THE USER: Ask the user which {first_name} they're asking about. List the options above and ask them to provide the full name or select a number.")
+    elif query_type in ['email', 'phone', 'contact']:
+        parts.append(f"ASK THE USER: Ask the user which {first_name}'s contact info they need. Present the list above.")
+    else:
+        parts.append(f"ASK THE USER: Ask the user to clarify which {first_name} they mean by providing the full name or selecting from the list above.")
+
+    parts.append("[END FIRST NAME CLARIFICATION]\n")
+
+    return '\n'.join(parts)
+
+
+def is_first_name_only(name: str) -> bool:
+    """
+    Check if a name appears to be just a first name (single word).
+
+    Args:
+        name: Name string to check.
+
+    Returns:
+        True if this appears to be a first name only.
+    """
+    if not name:
+        return False
+
+    # Strip and split on whitespace
+    parts = name.strip().split()
+
+    # Single word is likely just a first name
+    return len(parts) == 1
+
+
 def get_local_volunteer_suggestions(name: str, limit: int = 5) -> list:
     """
     Get name suggestions from local Volunteer database.
@@ -2594,10 +2654,34 @@ def query_agent(question: str, user, session_id: str) -> str:
         pco_api = PlanningCenterAPI()
 
         if pco_api.is_configured:
-            # Use search with suggestions to handle misspellings
-            search_result = pco_api.search_person_with_suggestions(pco_person_name)
+            # Check if this is a first-name-only query
+            if is_first_name_only(pco_person_name):
+                logger.info(f"First-name-only query detected for '{pco_person_name}'")
+                # Search for all people with this first name
+                first_name_results = pco_api.search_by_first_name(pco_person_name)
 
-            if search_result['found'] and search_result['details']:
+                if first_name_results['count'] == 1:
+                    # Only one match - use it directly
+                    single_match = first_name_results['matches'][0]
+                    logger.info(f"Single first name match: {single_match['name']}")
+                    search_result = pco_api.search_person_with_suggestions(single_match['name'])
+                elif first_name_results['count'] > 1:
+                    # Multiple matches - ask user to clarify
+                    pco_data_context = format_first_name_matches(
+                        pco_person_name,
+                        first_name_results['matches'],
+                        pco_query_type
+                    )
+                    logger.info(f"Multiple first name matches ({first_name_results['count']}), asking for clarification")
+                    search_result = {'found': False}  # Skip further processing
+                else:
+                    # No matches for this first name
+                    search_result = pco_api.search_person_with_suggestions(pco_person_name)
+            else:
+                # Full name provided - use normal search
+                search_result = pco_api.search_person_with_suggestions(pco_person_name)
+
+            if not pco_data_context and search_result.get('found') and search_result.get('details'):
                 details = search_result['details']
 
                 # If person not in Services and this is a schedule query, try searching upcoming plans
@@ -2621,7 +2705,7 @@ def query_agent(question: str, user, session_id: str) -> str:
 
                 pco_data_context = format_pco_details(details, pco_query_type)
                 logger.info(f"Found PCO data for {details.get('name')}")
-            else:
+            elif not pco_data_context:
                 # No exact match - get suggestions from both PCO and local database
                 pco_suggestions = search_result.get('suggestions', [])
                 local_suggestions = get_local_volunteer_suggestions(pco_person_name)
