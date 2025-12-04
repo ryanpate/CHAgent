@@ -1170,6 +1170,139 @@ def is_first_name_only(name: str) -> bool:
     return len(parts) == 1
 
 
+def check_ambiguous_song_or_person(message: str) -> Tuple[bool, Optional[str], bool, bool]:
+    """
+    Check if a query is ambiguous between a song and a person lookup.
+
+    This detects queries like "When did we last play Gratitude" where
+    "Gratitude" could be either a song title or a person's name.
+
+    Args:
+        message: The user's question.
+
+    Returns:
+        Tuple of (is_ambiguous, extracted_value, matches_song_pattern, matches_person_pattern)
+    """
+    message_lower = message.lower().strip()
+
+    # Patterns that clearly indicate song (not ambiguous)
+    clear_song_patterns = [
+        r'\bthe\s+song\b', r'\bsong\s+called\b', r'\bsong\s+named\b',
+        r'\blyrics\s+(for|to|of)\b', r'\bchord\s*chart\s+(for|to|of)\b',
+        r'\bwhat\s+songs?\b', r'\bwhich\s+songs?\b', r'\bsetlist\b'
+    ]
+
+    # Patterns that clearly indicate person (not ambiguous)
+    clear_person_patterns = [
+        r"'s\s+(contact|email|phone|schedule|birthday)",  # possessive
+        r'\b(email|phone|contact|birthday)\s+(for|of)\b',
+        r'\b(scheduled|serving|blocked\s*out)\b',
+        r'\bwhen\s+(does|is|will)\s+\w+\s+\w+\s+(serve|play|sing)\b',  # full name + action
+    ]
+
+    # Check if clearly a song
+    for pattern in clear_song_patterns:
+        if re.search(pattern, message_lower):
+            return False, None, True, False
+
+    # Check if clearly a person
+    for pattern in clear_person_patterns:
+        if re.search(pattern, message_lower):
+            return False, None, False, True
+
+    # Ambiguous patterns - could be either song or person
+    # "when did we last play X", "have we played X", "last time we played X"
+    ambiguous_patterns = [
+        r'when\s+did\s+we\s+(?:last\s+)?play\s+([a-zA-Z][a-zA-Z\s\']*?)(?:\s*\?|$)',
+        r'have\s+we\s+(?:ever\s+)?played\s+([a-zA-Z][a-zA-Z\s\']*?)(?:\s*\?|$)',
+        r'last\s+time\s+we\s+played\s+([a-zA-Z][a-zA-Z\s\']*?)(?:\s*\?|$)',
+        r'when\s+was\s+([a-zA-Z][a-zA-Z\s\']*?)\s+(?:last\s+)?played(?:\s*\?|$)',
+        r'did\s+we\s+(?:ever\s+)?play\s+([a-zA-Z][a-zA-Z\s\']*?)(?:\s*\?|$)',
+    ]
+
+    for pattern in ambiguous_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            extracted = match.group(1).strip()
+            # Clean up the extracted value
+            extracted = re.sub(r'\s+', ' ', extracted).strip()
+            if extracted and len(extracted) > 1:
+                logger.info(f"Ambiguous song/person query detected, extracted: '{extracted}'")
+                return True, extracted.title(), True, True
+
+    return False, None, False, False
+
+
+def check_disambiguation_response(message: str) -> Tuple[bool, Optional[str]]:
+    """
+    Check if a message is a response to a disambiguation question.
+
+    Args:
+        message: The user's response.
+
+    Returns:
+        Tuple of (is_disambiguation_response, choice) where choice is 'song' or 'person'
+    """
+    message_lower = message.lower().strip()
+
+    # Patterns indicating user chose "song"
+    song_choice_patterns = [
+        r'^the\s+song', r'^a\s+song', r'^song\b', r'^it\'?s\s+a\s+song',
+        r'^i\s+mean\s+the\s+song', r'^the\s+worship\s+song',
+        r'^asking\s+about\s+the\s+song', r'^the\s+music', r'^the\s+track'
+    ]
+
+    # Patterns indicating user chose "person"
+    person_choice_patterns = [
+        r'^the\s+person', r'^a\s+person', r'^person\b', r'^the\s+volunteer',
+        r'^a\s+volunteer', r'^volunteer\b', r'^it\'?s\s+a\s+person',
+        r'^i\s+mean\s+the\s+person', r'^asking\s+about\s+the\s+person',
+        r'^the\s+team\s+member', r'^someone\s+named'
+    ]
+
+    for pattern in song_choice_patterns:
+        if re.search(pattern, message_lower):
+            return True, 'song'
+
+    for pattern in person_choice_patterns:
+        if re.search(pattern, message_lower):
+            return True, 'person'
+
+    return False, None
+
+
+def format_disambiguation_prompt(extracted_value: str, has_song_match: bool, has_person_match: bool) -> str:
+    """
+    Format a disambiguation prompt for the AI to ask the user.
+
+    Args:
+        extracted_value: The ambiguous value (e.g., "Gratitude")
+        has_song_match: Whether a song with this name was found
+        has_person_match: Whether a person with this name was found
+
+    Returns:
+        Context string for the AI to use in asking for clarification
+    """
+    parts = ["\n[DISAMBIGUATION NEEDED]"]
+    parts.append(f"The query mentions '{extracted_value}' which could refer to either:")
+
+    if has_song_match:
+        parts.append(f"  • A song titled '{extracted_value}'")
+    else:
+        parts.append(f"  • A song (searching for '{extracted_value}')")
+
+    if has_person_match:
+        parts.append(f"  • A volunteer/person named '{extracted_value}'")
+    else:
+        parts.append(f"  • A person (searching for '{extracted_value}')")
+
+    parts.append("")
+    parts.append("Please ask the user to clarify: Are you asking about the song or a person?")
+    parts.append("[END DISAMBIGUATION]")
+
+    return '\n'.join(parts)
+
+
 def get_local_volunteer_suggestions(name: str, limit: int = 5) -> list:
     """
     Get name suggestions from local Volunteer database.
@@ -2674,6 +2807,166 @@ def query_agent(question: str, user, session_id: str) -> str:
             conversation_context.save()
 
             return answer
+
+    # Check if user is responding to a disambiguation question (song vs person)
+    pending_disambiguation = conversation_context.get_pending_disambiguation()
+    if pending_disambiguation:
+        is_disambiguation_response, choice = check_disambiguation_response(question)
+        if is_disambiguation_response:
+            extracted_value = pending_disambiguation.get('extracted_value', '')
+            original_query = pending_disambiguation.get('original_query', '')
+            logger.info(f"User clarified disambiguation: choice='{choice}' for '{extracted_value}'")
+
+            # Clear the pending disambiguation
+            conversation_context.clear_pending_disambiguation()
+            conversation_context.save()
+
+            # Save the user's response to chat history
+            ChatMessage.objects.create(
+                user=user,
+                session_id=session_id,
+                role='user',
+                content=question
+            )
+
+            # Re-process the original query with the clarified intent
+            if choice == 'song':
+                # Process as a song query
+                from .planning_center import PlanningCenterServicesAPI
+                services_api = PlanningCenterServicesAPI()
+                if services_api.is_configured:
+                    song_data_context = ""
+                    songs = services_api.search_songs(extracted_value)
+                    if songs:
+                        if len(songs) == 1:
+                            song = songs[0]
+                            song_history = services_api.get_song_schedule_history(song.get('id'))
+                            song_data_context = format_song_data(song, history=song_history, query_type='song_history')
+                        else:
+                            song_data_context = format_song_suggestions(songs, extracted_value)
+                    else:
+                        song_data_context = f"\n[PLANNING CENTER: No songs found matching '{extracted_value}'.]\n"
+
+                    user_name = user.display_name if user.display_name else user.username
+                    response = client.messages.create(
+                        model="claude-sonnet-4-20250514",
+                        max_tokens=2000,
+                        system=SYSTEM_PROMPT.format(
+                            context=song_data_context,
+                            current_date=datetime.now().strftime('%Y-%m-%d'),
+                            user_name=user_name
+                        ),
+                        messages=[{"role": "user", "content": f"When did we last play the song {extracted_value}?"}]
+                    )
+                    answer = response.content[0].text
+                else:
+                    answer = "I'm sorry, but the Planning Center integration is not configured for song lookups."
+            else:
+                # Process as a person query
+                from .planning_center import PlanningCenterAPI, PlanningCenterServicesAPI
+                pco_api = PlanningCenterAPI()
+                services_api = PlanningCenterServicesAPI()
+                if pco_api.is_configured:
+                    search_result = pco_api.search_person_with_suggestions(extracted_value)
+                    if search_result.get('found') and search_result.get('details'):
+                        details = search_result['details']
+                        # Check if they're in services
+                        if not details.get('in_services') and services_api.is_configured:
+                            upcoming = services_api.find_person_upcoming_services(details.get('name', ''))
+                            if upcoming:
+                                details['in_services'] = True
+                                for svc in upcoming:
+                                    details['recent_schedules'].append({
+                                        'date': svc.get('date'),
+                                        'team_name': svc.get('team_name'),
+                                        'team_position_name': svc.get('position'),
+                                        'status': svc.get('status'),
+                                        'plan_title': svc.get('service_type', '')
+                                    })
+                        person_data_context = format_pco_details(details, 'service_history')
+                    else:
+                        person_data_context = f"\n[PLANNING CENTER: No person found matching '{extracted_value}'.]\n"
+
+                    user_name = user.display_name if user.display_name else user.username
+                    response = client.messages.create(
+                        model="claude-sonnet-4-20250514",
+                        max_tokens=2000,
+                        system=SYSTEM_PROMPT.format(
+                            context=person_data_context,
+                            current_date=datetime.now().strftime('%Y-%m-%d'),
+                            user_name=user_name
+                        ),
+                        messages=[{"role": "user", "content": f"When does {extracted_value} serve next?"}]
+                    )
+                    answer = response.content[0].text
+                else:
+                    answer = "I'm sorry, but the Planning Center integration is not configured."
+
+            # Save assistant response to chat history
+            ChatMessage.objects.create(
+                user=user,
+                session_id=session_id,
+                role='assistant',
+                content=answer
+            )
+
+            # Update conversation context
+            conversation_context.increment_message_count(2)
+            conversation_context.save()
+
+            return answer
+
+    # Check if this query is ambiguous between song and person
+    is_ambiguous, ambig_value, matches_song, matches_person = check_ambiguous_song_or_person(question)
+    if is_ambiguous and ambig_value:
+        logger.info(f"Ambiguous query detected: '{ambig_value}' could be song or person")
+
+        # Store the pending disambiguation
+        conversation_context.set_pending_disambiguation(ambig_value, question)
+        conversation_context.save()
+
+        # Create a disambiguation prompt for Claude
+        disambiguation_context = format_disambiguation_prompt(ambig_value, matches_song, matches_person)
+
+        # Save the user's question to chat history
+        ChatMessage.objects.create(
+            user=user,
+            session_id=session_id,
+            role='user',
+            content=question
+        )
+
+        # Query Claude to ask for clarification
+        user_name = user.display_name if user.display_name else user.username
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=500,
+                system=SYSTEM_PROMPT.format(
+                    context=disambiguation_context,
+                    current_date=datetime.now().strftime('%Y-%m-%d'),
+                    user_name=user_name
+                ),
+                messages=[{"role": "user", "content": question}]
+            )
+            answer = response.content[0].text
+        except Exception as e:
+            logger.error(f"Error querying Claude for disambiguation: {e}")
+            answer = f"I noticed you mentioned \"{ambig_value}\" - are you asking about the song or a person/volunteer with that name?"
+
+        # Save assistant response to chat history
+        ChatMessage.objects.create(
+            user=user,
+            session_id=session_id,
+            role='assistant',
+            content=answer
+        )
+
+        # Update conversation context
+        conversation_context.increment_message_count(2)
+        conversation_context.save()
+
+        return answer
 
     # Check if this is a PCO data query (contact info, email, phone, etc.)
     pco_query, pco_query_type, pco_person_name = is_pco_data_query(question)
