@@ -494,6 +494,61 @@ class PlanningCenterAPI:
 
         return result
 
+    def search_by_first_name(self, first_name: str, limit: int = 10) -> dict:
+        """
+        Search for people by first name only, returning all matches.
+
+        This is used when a user provides only a first name and we need
+        to ask them to clarify which person they mean.
+
+        Args:
+            first_name: First name to search for.
+            limit: Maximum number of matches to return.
+
+        Returns:
+            Dict with:
+            - 'matches': List of people with this first name
+            - 'count': Number of matches found
+            - 'search_name': The original search name
+        """
+        result = {
+            'matches': [],
+            'count': 0,
+            'search_name': first_name
+        }
+
+        if not self.is_configured:
+            return result
+
+        first_name_lower = first_name.lower().strip()
+
+        # Get all people and filter by first name
+        all_people = self.get_people(use_cache=True)
+
+        matches = []
+        for person in all_people:
+            attrs = person.get('attributes', {})
+            pco_first = (attrs.get('first_name') or '').lower().strip()
+
+            # Check for exact first name match or close match
+            if pco_first == first_name_lower or pco_first.startswith(first_name_lower):
+                full_name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
+                matches.append({
+                    'name': full_name,
+                    'first_name': attrs.get('first_name', ''),
+                    'last_name': attrs.get('last_name', ''),
+                    'pco_id': person.get('id')
+                })
+
+        # Sort by last name for consistent ordering
+        matches.sort(key=lambda x: x.get('last_name', '').lower())
+
+        result['matches'] = matches[:limit]
+        result['count'] = len(matches)
+
+        logger.info(f"First name search for '{first_name}': found {len(matches)} matches")
+        return result
+
     def get_name_suggestions(self, name: str, limit: int = 5) -> list:
         """
         Get name suggestions from PCO for a given search name.
