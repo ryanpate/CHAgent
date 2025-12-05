@@ -3,12 +3,14 @@ Views for the Cherry Hills Worship Arts Portal.
 """
 import json
 import uuid
+from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST, require_http_methods
 from django.db.models import Count
+from django.utils import timezone
 
 from .models import Interaction, Volunteer, ChatMessage, ConversationContext, FollowUp, ResponseFeedback
 from .agent import (
@@ -823,3 +825,260 @@ def followup_delete(request, pk):
         return HttpResponse('')  # Empty response removes the row
 
     return redirect('followup_list')
+
+
+# ============================================================================
+# Analytics and Reporting Views
+# ============================================================================
+
+@login_required
+def analytics_dashboard(request):
+    """
+    Main analytics dashboard with overview metrics and quick links to reports.
+    """
+    from .reports import ReportGenerator
+    from .models import ReportCache
+    from datetime import datetime
+
+    # Parse date range from request
+    days = int(request.GET.get('days', 30))
+    date_to = timezone.now()
+    date_from = date_to - timedelta(days=days)
+
+    # Check cache first
+    cache_params = {'days': days}
+    cached = ReportCache.get_cached_report('dashboard_summary', cache_params)
+
+    if cached:
+        summary = cached
+    else:
+        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        summary = generator.dashboard_summary()
+        # Cache for 15 minutes
+        ReportCache.set_cached_report('dashboard_summary', summary, cache_params, ttl_minutes=15)
+
+    # Get quick team care insights
+    care_cached = ReportCache.get_cached_report('team_care', cache_params)
+    if care_cached:
+        care_report = care_cached
+    else:
+        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        care_report = generator.team_care_report()
+        ReportCache.set_cached_report('team_care', care_report, cache_params, ttl_minutes=15)
+
+    context = {
+        'summary': summary,
+        'care_report': care_report,
+        'days': days,
+        'date_from': date_from,
+        'date_to': date_to,
+    }
+    return render(request, 'core/analytics/dashboard.html', context)
+
+
+@login_required
+def analytics_volunteer_engagement(request):
+    """
+    Detailed volunteer engagement report.
+    """
+    from .reports import ReportGenerator
+    from .models import ReportCache
+
+    days = int(request.GET.get('days', 90))
+    date_to = timezone.now()
+    date_from = date_to - timedelta(days=days)
+
+    cache_params = {'days': days}
+    cached = ReportCache.get_cached_report('volunteer_engagement', cache_params)
+
+    if cached:
+        report = cached
+    else:
+        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        report = generator.volunteer_engagement_report()
+        ReportCache.set_cached_report('volunteer_engagement', report, cache_params, ttl_minutes=30)
+
+    context = {
+        'report': report,
+        'days': days,
+    }
+    return render(request, 'core/analytics/volunteer_engagement.html', context)
+
+
+@login_required
+def analytics_team_care(request):
+    """
+    Team care report - volunteers needing attention.
+    """
+    from .reports import ReportGenerator
+    from .models import ReportCache
+
+    days = int(request.GET.get('days', 30))
+    date_to = timezone.now()
+    date_from = date_to - timedelta(days=days)
+
+    cache_params = {'days': days}
+    cached = ReportCache.get_cached_report('team_care', cache_params)
+
+    if cached:
+        report = cached
+    else:
+        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        report = generator.team_care_report()
+        ReportCache.set_cached_report('team_care', report, cache_params, ttl_minutes=15)
+
+    context = {
+        'report': report,
+        'days': days,
+    }
+    return render(request, 'core/analytics/team_care.html', context)
+
+
+@login_required
+def analytics_interaction_trends(request):
+    """
+    Interaction trends over time.
+    """
+    from .reports import ReportGenerator
+    from .models import ReportCache
+
+    days = int(request.GET.get('days', 90))
+    group_by = request.GET.get('group_by', 'week')
+    date_to = timezone.now()
+    date_from = date_to - timedelta(days=days)
+
+    cache_params = {'days': days, 'group_by': group_by}
+    cached = ReportCache.get_cached_report('interaction_trends', cache_params)
+
+    if cached:
+        report = cached
+    else:
+        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        report = generator.interaction_trends_report(group_by=group_by)
+        ReportCache.set_cached_report('interaction_trends', report, cache_params, ttl_minutes=30)
+
+    context = {
+        'report': report,
+        'days': days,
+        'group_by': group_by,
+    }
+    return render(request, 'core/analytics/interaction_trends.html', context)
+
+
+@login_required
+def analytics_prayer_requests(request):
+    """
+    Prayer request summary and themes.
+    """
+    from .reports import ReportGenerator
+    from .models import ReportCache
+
+    days = int(request.GET.get('days', 90))
+    date_to = timezone.now()
+    date_from = date_to - timedelta(days=days)
+
+    cache_params = {'days': days}
+    cached = ReportCache.get_cached_report('prayer_summary', cache_params)
+
+    if cached:
+        report = cached
+    else:
+        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        report = generator.prayer_request_summary()
+        ReportCache.set_cached_report('prayer_summary', report, cache_params, ttl_minutes=30)
+
+    context = {
+        'report': report,
+        'days': days,
+    }
+    return render(request, 'core/analytics/prayer_requests.html', context)
+
+
+@login_required
+def analytics_ai_performance(request):
+    """
+    AI (Aria) performance metrics.
+    """
+    from .reports import ReportGenerator
+    from .models import ReportCache
+
+    days = int(request.GET.get('days', 30))
+    date_to = timezone.now()
+    date_from = date_to - timedelta(days=days)
+
+    cache_params = {'days': days}
+    cached = ReportCache.get_cached_report('ai_performance', cache_params)
+
+    if cached:
+        report = cached
+    else:
+        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        report = generator.ai_performance_report()
+        ReportCache.set_cached_report('ai_performance', report, cache_params, ttl_minutes=15)
+
+    context = {
+        'report': report,
+        'days': days,
+    }
+    return render(request, 'core/analytics/ai_performance.html', context)
+
+
+@login_required
+def analytics_export(request, report_type):
+    """
+    Export a report as JSON.
+    """
+    from .reports import ReportGenerator
+    import json
+
+    days = int(request.GET.get('days', 90))
+    date_to = timezone.now()
+    date_from = date_to - timedelta(days=days)
+
+    generator = ReportGenerator(date_from=date_from, date_to=date_to)
+
+    report_methods = {
+        'volunteer_engagement': generator.volunteer_engagement_report,
+        'team_care': generator.team_care_report,
+        'interaction_trends': lambda: generator.interaction_trends_report(
+            group_by=request.GET.get('group_by', 'week')
+        ),
+        'prayer_requests': generator.prayer_request_summary,
+        'ai_performance': generator.ai_performance_report,
+        'dashboard': generator.dashboard_summary,
+    }
+
+    if report_type not in report_methods:
+        return JsonResponse({'error': 'Unknown report type'}, status=400)
+
+    report_data = report_methods[report_type]()
+
+    # Convert datetime objects to strings for JSON serialization
+    def json_serializer(obj):
+        if hasattr(obj, 'isoformat'):
+            return obj.isoformat()
+        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+    response = JsonResponse(report_data, json_dumps_params={'default': json_serializer, 'indent': 2})
+    response['Content-Disposition'] = f'attachment; filename="{report_type}_report.json"'
+    return response
+
+
+@login_required
+@require_POST
+def analytics_refresh_cache(request):
+    """
+    Refresh cached reports.
+    """
+    from .models import ReportCache
+
+    report_type = request.POST.get('report_type')
+    if report_type:
+        ReportCache.clear_all(report_type=report_type)
+    else:
+        ReportCache.clear_all()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('<span class="text-green-500">Cache cleared!</span>')
+
+    return redirect('analytics_dashboard')

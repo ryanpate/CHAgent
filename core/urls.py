@@ -27,4 +27,13 @@ urlpatterns = [
     path('followups/<int:pk>/complete/', views.followup_complete, name='followup_complete'),
     path('followups/<int:pk>/update/', views.followup_update, name='followup_update'),
     path('followups/<int:pk>/delete/', views.followup_delete, name='followup_delete'),
+    # Analytics and Reporting
+    path('analytics/', views.analytics_dashboard, name='analytics_dashboard'),
+    path('analytics/engagement/', views.analytics_volunteer_engagement, name='analytics_volunteer_engagement'),
+    path('analytics/care/', views.analytics_team_care, name='analytics_team_care'),
+    path('analytics/trends/', views.analytics_interaction_trends, name='analytics_interaction_trends'),
+    path('analytics/prayer/', views.analytics_prayer_requests, name='analytics_prayer_requests'),
+    path('analytics/ai/', views.analytics_ai_performance, name='analytics_ai_performance'),
+    path('analytics/export/<str:report_type>/', views.analytics_export, name='analytics_export'),
+    path('analytics/refresh/', views.analytics_refresh_cache, name='analytics_refresh_cache'),
 ]

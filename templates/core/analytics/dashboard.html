@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-ch-gold">Analytics Dashboard</h2>
+            <p class="text-gray-400 text-sm mt-1">Team insights and metrics for the past {{ days }} days</p>
+        </div>
+        <div class="flex gap-2">
+            <!-- Date Range Selector -->
+            <select onchange="window.location.href='?days=' + this.value"
+                    class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+                <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+            </select>
+            <form hx-post="{% url 'analytics_refresh_cache' %}" hx-swap="none" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition text-sm">
+                    Refresh Data
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Key Metrics Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-ch-gold">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Total Volunteers</p>
+            <p class="text-3xl font-bold mt-1">{{ summary.volunteers.total }}</p>
+            <p class="text-sm text-gray-500 mt-1">{{ summary.volunteers.with_recent_interactions }} active</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-blue-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Interactions ({{ days }}d)</p>
+            <p class="text-3xl font-bold mt-1">{{ summary.interactions.last_30_days }}</p>
+            <p class="text-sm text-gray-500 mt-1">{{ summary.interactions.avg_per_day }}/day avg</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 {% if summary.followups.overdue > 0 %}border-red-500{% else %}border-green-500{% endif %}">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Pending Follow-ups</p>
+            <p class="text-3xl font-bold mt-1">{{ summary.followups.pending }}</p>
+            <p class="text-sm {% if summary.followups.overdue > 0 %}text-red-400{% else %}text-gray-500{% endif %} mt-1">
+                {{ summary.followups.overdue }} overdue
+            </p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-purple-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Care Needs</p>
+            <p class="text-3xl font-bold mt-1">{{ summary.care.volunteers_needing_checkin }}</p>
+            <p class="text-sm text-gray-500 mt-1">need check-in</p>
+        </div>
+    </div>
+
+    <!-- Quick Links to Reports -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+        <a href="{% url 'analytics_volunteer_engagement' %}?days={{ days }}"
+           class="bg-ch-dark rounded-lg p-4 hover:bg-ch-gray transition group">
+            <svg class="w-8 h-8 text-ch-gold mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            <h3 class="font-semibold group-hover:text-ch-gold transition">Volunteer Engagement</h3>
+            <p class="text-xs text-gray-500 mt-1">Activity & participation</p>
+        </a>
+        <a href="{% url 'analytics_team_care' %}?days={{ days }}"
+           class="bg-ch-dark rounded-lg p-4 hover:bg-ch-gray transition group">
+            <svg class="w-8 h-8 text-ch-gold mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+            </svg>
+            <h3 class="font-semibold group-hover:text-ch-gold transition">Team Care</h3>
+            <p class="text-xs text-gray-500 mt-1">Who needs attention</p>
+        </a>
+        <a href="{% url 'analytics_interaction_trends' %}?days={{ days }}"
+           class="bg-ch-dark rounded-lg p-4 hover:bg-ch-gray transition group">
+            <svg class="w-8 h-8 text-ch-gold mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            <h3 class="font-semibold group-hover:text-ch-gold transition">Interaction Trends</h3>
+            <p class="text-xs text-gray-500 mt-1">Activity over time</p>
+        </a>
+        <a href="{% url 'analytics_prayer_requests' %}?days={{ days }}"
+           class="bg-ch-dark rounded-lg p-4 hover:bg-ch-gray transition group">
+            <svg class="w-8 h-8 text-ch-gold mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11"></path>
+            </svg>
+            <h3 class="font-semibold group-hover:text-ch-gold transition">Prayer Requests</h3>
+            <p class="text-xs text-gray-500 mt-1">Themes & follow-up</p>
+        </a>
+        <a href="{% url 'analytics_ai_performance' %}?days={{ days }}"
+           class="bg-ch-dark rounded-lg p-4 hover:bg-ch-gray transition group">
+            <svg class="w-8 h-8 text-ch-gold mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+            </svg>
+            <h3 class="font-semibold group-hover:text-ch-gold transition">AI Performance</h3>
+            <p class="text-xs text-gray-500 mt-1">Aria feedback stats</p>
+        </a>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+        <!-- Overdue Follow-ups -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-lg">Overdue Follow-ups</h3>
+                {% if care_report.overdue_count > 0 %}
+                <span class="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">{{ care_report.overdue_count }} overdue</span>
+                {% else %}
+                <span class="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">All caught up!</span>
+                {% endif %}
+            </div>
+            <div class="space-y-3">
+                {% for followup in care_report.overdue_followups|slice:":5" %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-3">
+                    <div>
+                        <p class="font-medium text-sm">{{ followup.title }}</p>
+                        <p class="text-xs text-gray-500">
+                            {% if followup.volunteer_name %}{{ followup.volunteer_name }} &bull; {% endif %}
+                            {{ followup.days_overdue }} days overdue
+                        </p>
+                    </div>
+                    <a href="{% url 'followup_list' %}?date=overdue" class="text-ch-gold text-sm hover:underline">View</a>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm py-4 text-center">No overdue follow-ups</p>
+                {% endfor %}
+            </div>
+            {% if care_report.overdue_count > 5 %}
+            <a href="{% url 'followup_list' %}?date=overdue" class="block text-center text-ch-gold text-sm mt-4 hover:underline">
+                View all {{ care_report.overdue_count }} overdue &rarr;
+            </a>
+            {% endif %}
+        </div>
+
+        <!-- Volunteers Needing Check-in -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-lg">Need Check-in</h3>
+                <span class="text-xs text-gray-500">No contact in 30+ days</span>
+            </div>
+            <div class="space-y-3">
+                {% for volunteer in care_report.volunteers_needing_checkin|slice:":5" %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-3">
+                    <div>
+                        <p class="font-medium text-sm">{{ volunteer.name }}</p>
+                        <p class="text-xs text-gray-500">
+                            {% if volunteer.team %}{{ volunteer.team }} &bull; {% endif %}
+                            Last interaction {{ volunteer.days_since_interaction }} days ago
+                        </p>
+                    </div>
+                    <a href="{% url 'volunteer_detail' volunteer.id %}" class="text-ch-gold text-sm hover:underline">View</a>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm py-4 text-center">Everyone has been contacted recently!</p>
+                {% endfor %}
+            </div>
+            {% if care_report.volunteers_needing_checkin|length > 5 %}
+            <a href="{% url 'analytics_team_care' %}?days={{ days }}" class="block text-center text-ch-gold text-sm mt-4 hover:underline">
+                View all &rarr;
+            </a>
+            {% endif %}
+        </div>
+
+        <!-- Recent Prayer Requests -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-lg">Recent Prayer Requests</h3>
+                <span class="text-xs text-gray-500">{{ summary.care.prayer_requests_this_month }} this month</span>
+            </div>
+            <div class="space-y-3">
+                {% for pr in care_report.recent_prayer_requests|slice:":5" %}
+                <div class="bg-ch-gray/50 rounded p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-medium text-sm text-ch-gold">{{ pr.volunteer_name }}</span>
+                        <span class="text-xs text-gray-500">{{ pr.date|date:"M d" }}</span>
+                    </div>
+                    <p class="text-sm text-gray-300">{{ pr.request|truncatewords:20 }}</p>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm py-4 text-center">No recent prayer requests</p>
+                {% endfor %}
+            </div>
+            {% if care_report.recent_prayer_requests|length > 5 %}
+            <a href="{% url 'analytics_prayer_requests' %}?days={{ days }}" class="block text-center text-ch-gold text-sm mt-4 hover:underline">
+                View all prayer requests &rarr;
+            </a>
+            {% endif %}
+        </div>
+
+        <!-- Upcoming Birthdays -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-lg">Upcoming Birthdays</h3>
+                <span class="text-xs text-gray-500">Next 30 days</span>
+            </div>
+            <div class="space-y-3">
+                {% for bday in care_report.upcoming_birthdays|slice:":5" %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-3">
+                    <div>
+                        <p class="font-medium text-sm">{{ bday.volunteer_name }}</p>
+                        <p class="text-xs text-gray-500">{{ bday.birthday }}</p>
+                    </div>
+                    <span class="px-2 py-1 {% if bday.days_until == 0 %}bg-ch-gold text-black{% elif bday.days_until <= 7 %}bg-yellow-500/20 text-yellow-400{% else %}bg-ch-gray text-gray-400{% endif %} text-xs rounded">
+                        {% if bday.days_until == 0 %}Today!{% elif bday.days_until == 1 %}Tomorrow{% else %}{{ bday.days_until }} days{% endif %}
+                    </span>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm py-4 text-center">No upcoming birthdays found</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Options -->
+    <div class="mt-8 pt-6 border-t border-gray-800">
+        <h3 class="text-sm font-semibold text-gray-400 mb-3">Export Reports</h3>
+        <div class="flex flex-wrap gap-2">
+            <a href="{% url 'analytics_export' 'dashboard' %}?days={{ days }}"
+               class="px-3 py-1.5 bg-ch-gray hover:bg-ch-gold hover:text-black text-sm rounded transition">
+                Dashboard Summary (JSON)
+            </a>
+            <a href="{% url 'analytics_export' 'volunteer_engagement' %}?days={{ days }}"
+               class="px-3 py-1.5 bg-ch-gray hover:bg-ch-gold hover:text-black text-sm rounded transition">
+                Engagement Report (JSON)
+            </a>
+            <a href="{% url 'analytics_export' 'team_care' %}?days={{ days }}"
+               class="px-3 py-1.5 bg-ch-gray hover:bg-ch-gold hover:text-black text-sm rounded transition">
+                Team Care Report (JSON)
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

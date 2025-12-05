@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+
+{% block title %}Team Care Report{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <div>
+            <a href="{% url 'analytics_dashboard' %}" class="text-gray-400 hover:text-white text-sm mb-2 inline-block">&larr; Back to Analytics</a>
+            <h2 class="text-2xl font-bold text-ch-gold">Team Care Report</h2>
+            <p class="text-gray-400 text-sm mt-1">Volunteers who need attention and follow-up</p>
+        </div>
+        <div class="flex gap-2">
+            <select onchange="window.location.href='?days=' + this.value"
+                    class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                <option value="14" {% if days == 14 %}selected{% endif %}>Last 14 days</option>
+                <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                <option value="60" {% if days == 60 %}selected{% endif %}>Last 60 days</option>
+            </select>
+            <a href="{% url 'analytics_export' 'team_care' %}?days={{ days }}"
+               class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition text-sm">
+                Export JSON
+            </a>
+        </div>
+    </div>
+
+    <!-- Overdue Follow-ups Section -->
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 class="font-semibold text-lg">Overdue Follow-ups</h3>
+                <p class="text-gray-400 text-sm">Action items past their due date</p>
+            </div>
+            {% if report.overdue_count > 0 %}
+            <span class="px-3 py-1 bg-red-500/20 text-red-400 text-sm rounded-full font-semibold">{{ report.overdue_count }} overdue</span>
+            {% else %}
+            <span class="px-3 py-1 bg-green-500/20 text-green-400 text-sm rounded-full">All caught up!</span>
+            {% endif %}
+        </div>
+        <div class="space-y-3">
+            {% for followup in report.overdue_followups %}
+            <div class="bg-ch-gray/50 rounded-lg p-4 border-l-4 border-red-500">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div class="flex-1">
+                        <h4 class="font-medium">{{ followup.title }}</h4>
+                        <p class="text-sm text-gray-400 mt-1">
+                            {% if followup.volunteer_name %}
+                            <a href="{% url 'volunteer_detail' followup.volunteer_id %}" class="text-ch-gold hover:underline">{{ followup.volunteer_name }}</a> &bull;
+                            {% endif %}
+                            Due {{ followup.due_date|date:"M d" }} &bull;
+                            <span class="text-red-400">{{ followup.days_overdue }} days overdue</span>
+                        </p>
+                        <div class="flex items-center gap-2 mt-2">
+                            <span class="px-2 py-0.5 text-xs rounded
+                                {% if followup.priority == 'urgent' %}bg-red-500/30 text-red-300
+                                {% elif followup.priority == 'high' %}bg-orange-500/30 text-orange-300
+                                {% elif followup.priority == 'medium' %}bg-yellow-500/30 text-yellow-300
+                                {% else %}bg-gray-500/30 text-gray-300{% endif %}">
+                                {{ followup.priority }}
+                            </span>
+                            {% if followup.category %}
+                            <span class="px-2 py-0.5 text-xs rounded bg-ch-gray text-gray-400">{{ followup.category }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <a href="{% url 'followup_detail' followup.id %}"
+                       class="px-4 py-2 bg-ch-gold text-black rounded text-sm hover:bg-yellow-500 transition">
+                        View
+                    </a>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center py-8 text-gray-500">
+                <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <p>No overdue follow-ups! Great job staying on top of things.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+        <!-- Upcoming Follow-ups -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Upcoming This Week</h3>
+            <div class="space-y-2">
+                {% for followup in report.upcoming_followups %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-3">
+                    <div class="flex-1">
+                        <p class="font-medium text-sm">{{ followup.title }}</p>
+                        <p class="text-xs text-gray-500">
+                            {% if followup.volunteer_name %}{{ followup.volunteer_name }} &bull; {% endif %}
+                            Due {{ followup.due_date|date:"M d" }}
+                        </p>
+                    </div>
+                    <span class="px-2 py-1 text-xs rounded
+                        {% if followup.days_until == 0 %}bg-ch-gold text-black
+                        {% elif followup.days_until == 1 %}bg-yellow-500/30 text-yellow-300
+                        {% else %}bg-ch-gray text-gray-400{% endif %}">
+                        {% if followup.days_until == 0 %}Today{% elif followup.days_until == 1 %}Tomorrow{% else %}{{ followup.days_until }}d{% endif %}
+                    </span>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">No follow-ups due this week</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Upcoming Birthdays -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Upcoming Birthdays</h3>
+            <div class="space-y-2">
+                {% for bday in report.upcoming_birthdays %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-3">
+                    <div>
+                        <a href="{% url 'volunteer_detail' bday.volunteer_id %}" class="font-medium text-sm hover:text-ch-gold transition">{{ bday.volunteer_name }}</a>
+                        <p class="text-xs text-gray-500">{{ bday.birthday }}</p>
+                    </div>
+                    <span class="px-2 py-1 text-xs rounded
+                        {% if bday.days_until == 0 %}bg-ch-gold text-black font-bold
+                        {% elif bday.days_until <= 3 %}bg-yellow-500/30 text-yellow-300
+                        {% else %}bg-ch-gray text-gray-400{% endif %}">
+                        {% if bday.days_until == 0 %}Today!{% elif bday.days_until == 1 %}Tomorrow{% else %}{{ bday.days_until }} days{% endif %}
+                    </span>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">No birthdays in the next 30 days</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Volunteers Needing Check-in -->
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 class="font-semibold text-lg">Volunteers Needing Check-in</h3>
+                <p class="text-gray-400 text-sm">No interactions logged in 30+ days</p>
+            </div>
+            <span class="text-sm text-gray-500">{{ report.volunteers_needing_checkin|length }} volunteers</span>
+        </div>
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {% for volunteer in report.volunteers_needing_checkin %}
+            <a href="{% url 'volunteer_detail' volunteer.id %}"
+               class="bg-ch-gray/50 rounded p-4 hover:bg-ch-gray transition">
+                <p class="font-medium">{{ volunteer.name }}</p>
+                <p class="text-xs text-gray-500 mt-1">
+                    {% if volunteer.team %}{{ volunteer.team }} &bull; {% endif %}
+                    {{ volunteer.total_interactions }} interactions total
+                </p>
+                <p class="text-sm text-yellow-400 mt-2">Last contact: {{ volunteer.days_since_interaction }} days ago</p>
+            </a>
+            {% empty %}
+            <p class="text-gray-500 text-sm text-center py-4 col-span-3">Everyone has been contacted recently!</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Recent Prayer Requests -->
+    <div class="bg-ch-dark rounded-lg p-6">
+        <h3 class="font-semibold text-lg mb-4">Recent Prayer Requests</h3>
+        <div class="space-y-3">
+            {% for pr in report.recent_prayer_requests %}
+            <div class="bg-ch-gray/50 rounded p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <a href="{% url 'volunteer_detail' pr.volunteer_id %}" class="font-medium text-ch-gold hover:underline">{{ pr.volunteer_name }}</a>
+                    <span class="text-xs text-gray-500">{{ pr.date|date:"M d, Y" }}</span>
+                </div>
+                <p class="text-sm text-gray-300">{{ pr.request }}</p>
+                {% if pr.is_verified %}
+                <span class="mt-2 inline-block px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">Verified</span>
+                {% endif %}
+            </div>
+            {% empty %}
+            <p class="text-gray-500 text-sm text-center py-4">No recent prayer requests logged</p>
+            {% endfor %}
+        </div>
+        {% if report.recent_prayer_requests|length > 0 %}
+        <a href="{% url 'analytics_prayer_requests' %}?days={{ days }}" class="block text-center text-ch-gold text-sm mt-4 hover:underline">
+            View all prayer requests &rarr;
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
