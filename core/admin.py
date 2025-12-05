@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
-from .models import Volunteer, Interaction, ChatMessage, ResponseFeedback
+from .models import Volunteer, Interaction, ChatMessage, ResponseFeedback, ReportCache
 
 
 @admin.register(Volunteer)
@@ -189,3 +189,41 @@ class ResponseFeedbackAdmin(admin.ModelAdmin):
             resolved_at=None
         )
         self.message_user(request, f'{updated} feedback(s) marked as unresolved.')
+
+
+@admin.register(ReportCache)
+class ReportCacheAdmin(admin.ModelAdmin):
+    """Admin configuration for ReportCache model."""
+    list_display = ('report_type', 'created_at', 'expires_at', 'is_expired_status', 'parameters_preview')
+    list_filter = ('report_type', 'created_at', 'expires_at')
+    search_fields = ('report_type',)
+    ordering = ('-created_at',)
+    readonly_fields = ('report_type', 'parameters', 'data', 'created_at', 'expires_at')
+    actions = ['clear_expired_caches', 'clear_all_caches']
+
+    def is_expired_status(self, obj):
+        """Display expiration status with icon."""
+        if obj.is_expired:
+            return format_html(
+                '<span style="color: #ef4444;" title="Expired">Expired</span>'
+            )
+        return format_html(
+            '<span style="color: #22c55e;" title="Valid">Valid</span>'
+        )
+    is_expired_status.short_description = 'Status'
+
+    def parameters_preview(self, obj):
+        """Display truncated parameters."""
+        params = str(obj.parameters)
+        return params[:50] + '...' if len(params) > 50 else params
+    parameters_preview.short_description = 'Parameters'
+
+    @admin.action(description='Clear expired cache entries')
+    def clear_expired_caches(self, request, queryset):
+        count = ReportCache.clear_expired()
+        self.message_user(request, f'{count} expired cache entry(ies) deleted.')
+
+    @admin.action(description='Clear all cache entries')
+    def clear_all_caches(self, request, queryset):
+        count = ReportCache.clear_all()
+        self.message_user(request, f'{count} cache entry(ies) deleted.')

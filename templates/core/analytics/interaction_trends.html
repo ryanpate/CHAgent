@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+
+{% block title %}Interaction Trends{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <div>
+            <a href="{% url 'analytics_dashboard' %}" class="text-gray-400 hover:text-white text-sm mb-2 inline-block">&larr; Back to Analytics</a>
+            <h2 class="text-2xl font-bold text-ch-gold">Interaction Trends</h2>
+            <p class="text-gray-400 text-sm mt-1">How interaction logging activity has changed over time</p>
+        </div>
+        <div class="flex gap-2">
+            <select onchange="window.location.href='?days=' + this.value + '&group_by={{ group_by }}'"
+                    class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                <option value="60" {% if days == 60 %}selected{% endif %}>Last 60 days</option>
+                <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+                <option value="180" {% if days == 180 %}selected{% endif %}>Last 6 months</option>
+            </select>
+            <select onchange="window.location.href='?days={{ days }}&group_by=' + this.value"
+                    class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                <option value="day" {% if group_by == 'day' %}selected{% endif %}>By Day</option>
+                <option value="week" {% if group_by == 'week' %}selected{% endif %}>By Week</option>
+                <option value="month" {% if group_by == 'month' %}selected{% endif %}>By Month</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-ch-gold">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Total Interactions</p>
+            <p class="text-3xl font-bold mt-1">{{ report.total_stats.total_interactions }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-blue-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Volunteers Mentioned</p>
+            <p class="text-3xl font-bold mt-1">{{ report.total_stats.unique_volunteers_mentioned }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-green-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Avg Per Day</p>
+            <p class="text-3xl font-bold mt-1">{{ report.total_stats.avg_per_day }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-purple-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Active Team Members</p>
+            <p class="text-3xl font-bold mt-1">{{ report.by_user|length }}</p>
+        </div>
+    </div>
+
+    <!-- Trend Chart (Simple bar representation) -->
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <h3 class="font-semibold text-lg mb-4">Activity Over Time</h3>
+        {% if report.trend_data %}
+        <div class="space-y-2">
+            {% for item in report.trend_data %}
+            <div class="flex items-center gap-4">
+                <span class="text-xs text-gray-500 w-24 flex-shrink-0">{{ item.period|slice:":10" }}</span>
+                <div class="flex-1 bg-ch-gray rounded-full h-4 overflow-hidden">
+                    {% widthratio item.count report.trend_data.0.count 100 as bar_width %}
+                    <div class="bg-ch-gold h-full rounded-full transition-all duration-300"
+                         style="width: {% widthratio item.count report.total_stats.total_interactions 100 %}%"></div>
+                </div>
+                <span class="text-sm font-medium w-12 text-right">{{ item.count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-500 text-center py-8">No data available for this period</p>
+        {% endif %}
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+        <!-- By Team Member -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Interactions by Team Member</h3>
+            <div class="space-y-3">
+                {% for user in report.by_user %}
+                <div class="bg-ch-gray/50 rounded p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-medium">{{ user.display_name }}</span>
+                        <span class="text-ch-gold font-semibold">{{ user.count }}</span>
+                    </div>
+                    <div class="w-full bg-ch-black rounded-full h-2">
+                        <div class="bg-ch-gold rounded-full h-2"
+                             style="width: {% widthratio user.count report.total_stats.total_interactions 100 %}%"></div>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">No data available</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- By Volunteer Team -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Interactions by Volunteer Team</h3>
+            <div class="space-y-3">
+                {% for team, count in report.by_team.items %}
+                <div class="bg-ch-gray/50 rounded p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-medium">{{ team }}</span>
+                        <span class="text-ch-gold font-semibold">{{ count }}</span>
+                    </div>
+                    <div class="w-full bg-ch-black rounded-full h-2">
+                        <div class="bg-blue-500 rounded-full h-2"
+                             style="width: {% widthratio count report.total_stats.total_interactions 100 %}%"></div>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">No team data available</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+        <!-- Peak Hours -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Peak Logging Hours</h3>
+            <p class="text-gray-400 text-sm mb-4">When team members log the most interactions</p>
+            <div class="space-y-2">
+                {% for hour, count in report.peak_hours.items %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-3">
+                    <span class="font-medium">
+                        {% if hour < 12 %}{{ hour }}:00 AM{% elif hour == 12 %}12:00 PM{% else %}{{ hour|add:"-12" }}:00 PM{% endif %}
+                    </span>
+                    <span class="text-ch-gold">{{ count }} interactions</span>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">No data available</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Peak Days -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Activity by Day of Week</h3>
+            <p class="text-gray-400 text-sm mb-4">Which days see the most interaction logging</p>
+            <div class="space-y-2">
+                {% for day, count in report.peak_days.items %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-3">
+                    <span class="font-medium">{{ day }}</span>
+                    <div class="flex items-center gap-3">
+                        <div class="w-24 bg-ch-black rounded-full h-2">
+                            <div class="bg-purple-500 rounded-full h-2"
+                                 style="width: {% widthratio count report.total_stats.total_interactions 100 %}%"></div>
+                        </div>
+                        <span class="text-purple-400 w-8 text-right">{{ count }}</span>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">No data available</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Export -->
+    <div class="mt-8 text-center">
+        <a href="{% url 'analytics_export' 'interaction_trends' %}?days={{ days }}&group_by={{ group_by }}"
+           class="px-6 py-3 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition inline-block">
+            Export Full Report (JSON)
+        </a>
+    </div>
+</div>
+{% endblock %}

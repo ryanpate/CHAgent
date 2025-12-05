@@ -1059,3 +1059,143 @@ class QueryPattern(models.Model):
         # Remove punctuation except question marks
         normalized = re.sub(r'[^\w\s?]', '', normalized)
         return normalized
+
+
+class ReportCache(models.Model):
+    """
+    Caches generated reports to avoid expensive recomputation.
+
+    Reports are cached with a TTL and regenerated on-demand when expired.
+    """
+    REPORT_TYPE_CHOICES = [
+        ('volunteer_engagement', 'Volunteer Engagement'),
+        ('team_care', 'Team Care'),
+        ('interaction_trends', 'Interaction Trends'),
+        ('prayer_summary', 'Prayer Request Summary'),
+        ('ai_performance', 'AI Performance'),
+        ('service_participation', 'Service Participation'),
+        ('dashboard_summary', 'Dashboard Summary'),
+    ]
+
+    report_type = models.CharField(
+        max_length=50,
+        choices=REPORT_TYPE_CHOICES,
+        db_index=True
+    )
+
+    # Parameters used to generate this report (for cache key)
+    parameters = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Parameters used to generate this report (date range, filters, etc.)"
+    )
+
+    # The cached report data
+    data = models.JSONField(
+        help_text="The generated report data"
+    )
+
+    # Cache management
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(
+        help_text="When this cache entry expires"
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Report Cache'
+        verbose_name_plural = 'Report Caches'
+        indexes = [
+            models.Index(fields=['report_type', 'expires_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_report_type_display()} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if this cache entry has expired."""
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
+
+    @classmethod
+    def get_cached_report(cls, report_type: str, parameters: dict = None) -> dict:
+        """
+        Get a cached report if available and not expired.
+
+        Args:
+            report_type: Type of report to retrieve
+            parameters: Parameters to match
+
+        Returns:
+            Cached report data or None
+        """
+        from django.utils import timezone
+
+        params = parameters or {}
+        cache_entry = cls.objects.filter(
+            report_type=report_type,
+            parameters=params,
+            expires_at__gt=timezone.now()
+        ).order_by('-created_at').first()
+
+        if cache_entry:
+            return cache_entry.data
+        return None
+
+    @classmethod
+    def set_cached_report(cls, report_type: str, data: dict,
+                          parameters: dict = None, ttl_minutes: int = 30) -> 'ReportCache':
+        """
+        Cache a generated report.
+
+        Args:
+            report_type: Type of report
+            data: Report data to cache
+            parameters: Parameters used to generate
+            ttl_minutes: Time to live in minutes
+
+        Returns:
+            The created cache entry
+        """
+        from django.utils import timezone
+        from datetime import timedelta
+
+        params = parameters or {}
+
+        # Delete old cache entries for this report type + params
+        cls.objects.filter(
+            report_type=report_type,
+            parameters=params
+        ).delete()
+
+        return cls.objects.create(
+            report_type=report_type,
+            parameters=params,
+            data=data,
+            expires_at=timezone.now() + timedelta(minutes=ttl_minutes)
+        )
+
+    @classmethod
+    def clear_expired(cls) -> int:
+        """Delete all expired cache entries. Returns count deleted."""
+        from django.utils import timezone
+        count, _ = cls.objects.filter(expires_at__lt=timezone.now()).delete()
+        return count
+
+    @classmethod
+    def clear_all(cls, report_type: str = None) -> int:
+        """
+        Clear all cached reports, optionally filtered by type.
+
+        Args:
+            report_type: Optional type to filter by
+
+        Returns:
+            Count of deleted entries
+        """
+        qs = cls.objects.all()
+        if report_type:
+            qs = qs.filter(report_type=report_type)
+        count, _ = qs.delete()
+        return count

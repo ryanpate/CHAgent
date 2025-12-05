@@ -87,6 +87,224 @@ def is_aggregate_question(message: str) -> Tuple[bool, str]:
     return is_aggregate, category
 
 
+def is_analytics_query(message: str) -> Tuple[bool, str]:
+    """
+    Detect if a question is asking for analytics or team metrics.
+
+    Args:
+        message: The user's question.
+
+    Returns:
+        Tuple of (is_analytics, report_type) where:
+        - is_analytics: True if asking for analytics/reports
+        - report_type: Type of report requested (overview, engagement, care, trends, prayer, ai)
+    """
+    message_lower = message.lower().strip()
+
+    # Patterns that indicate analytics/reporting questions
+    analytics_patterns = {
+        'overview': [
+            r'team\s+(?:overview|summary|stats|statistics|metrics)',
+            r'dashboard\s+(?:summary|stats)',
+            r'(?:show|give|tell)\s+(?:me\s+)?(?:the\s+)?(?:team\s+)?(?:overview|summary|stats)',
+            r'how\s+(?:is|are)\s+(?:we|the\s+team)\s+doing',
+            r'(?:overall|general)\s+(?:team\s+)?(?:stats|metrics|summary)',
+        ],
+        'engagement': [
+            r'volunteer\s+engagement',
+            r'engagement\s+(?:report|stats|metrics)',
+            r'who\s+(?:is|are)\s+(?:most\s+)?(?:engaged|active)',
+            r'(?:most|least)\s+(?:engaged|active)\s+volunteers?',
+            r'engagement\s+(?:rate|level|trend)',
+            r'volunteer\s+(?:activity|participation)',
+        ],
+        'care': [
+            r'(?:volunteers?|people)\s+(?:need|needing)\s+(?:attention|check\s*-?\s*in|follow\s*-?\s*up)',
+            r'who\s+(?:needs?|should\s+(?:I|we))\s+(?:check\s+(?:in\s+)?(?:on|with)|follow\s+up|reach\s+out)',
+            r'care\s+(?:report|needs?|list)',
+            r'overdue\s+follow\s*-?\s*ups?',
+            r'(?:upcoming|pending)\s+(?:birthdays?|anniversaries?)',
+            r'volunteers?\s+(?:to|we\s+should)\s+(?:check\s+(?:in\s+)?(?:on|with)|reach\s+out)',
+        ],
+        'trends': [
+            r'interaction\s+(?:trend|trends|history|over\s+time)',
+            r'(?:how|what)\s+(?:has|have)\s+(?:been\s+)?(?:the\s+)?interactions?',
+            r'(?:activity|interaction)\s+(?:by|per)\s+(?:day|week|month)',
+            r'when\s+(?:are|do)\s+(?:most|we)\s+(?:interactions?|log(?:ged|ging)?)',
+            r'(?:logging|interaction)\s+(?:pattern|trends?)',
+        ],
+        'prayer': [
+            r'prayer\s+request\s+(?:summary|report|themes?|trends?)',
+            r'(?:summary|overview)\s+of\s+prayer\s+requests?',
+            r'(?:common|frequent)\s+prayer\s+(?:themes?|topics?|needs?)',
+            r'what\s+(?:are|is)\s+(?:the\s+)?(?:team|people)\s+praying\s+(?:for|about)',
+        ],
+        'ai': [
+            r'(?:aria|ai|assistant)\s+(?:performance|stats|metrics)',
+            r'how\s+(?:is|well\s+is)\s+aria\s+(?:doing|performing)',
+            r'feedback\s+(?:summary|stats|report)',
+            r'(?:ai|assistant)\s+(?:feedback|accuracy)',
+        ],
+    }
+
+    for report_type, patterns in analytics_patterns.items():
+        for pattern in patterns:
+            if re.search(pattern, message_lower):
+                logger.info(f"Analytics query detected: '{report_type}' for message: '{message[:50]}...'")
+                return True, report_type
+
+    return False, None
+
+
+def get_analytics_response(report_type: str) -> str:
+    """
+    Generate an analytics response based on the requested report type.
+
+    Args:
+        report_type: Type of report (overview, engagement, care, trends, prayer, ai)
+
+    Returns:
+        Formatted analytics summary string.
+    """
+    from .reports import ReportGenerator
+
+    generator = ReportGenerator()
+
+    if report_type == 'overview':
+        summary = generator.dashboard_summary()
+        return f"""**Team Overview (Last 30 Days)**
+
+**Volunteers:** {summary['volunteers']['total']} total, {summary['volunteers']['with_recent_interactions']} with recent interactions
+
+**Interactions:** {summary['interactions']['last_30_days']} logged (avg {summary['interactions']['avg_per_day']}/day)
+
+**Follow-ups:** {summary['followups']['pending']} pending, {summary['followups']['overdue']} overdue, {summary['followups']['due_today']} due today
+
+**Care Needs:** {summary['care']['prayer_requests_this_month']} prayer requests this month, {summary['care']['volunteers_needing_checkin']} volunteers need check-in
+
+For detailed reports, visit the [Analytics Dashboard](/analytics/)."""
+
+    elif report_type == 'engagement':
+        report = generator.volunteer_engagement_report()
+        top_engaged = report.get('top_engaged', [])[:5]
+        least_engaged = report.get('least_engaged', [])[:5]
+
+        response = f"""**Volunteer Engagement Report (Last 90 Days)**
+
+**Overview:**
+- Total Volunteers: {report['total_volunteers']}
+- Active (with interactions): {report['active_volunteers']} ({report['engagement_rate']}%)
+- Inactive: {report['inactive_volunteers']}
+
+**Most Engaged:**
+"""
+        for v in top_engaged:
+            response += f"- {v['name']}: {v['interaction_count']} interactions\n"
+
+        if least_engaged:
+            response += "\n**Need Attention (no recent contact):**\n"
+            for v in least_engaged:
+                response += f"- {v['name']}: {v.get('days_since_interaction', '?')} days since last interaction\n"
+
+        response += "\nFor the full report, visit [Volunteer Engagement](/analytics/engagement/)."
+        return response
+
+    elif report_type == 'care':
+        report = generator.team_care_report()
+        overdue = report.get('overdue_followups', [])[:5]
+        checkin = report.get('volunteers_needing_checkin', [])[:5]
+        birthdays = report.get('upcoming_birthdays', [])[:3]
+
+        response = "**Team Care Report**\n\n"
+
+        if overdue:
+            response += f"**Overdue Follow-ups ({len(report.get('overdue_followups', []))} total):**\n"
+            for f in overdue:
+                response += f"- {f['title']} ({f.get('volunteer_name', 'General')}) - {f['days_overdue']} days overdue\n"
+            response += "\n"
+
+        if checkin:
+            response += "**Volunteers Needing Check-in:**\n"
+            for v in checkin:
+                response += f"- {v['name']} - {v.get('days_since_interaction', '?')} days since last contact\n"
+            response += "\n"
+
+        if birthdays:
+            response += "**Upcoming Birthdays:**\n"
+            for b in birthdays:
+                days = b.get('days_until', 0)
+                when = "Today!" if days == 0 else f"in {days} days"
+                response += f"- {b['volunteer_name']} ({b['birthday']}) - {when}\n"
+
+        response += "\nFor the full care report, visit [Team Care](/analytics/care/)."
+        return response
+
+    elif report_type == 'trends':
+        report = generator.interaction_trends_report(group_by='week')
+        stats = report.get('total_stats', {})
+        by_user = report.get('by_user', [])[:5]
+
+        response = f"""**Interaction Trends (Last 90 Days)**
+
+**Summary:**
+- Total Interactions: {stats.get('total_interactions', 0)}
+- Average per Day: {stats.get('avg_per_day', 0)}
+- Unique Volunteers Mentioned: {stats.get('unique_volunteers_mentioned', 0)}
+
+**Top Contributors:**
+"""
+        for user in by_user:
+            response += f"- {user.get('display_name', 'Unknown')}: {user['count']} interactions\n"
+
+        response += "\nFor detailed trends and charts, visit [Interaction Trends](/analytics/trends/)."
+        return response
+
+    elif report_type == 'prayer':
+        report = generator.prayer_request_summary()
+        recent = report.get('recent_requests', [])[:5]
+        themes = report.get('common_themes', {})
+
+        response = f"""**Prayer Request Summary**
+
+**Total Prayer Requests:** {report.get('total_prayer_requests', 0)}
+
+"""
+        if themes:
+            theme_list = ', '.join(list(themes.keys())[:5])
+            response += f"**Common Themes:** {theme_list}\n\n"
+
+        if recent:
+            response += "**Recent Requests:**\n"
+            for pr in recent:
+                response += f"- **{pr['volunteer_name']}**: {pr['request'][:80]}{'...' if len(pr['request']) > 80 else ''}\n"
+
+        response += "\nFor the full prayer report, visit [Prayer Requests](/analytics/prayer/)."
+        return response
+
+    elif report_type == 'ai':
+        report = generator.ai_performance_report()
+
+        response = f"""**AI (Aria) Performance Report**
+
+**Usage (Last 30 Days):**
+- Total Responses: {report.get('total_ai_responses', 0)}
+- Feedback Received: {report.get('total_feedback', 0)} ({report.get('feedback_rate', 0)}% feedback rate)
+
+**Satisfaction:**
+- Positive Feedback: {report.get('positive_rate', 0)}% ({report.get('positive_count', 0)} helpful)
+- Negative Feedback: {report.get('negative_count', 0)} issues reported
+- Resolution Rate: {report.get('resolution_rate', 0)}%
+
+"""
+        if report.get('unresolved_count', 0) > 0:
+            response += f"**Unresolved Issues:** {report['unresolved_count']} need attention\n"
+
+        response += "\nFor detailed AI metrics, visit [AI Performance](/analytics/ai/)."
+        return response
+
+    return "I can provide team analytics. Try asking about:\n- Team overview/summary\n- Volunteer engagement\n- Team care needs\n- Interaction trends\n- Prayer request summary\n- AI performance"
+
+
 def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
     """
     Detect if a question is asking for data that resides in Planning Center.
@@ -2953,6 +3171,40 @@ def query_agent(question: str, user, session_id: str) -> str:
         except Exception as e:
             logger.error(f"Error querying Claude for disambiguation: {e}")
             answer = f"I noticed you mentioned \"{ambig_value}\" - are you asking about the song or a person/volunteer with that name?"
+
+        # Save assistant response to chat history
+        ChatMessage.objects.create(
+            user=user,
+            session_id=session_id,
+            role='assistant',
+            content=answer
+        )
+
+        # Update conversation context
+        conversation_context.increment_message_count(2)
+        conversation_context.save()
+
+        return answer
+
+    # Check if this is an analytics/team metrics query
+    analytics_query, analytics_type = is_analytics_query(question)
+    if analytics_query:
+        logger.info(f"Analytics query detected: {analytics_type}")
+
+        # Save the user's question to chat history
+        ChatMessage.objects.create(
+            user=user,
+            session_id=session_id,
+            role='user',
+            content=question
+        )
+
+        # Generate analytics response
+        try:
+            answer = get_analytics_response(analytics_type)
+        except Exception as e:
+            logger.error(f"Error generating analytics response: {e}")
+            answer = "I encountered an error generating the analytics report. Please try visiting the [Analytics Dashboard](/analytics/) directly."
 
         # Save assistant response to chat history
         ChatMessage.objects.create(

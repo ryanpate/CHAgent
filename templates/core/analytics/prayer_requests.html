@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+
+{% block title %}Prayer Request Summary{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <div>
+            <a href="{% url 'analytics_dashboard' %}" class="text-gray-400 hover:text-white text-sm mb-2 inline-block">&larr; Back to Analytics</a>
+            <h2 class="text-2xl font-bold text-ch-gold">Prayer Request Summary</h2>
+            <p class="text-gray-400 text-sm mt-1">Overview of prayer needs across the team</p>
+        </div>
+        <div class="flex gap-2">
+            <select onchange="window.location.href='?days=' + this.value"
+                    class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                <option value="60" {% if days == 60 %}selected{% endif %}>Last 60 days</option>
+                <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+                <option value="180" {% if days == 180 %}selected{% endif %}>Last 6 months</option>
+            </select>
+            <a href="{% url 'analytics_export' 'prayer_requests' %}?days={{ days }}"
+               class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition text-sm">
+                Export JSON
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="bg-ch-dark rounded-lg p-6 mb-6 border-l-4 border-purple-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-2xl font-bold">{{ report.total_prayer_requests }}</h3>
+                <p class="text-gray-400">Total Prayer Requests</p>
+            </div>
+            <svg class="w-16 h-16 text-purple-500/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11"></path>
+            </svg>
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-6 mb-6">
+        <!-- Common Themes -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Common Themes</h3>
+            <p class="text-gray-400 text-sm mb-4">Most frequently mentioned topics</p>
+            <div class="space-y-2">
+                {% for theme, count in report.common_themes.items %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-2">
+                    <span class="text-sm">{{ theme }}</span>
+                    <span class="px-2 py-0.5 bg-purple-500/20 text-purple-300 text-xs rounded">{{ count }}</span>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">No themes detected yet</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Pending Prayer Follow-ups -->
+        <div class="bg-ch-dark rounded-lg p-6 md:col-span-2">
+            <h3 class="font-semibold text-lg mb-4">Prayer-Related Follow-ups</h3>
+            <p class="text-gray-400 text-sm mb-4">Pending follow-ups tagged as prayer requests</p>
+            <div class="space-y-2">
+                {% for followup in report.pending_followups %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-3">
+                    <div>
+                        <p class="font-medium text-sm">{{ followup.title }}</p>
+                        <p class="text-xs text-gray-500">
+                            {% if followup.volunteer_name %}{{ followup.volunteer_name }}{% endif %}
+                            {% if followup.due_date %} &bull; Due {{ followup.due_date|date:"M d" }}{% endif %}
+                        </p>
+                    </div>
+                    <a href="{% url 'followup_detail' followup.id %}" class="text-ch-gold text-sm hover:underline">View</a>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">No pending prayer follow-ups</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Prayer Requests -->
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <h3 class="font-semibold text-lg mb-4">Recent Prayer Requests</h3>
+        <div class="space-y-4">
+            {% for pr in report.recent_requests %}
+            <div class="bg-ch-gray/50 rounded-lg p-4 border-l-4 border-purple-500">
+                <div class="flex flex-col md:flex-row md:items-start justify-between gap-2 mb-2">
+                    <a href="{% url 'volunteer_detail' pr.volunteer_id %}" class="font-semibold text-ch-gold hover:underline">{{ pr.volunteer_name }}</a>
+                    <div class="flex items-center gap-2">
+                        {% if pr.is_verified %}
+                        <span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">Verified</span>
+                        {% endif %}
+                        <span class="text-xs text-gray-500">{{ pr.date|date:"M d, Y" }}</span>
+                    </div>
+                </div>
+                <p class="text-gray-300">{{ pr.request }}</p>
+            </div>
+            {% empty %}
+            <div class="text-center py-8 text-gray-500">
+                <svg class="w-16 h-16 mx-auto mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11"></path>
+                </svg>
+                <p>No prayer requests have been logged in this period.</p>
+                <p class="text-sm mt-2">Prayer requests are extracted when you log interactions mentioning prayer needs.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- By Volunteer -->
+    {% if report.by_volunteer %}
+    <div class="bg-ch-dark rounded-lg p-6">
+        <h3 class="font-semibold text-lg mb-4">Prayer Requests by Volunteer</h3>
+        <div class="grid md:grid-cols-2 gap-4">
+            {% for volunteer_name, requests in report.by_volunteer.items %}
+            <div class="bg-ch-gray/50 rounded p-4">
+                <h4 class="font-medium text-ch-gold mb-2">{{ volunteer_name }}</h4>
+                <div class="space-y-2">
+                    {% for req in requests|slice:":3" %}
+                    <div class="text-sm text-gray-300 border-l-2 border-gray-600 pl-3">
+                        {{ req.request|truncatewords:20 }}
+                        <span class="text-xs text-gray-500 block">{{ req.date|date:"M d" }}</span>
+                    </div>
+                    {% endfor %}
+                    {% if requests|length > 3 %}
+                    <p class="text-xs text-gray-500">+ {{ requests|length|add:"-3" }} more</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

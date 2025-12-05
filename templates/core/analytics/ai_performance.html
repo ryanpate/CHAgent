@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+
+{% block title %}AI Performance{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <div>
+            <a href="{% url 'analytics_dashboard' %}" class="text-gray-400 hover:text-white text-sm mb-2 inline-block">&larr; Back to Analytics</a>
+            <h2 class="text-2xl font-bold text-ch-gold">AI Performance</h2>
+            <p class="text-gray-400 text-sm mt-1">How well Aria is serving the team</p>
+        </div>
+        <div class="flex gap-2">
+            <select onchange="window.location.href='?days=' + this.value"
+                    class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+                <option value="14" {% if days == 14 %}selected{% endif %}>Last 14 days</option>
+                <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+            </select>
+            <a href="{% url 'feedback_dashboard' %}"
+               class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition text-sm">
+                View All Feedback
+            </a>
+        </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-blue-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Total Responses</p>
+            <p class="text-3xl font-bold mt-1">{{ report.total_ai_responses }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-purple-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Feedback Rate</p>
+            <p class="text-3xl font-bold mt-1">{{ report.feedback_rate }}%</p>
+            <p class="text-sm text-gray-500 mt-1">{{ report.total_feedback }} ratings</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-green-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Positive Rate</p>
+            <p class="text-3xl font-bold text-green-400 mt-1">{{ report.positive_rate }}%</p>
+            <p class="text-sm text-gray-500 mt-1">{{ report.positive_count }} helpful</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 {% if report.unresolved_count > 0 %}border-red-500{% else %}border-gray-500{% endif %}">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Unresolved Issues</p>
+            <p class="text-3xl font-bold {% if report.unresolved_count > 0 %}text-red-400{% endif %} mt-1">{{ report.unresolved_count }}</p>
+            <p class="text-sm text-gray-500 mt-1">{{ report.resolution_rate }}% resolved</p>
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+        <!-- Satisfaction Gauge -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Overall Satisfaction</h3>
+            <div class="flex items-center justify-center py-8">
+                <div class="relative">
+                    <svg class="w-48 h-48 transform -rotate-90" viewBox="0 0 100 100">
+                        <!-- Background circle -->
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="#333" stroke-width="10"/>
+                        <!-- Progress circle -->
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="#22c55e" stroke-width="10"
+                                stroke-dasharray="{{ report.positive_rate|floatformat:0 }} {% widthratio 100 1 1 %}"
+                                stroke-dashoffset="0"
+                                stroke-linecap="round"/>
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="text-center">
+                            <span class="text-4xl font-bold">{{ report.positive_rate }}%</span>
+                            <p class="text-sm text-gray-400">Helpful</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-center gap-8 mt-4">
+                <div class="text-center">
+                    <span class="text-2xl font-bold text-green-400">{{ report.positive_count }}</span>
+                    <p class="text-xs text-gray-400">Helpful</p>
+                </div>
+                <div class="text-center">
+                    <span class="text-2xl font-bold text-red-400">{{ report.negative_count }}</span>
+                    <p class="text-xs text-gray-400">Not Helpful</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Issue Breakdown -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Issue Breakdown</h3>
+            <p class="text-gray-400 text-sm mb-4">What types of issues are reported</p>
+            {% if report.issue_breakdown %}
+            <div class="space-y-3">
+                {% for issue_type, count in report.issue_breakdown.items %}
+                <div class="bg-ch-gray/50 rounded p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-medium text-sm">
+                            {% if issue_type == 'missing_info' %}Information Missing
+                            {% elif issue_type == 'wrong_info' %}Incorrect Information
+                            {% elif issue_type == 'wrong_volunteer' %}Wrong Volunteer
+                            {% elif issue_type == 'no_response' %}No Useful Response
+                            {% elif issue_type == 'slow_response' %}Too Slow
+                            {% elif issue_type == 'formatting' %}Formatting Issue
+                            {% else %}{{ issue_type }}{% endif %}
+                        </span>
+                        <span class="text-red-400 font-semibold">{{ count }}</span>
+                    </div>
+                    <div class="w-full bg-ch-black rounded-full h-2">
+                        <div class="bg-red-500 rounded-full h-2"
+                             style="width: {% widthratio count report.negative_count 100 %}%"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8 text-gray-500">
+                <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <p>No issues reported!</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Unresolved Issues -->
+    {% if report.unresolved_issues %}
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-lg">Unresolved Issues</h3>
+            <a href="{% url 'feedback_dashboard' %}?type=negative&resolved=no" class="text-ch-gold text-sm hover:underline">View all</a>
+        </div>
+        <div class="space-y-3">
+            {% for issue in report.unresolved_issues %}
+            <div class="bg-ch-gray/50 rounded-lg p-4 border-l-4 border-red-500">
+                <div class="flex flex-col md:flex-row md:items-start justify-between gap-2 mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 text-xs rounded bg-red-500/20 text-red-400">{{ issue.issue_type_display }}</span>
+                        <span class="text-xs text-gray-500">{{ issue.created_at|timesince }} ago</span>
+                    </div>
+                    <span class="text-xs text-gray-400">by {{ issue.user }}</span>
+                </div>
+                {% if issue.expected_result %}
+                <p class="text-sm text-yellow-200 mb-2"><strong>Expected:</strong> {{ issue.expected_result }}</p>
+                {% endif %}
+                {% if issue.comment %}
+                <p class="text-sm text-gray-300">{{ issue.comment }}</p>
+                {% endif %}
+                <div class="mt-3">
+                    <a href="{% url 'feedback_dashboard' %}?type=negative&resolved=no" class="text-ch-gold text-sm hover:underline">Resolve &rarr;</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Trend Over Time -->
+    {% if report.trend %}
+    <div class="bg-ch-dark rounded-lg p-6">
+        <h3 class="font-semibold text-lg mb-4">Feedback Trend</h3>
+        <p class="text-gray-400 text-sm mb-4">Weekly feedback breakdown</p>
+        <div class="space-y-3">
+            {% regroup report.trend by week as weeks_list %}
+            {% for week in weeks_list %}
+            <div class="bg-ch-gray/50 rounded p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm text-gray-400">Week of {{ week.grouper|slice:":10" }}</span>
+                </div>
+                <div class="flex gap-4">
+                    {% for item in week.list %}
+                    <div class="flex items-center gap-2">
+                        {% if item.feedback_type == 'positive' %}
+                        <span class="w-3 h-3 rounded-full bg-green-500"></span>
+                        <span class="text-sm text-green-400">{{ item.count }} helpful</span>
+                        {% else %}
+                        <span class="w-3 h-3 rounded-full bg-red-500"></span>
+                        <span class="text-sm text-red-400">{{ item.count }} issues</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tips for Improvement -->
+    <div class="mt-8 bg-ch-dark rounded-lg p-6">
+        <h3 class="font-semibold text-lg mb-4">Tips for Improving Aria</h3>
+        <div class="grid md:grid-cols-2 gap-4">
+            <div class="bg-ch-gray/50 rounded p-4">
+                <h4 class="font-medium text-ch-gold mb-2">Log More Interactions</h4>
+                <p class="text-sm text-gray-400">The more interactions you log, the better Aria can answer questions about volunteers.</p>
+            </div>
+            <div class="bg-ch-gray/50 rounded p-4">
+                <h4 class="font-medium text-ch-gold mb-2">Be Specific</h4>
+                <p class="text-sm text-gray-400">Include full names and specific details in your interactions for better matching.</p>
+            </div>
+            <div class="bg-ch-gray/50 rounded p-4">
+                <h4 class="font-medium text-ch-gold mb-2">Report Issues</h4>
+                <p class="text-sm text-gray-400">Use the feedback buttons to help Aria learn from mistakes.</p>
+            </div>
+            <div class="bg-ch-gray/50 rounded p-4">
+                <h4 class="font-medium text-ch-gold mb-2">Check Planning Center</h4>
+                <p class="text-sm text-gray-400">Ensure volunteer names in Planning Center match how you refer to them.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

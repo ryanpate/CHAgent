@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+
+{% block title %}Volunteer Engagement Report{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <div>
+            <a href="{% url 'analytics_dashboard' %}" class="text-gray-400 hover:text-white text-sm mb-2 inline-block">&larr; Back to Analytics</a>
+            <h2 class="text-2xl font-bold text-ch-gold">Volunteer Engagement Report</h2>
+            <p class="text-gray-400 text-sm mt-1">Activity and participation metrics for the past {{ days }} days</p>
+        </div>
+        <div class="flex gap-2">
+            <select onchange="window.location.href='?days=' + this.value"
+                    class="bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                <option value="60" {% if days == 60 %}selected{% endif %}>Last 60 days</option>
+                <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+                <option value="180" {% if days == 180 %}selected{% endif %}>Last 6 months</option>
+            </select>
+            <a href="{% url 'analytics_export' 'volunteer_engagement' %}?days={{ days }}"
+               class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition text-sm">
+                Export JSON
+            </a>
+        </div>
+    </div>
+
+    <!-- Overall Metrics -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-ch-gold">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Total Volunteers</p>
+            <p class="text-3xl font-bold mt-1">{{ report.total_volunteers }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-green-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Active</p>
+            <p class="text-3xl font-bold text-green-400 mt-1">{{ report.active_volunteers }}</p>
+            <p class="text-sm text-gray-500 mt-1">with interactions</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-yellow-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Inactive</p>
+            <p class="text-3xl font-bold text-yellow-400 mt-1">{{ report.inactive_volunteers }}</p>
+            <p class="text-sm text-gray-500 mt-1">no recent activity</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-blue-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Engagement Rate</p>
+            <p class="text-3xl font-bold text-blue-400 mt-1">{{ report.engagement_rate }}%</p>
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+        <!-- Engagement by Team -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Engagement by Team</h3>
+            <div class="space-y-3">
+                {% for team, data in report.engagement_by_team.items %}
+                <div class="bg-ch-gray/50 rounded p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-medium">{{ team }}</span>
+                        <span class="text-sm text-gray-400">{{ data.active }}/{{ data.total }} active</span>
+                    </div>
+                    <div class="w-full bg-ch-black rounded-full h-2">
+                        <div class="bg-ch-gold rounded-full h-2" style="width: {{ data.engagement_rate }}%"></div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">{{ data.engagement_rate }}% engagement</p>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">No team data available</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Top Engaged Volunteers -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Most Engaged Volunteers</h3>
+            <div class="space-y-2">
+                {% for volunteer in report.top_engaged %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-3">
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 h-6 flex items-center justify-center bg-ch-gold text-black text-sm font-bold rounded-full">{{ forloop.counter }}</span>
+                        <div>
+                            <a href="{% url 'volunteer_detail' volunteer.id %}" class="font-medium hover:text-ch-gold transition">{{ volunteer.name }}</a>
+                            {% if volunteer.team %}
+                            <p class="text-xs text-gray-500">{{ volunteer.team }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <span class="text-ch-gold font-semibold">{{ volunteer.interaction_count }} interactions</span>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">No interaction data yet</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+        <!-- Least Engaged (Need Attention) -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">Need Attention</h3>
+            <p class="text-gray-400 text-sm mb-4">Volunteers with history but no recent interactions</p>
+            <div class="space-y-2">
+                {% for volunteer in report.least_engaged %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-3">
+                    <div>
+                        <a href="{% url 'volunteer_detail' volunteer.id %}" class="font-medium hover:text-ch-gold transition">{{ volunteer.name }}</a>
+                        <p class="text-xs text-gray-500">
+                            {% if volunteer.team %}{{ volunteer.team }} &bull; {% endif %}
+                            {{ volunteer.total_interactions }} total interactions
+                        </p>
+                    </div>
+                    <span class="text-red-400 text-sm">{{ volunteer.days_since_interaction }} days ago</span>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">Everyone is well-engaged!</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- New Volunteers -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="font-semibold text-lg mb-4">New Volunteers</h3>
+            <p class="text-gray-400 text-sm mb-4">Recently added to the system</p>
+            <div class="space-y-2">
+                {% for volunteer in report.new_volunteers %}
+                <div class="flex items-center justify-between bg-ch-gray/50 rounded p-3">
+                    <div>
+                        <a href="{% url 'volunteer_detail' volunteer.id %}" class="font-medium hover:text-ch-gold transition">{{ volunteer.name }}</a>
+                        <p class="text-xs text-gray-500">{{ volunteer.team|default:"No team assigned" }}</p>
+                    </div>
+                    <span class="text-gray-400 text-sm">{{ volunteer.created_at|date:"M d" }}</span>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-sm text-center py-4">No new volunteers in this period</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
