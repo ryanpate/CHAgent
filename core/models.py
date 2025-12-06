@@ -1199,3 +1199,148 @@ class ReportCache(models.Model):
             qs = qs.filter(report_type=report_type)
         count, _ = qs.delete()
         return count
+
+
+class VolunteerInsight(models.Model):
+    """
+    AI-generated insights about volunteer engagement and care needs.
+
+    These insights are proactively generated to help team leaders
+    identify volunteers who may need attention, follow-up, or care.
+    """
+    INSIGHT_TYPE_CHOICES = [
+        ('engagement_drop', 'Engagement Drop'),
+        ('no_recent_contact', 'No Recent Contact'),
+        ('prayer_need', 'Prayer Need'),
+        ('birthday_upcoming', 'Birthday Upcoming'),
+        ('anniversary_upcoming', 'Anniversary Upcoming'),
+        ('new_volunteer', 'New Volunteer Check-in'),
+        ('returning', 'Returning After Absence'),
+        ('overdue_followup', 'Overdue Follow-up'),
+        ('frequent_declines', 'Frequent Schedule Declines'),
+        ('milestone', 'Service Milestone'),
+    ]
+
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('urgent', 'Urgent'),
+    ]
+
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('acknowledged', 'Acknowledged'),
+        ('actioned', 'Actioned'),
+        ('dismissed', 'Dismissed'),
+    ]
+
+    volunteer = models.ForeignKey(
+        Volunteer,
+        on_delete=models.CASCADE,
+        related_name='insights',
+        help_text='The volunteer this insight is about'
+    )
+
+    insight_type = models.CharField(
+        max_length=30,
+        choices=INSIGHT_TYPE_CHOICES,
+        db_index=True,
+        help_text='Type of care insight'
+    )
+
+    priority = models.CharField(
+        max_length=10,
+        choices=PRIORITY_CHOICES,
+        default='medium',
+        db_index=True
+    )
+
+    title = models.CharField(
+        max_length=200,
+        help_text='Short title for the insight'
+    )
+
+    message = models.TextField(
+        help_text='Detailed description of the insight'
+    )
+
+    suggested_action = models.TextField(
+        blank=True,
+        help_text='Recommended action to take'
+    )
+
+    # Context data for the insight
+    context_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Additional context (days since contact, dates, etc.)'
+    )
+
+    status = models.CharField(
+        max_length=15,
+        choices=STATUS_CHOICES,
+        default='active',
+        db_index=True
+    )
+
+    # Tracking
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    acknowledged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='acknowledged_insights'
+    )
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-priority', '-created_at']
+        verbose_name = 'Volunteer Insight'
+        verbose_name_plural = 'Volunteer Insights'
+        indexes = [
+            models.Index(fields=['status', 'priority']),
+            models.Index(fields=['insight_type', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_insight_type_display()} - {self.volunteer.name}"
+
+    def acknowledge(self, user):
+        """Mark the insight as acknowledged."""
+        self.status = 'acknowledged'
+        self.acknowledged_by = user
+        self.acknowledged_at = timezone.now()
+        self.save()
+
+    def mark_actioned(self, user):
+        """Mark the insight as actioned (follow-up completed)."""
+        self.status = 'actioned'
+        self.acknowledged_by = user
+        self.acknowledged_at = timezone.now()
+        self.save()
+
+    def dismiss(self, user):
+        """Dismiss the insight."""
+        self.status = 'dismissed'
+        self.acknowledged_by = user
+        self.acknowledged_at = timezone.now()
+        self.save()
+
+    @classmethod
+    def get_active_insights(cls, limit: int = None):
+        """Get all active insights ordered by priority."""
+        qs = cls.objects.filter(status='active').select_related('volunteer')
+        if limit:
+            qs = qs[:limit]
+        return qs
+
+    @classmethod
+    def get_insights_for_volunteer(cls, volunteer_id: int):
+        """Get all active insights for a specific volunteer."""
+        return cls.objects.filter(
+            volunteer_id=volunteer_id,
+            status='active'
+        ).order_by('-priority', '-created_at')

@@ -1,0 +1,14 @@
+<div class="bg-ch-dark rounded-lg p-5 border-l-4 border-green-500">
+    <div class="flex items-center gap-3 mb-2">
+        <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span class="text-green-400 font-medium">Follow-up Created</span>
+    </div>
+    <p class="text-gray-300 mb-3">
+        Created follow-up for <span class="text-ch-gold">{{ insight.volunteer.name }}</span>: "{{ followup.title }}"
+    </p>
+    <a href="{% url 'followup_detail' followup.id %}" class="text-ch-gold hover:underline text-sm">
+        View Follow-up &rarr;
+    </a>
+</div>

@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+
+{% block title %}Proactive Care Dashboard{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-ch-gold">Proactive Care Dashboard</h2>
+            <p class="text-gray-400 text-sm mt-1">Volunteers who need your attention and care</p>
+        </div>
+        <div class="flex gap-2">
+            <form hx-post="{% url 'care_refresh_insights' %}" hx-target="#refresh-result" hx-swap="innerHTML">
+                {% csrf_token %}
+                <button type="submit" class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition text-sm flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Scan for Insights
+                </button>
+            </form>
+            <a href="{% url 'followup_list' %}" class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition text-sm">
+                View Follow-ups
+            </a>
+        </div>
+    </div>
+
+    <!-- Refresh result placeholder -->
+    <div id="refresh-result" class="mb-4"></div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-ch-gold">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Total Insights</p>
+            <p class="text-3xl font-bold mt-1">{{ dashboard.total_active }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-red-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Urgent</p>
+            <p class="text-3xl font-bold text-red-400 mt-1">{{ dashboard.urgent_count }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-orange-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">High Priority</p>
+            <p class="text-3xl font-bold text-orange-400 mt-1">{{ dashboard.high_count }}</p>
+        </div>
+        <div class="bg-ch-dark rounded-lg p-4 border-l-4 border-blue-500">
+            <p class="text-gray-400 text-xs uppercase tracking-wide">Needs Attention</p>
+            <p class="text-3xl font-bold text-blue-400 mt-1">{{ dashboard.needs_attention }}</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-ch-dark rounded-lg p-4 mb-6">
+        <form method="get" class="flex flex-wrap items-center gap-4">
+            <div class="flex items-center gap-2">
+                <label class="text-sm text-gray-400">Type:</label>
+                <select name="type" onchange="this.form.submit()"
+                        class="bg-ch-gray border border-gray-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-ch-gold">
+                    <option value="">All Types</option>
+                    {% for value, label in type_choices %}
+                    <option value="{{ value }}" {% if filter_type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <label class="text-sm text-gray-400">Priority:</label>
+                <select name="priority" onchange="this.form.submit()"
+                        class="bg-ch-gray border border-gray-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-ch-gold">
+                    <option value="">All Priorities</option>
+                    <option value="urgent" {% if filter_priority == 'urgent' %}selected{% endif %}>Urgent</option>
+                    <option value="high" {% if filter_priority == 'high' %}selected{% endif %}>High</option>
+                    <option value="medium" {% if filter_priority == 'medium' %}selected{% endif %}>Medium</option>
+                    <option value="low" {% if filter_priority == 'low' %}selected{% endif %}>Low</option>
+                </select>
+            </div>
+            {% if filter_type or filter_priority %}
+            <a href="{% url 'care_dashboard' %}" class="text-sm text-ch-gold hover:underline">Clear filters</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Insight Cards -->
+    <div id="insight-list" class="space-y-4">
+        {% for insight in insights %}
+        <div id="insight-{{ insight.id }}"
+             class="bg-ch-dark rounded-lg p-5 border-l-4
+                    {% if insight.priority == 'urgent' %}border-red-500
+                    {% elif insight.priority == 'high' %}border-orange-500
+                    {% elif insight.priority == 'medium' %}border-yellow-500
+                    {% else %}border-gray-500{% endif %}">
+            <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div class="flex-1">
+                    <!-- Header -->
+                    <div class="flex items-center gap-3 mb-2">
+                        <!-- Priority Badge -->
+                        <span class="px-2 py-0.5 text-xs rounded font-medium uppercase
+                                    {% if insight.priority == 'urgent' %}bg-red-500/20 text-red-400
+                                    {% elif insight.priority == 'high' %}bg-orange-500/20 text-orange-400
+                                    {% elif insight.priority == 'medium' %}bg-yellow-500/20 text-yellow-300
+                                    {% else %}bg-gray-500/20 text-gray-400{% endif %}">
+                            {{ insight.priority }}
+                        </span>
+                        <!-- Type Badge -->
+                        <span class="px-2 py-0.5 text-xs rounded bg-ch-gray text-gray-400">
+                            {{ insight.insight_type_display }}
+                        </span>
+                    </div>
+
+                    <!-- Title -->
+                    <h3 class="text-lg font-semibold mb-2">{{ insight.title }}</h3>
+
+                    <!-- Volunteer Link -->
+                    <a href="{% url 'volunteer_detail' insight.volunteer_id %}"
+                       class="text-ch-gold hover:underline text-sm mb-3 inline-block">
+                        View {{ insight.volunteer_name }}'s profile
+                        {% if insight.volunteer_team %} ({{ insight.volunteer_team }}){% endif %}
+                    </a>
+
+                    <!-- Message -->
+                    <p class="text-gray-300 mb-3">{{ insight.message }}</p>
+
+                    <!-- Suggested Action -->
+                    {% if insight.suggested_action %}
+                    <div class="bg-ch-gray/50 rounded p-3 mb-3">
+                        <p class="text-sm text-gray-400 mb-1">Suggested Action:</p>
+                        <p class="text-sm">{{ insight.suggested_action }}</p>
+                    </div>
+                    {% endif %}
+
+                    <!-- Context Details -->
+                    {% if insight.context_data %}
+                    <div class="flex flex-wrap gap-2 text-xs text-gray-500">
+                        {% if insight.context_data.days_since_contact %}
+                        <span class="bg-ch-gray/50 px-2 py-1 rounded">{{ insight.context_data.days_since_contact }} days since contact</span>
+                        {% endif %}
+                        {% if insight.context_data.days_overdue %}
+                        <span class="bg-ch-gray/50 px-2 py-1 rounded">{{ insight.context_data.days_overdue }} days overdue</span>
+                        {% endif %}
+                        {% if insight.context_data.days_until %}
+                        <span class="bg-ch-gray/50 px-2 py-1 rounded">{{ insight.context_data.days_until }} days until</span>
+                        {% endif %}
+                        {% if insight.context_data.team %}
+                        <span class="bg-ch-gray/50 px-2 py-1 rounded">Team: {{ insight.context_data.team }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Actions -->
+                <div class="flex flex-col gap-2 min-w-[140px]">
+                    <!-- Create Follow-up -->
+                    <form hx-post="{% url 'care_create_followup' insight.id %}"
+                          hx-target="#insight-{{ insight.id }}"
+                          hx-swap="outerHTML">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="w-full px-4 py-2 bg-ch-gold text-black rounded text-sm hover:bg-yellow-500 transition font-medium">
+                            Create Follow-up
+                        </button>
+                    </form>
+
+                    <!-- Mark Addressed -->
+                    <form hx-post="{% url 'care_dismiss_insight' insight.id %}"
+                          hx-target="#insight-{{ insight.id }}"
+                          hx-swap="outerHTML">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="address">
+                        <button type="submit"
+                                class="w-full px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded text-sm transition">
+                            Mark Addressed
+                        </button>
+                    </form>
+
+                    <!-- Dismiss -->
+                    <form hx-post="{% url 'care_dismiss_insight' insight.id %}"
+                          hx-target="#insight-{{ insight.id }}"
+                          hx-swap="outerHTML">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="dismiss">
+                        <button type="submit"
+                                class="w-full px-4 py-2 bg-ch-gray hover:bg-gray-600 text-gray-300 rounded text-sm transition">
+                            Dismiss
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Timestamp -->
+            <p class="text-xs text-gray-600 mt-3">Created: {{ insight.created_at|slice:":10" }}</p>
+        </div>
+        {% empty %}
+        <div class="bg-ch-dark rounded-lg p-12 text-center">
+            <svg class="w-16 h-16 mx-auto mb-4 text-green-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <h3 class="text-xl font-semibold mb-2 text-green-400">All Caught Up!</h3>
+            <p class="text-gray-400 mb-4">No volunteers currently need special attention.</p>
+            <p class="text-sm text-gray-500 mb-6">Click "Scan for Insights" to check for new care opportunities.</p>
+            <a href="{% url 'volunteer_list' %}" class="text-ch-gold hover:underline">Browse all volunteers</a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Type Breakdown -->
+    {% if dashboard.type_counts %}
+    <div class="mt-8 bg-ch-dark rounded-lg p-6">
+        <h3 class="font-semibold text-lg mb-4">Insights by Type</h3>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {% for type_value, label in type_choices %}
+            <div class="bg-ch-gray/50 rounded p-4 text-center">
+                <p class="text-2xl font-bold text-ch-gold">{{ dashboard.type_counts|default_if_none:0 }}</p>
+                <p class="text-sm text-gray-400">{{ label }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

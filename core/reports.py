@@ -14,7 +14,7 @@ from collections import Counter, defaultdict
 from typing import Optional, Any
 import logging
 
-from django.db.models import Count, Q, Avg, F
+from django.db.models import Count, Q, Avg, F, Max
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
 from django.utils import timezone
 
@@ -888,5 +888,408 @@ def get_prayer_request_summary_for_aria() -> str:
             "",
             f"**Common themes:** {themes}"
         ])
+
+    return "\n".join(text_parts)
+
+
+# =============================================================================
+# PROACTIVE CARE GENERATOR
+# =============================================================================
+
+class ProactiveCareGenerator:
+    """
+    Generates proactive care insights for volunteers.
+
+    This class analyzes volunteer data to identify those who may need
+    attention, follow-up, or special care from the team.
+    """
+
+    def __init__(self):
+        self.today = timezone.now().date()
+        self.now = timezone.now()
+
+    def generate_all_insights(self) -> dict:
+        """
+        Generate all types of proactive care insights.
+
+        Returns:
+            Dict with counts and lists of generated insights by type.
+        """
+        results = {
+            'generated_at': self.now,
+            'total_new': 0,
+            'by_type': {},
+        }
+
+        # Generate each type of insight
+        generators = [
+            ('no_recent_contact', self._generate_no_contact_insights),
+            ('prayer_need', self._generate_prayer_insights),
+            ('birthday_upcoming', self._generate_birthday_insights),
+            ('overdue_followup', self._generate_overdue_followup_insights),
+            ('new_volunteer', self._generate_new_volunteer_insights),
+        ]
+
+        for insight_type, generator_func in generators:
+            count = generator_func()
+            results['by_type'][insight_type] = count
+            results['total_new'] += count
+
+        return results
+
+    def _generate_no_contact_insights(self) -> int:
+        """Generate insights for volunteers with no recent contact."""
+        from .models import VolunteerInsight
+
+        thirty_days_ago = self.now - timedelta(days=30)
+        sixty_days_ago = self.now - timedelta(days=60)
+
+        # Find volunteers with interactions but none recently
+        volunteers_needing_contact = Volunteer.objects.annotate(
+            total_interactions=Count('interactions'),
+            recent_interactions=Count(
+                'interactions',
+                filter=Q(interactions__created_at__gte=thirty_days_ago)
+            ),
+            last_interaction_date=Max('interactions__created_at')
+        ).filter(
+            total_interactions__gt=0,
+            recent_interactions=0
+        )
+
+        count = 0
+        for volunteer in volunteers_needing_contact:
+            # Check if we already have an active insight for this
+            existing = VolunteerInsight.objects.filter(
+                volunteer=volunteer,
+                insight_type='no_recent_contact',
+                status='active'
+            ).exists()
+
+            if not existing:
+                days_since = (self.now - volunteer.last_interaction_date).days if volunteer.last_interaction_date else 999
+
+                # Determine priority based on how long since contact
+                if days_since > 90:
+                    priority = 'high'
+                elif days_since > 60:
+                    priority = 'medium'
+                else:
+                    priority = 'low'
+
+                VolunteerInsight.objects.create(
+                    volunteer=volunteer,
+                    insight_type='no_recent_contact',
+                    priority=priority,
+                    title=f"No contact with {volunteer.name} in {days_since} days",
+                    message=f"{volunteer.name} hasn't had any logged interactions in {days_since} days. "
+                            f"Consider reaching out to check in on them.",
+                    suggested_action=f"Send a message or schedule a brief check-in with {volunteer.name}.",
+                    context_data={
+                        'days_since_contact': days_since,
+                        'total_interactions': volunteer.total_interactions,
+                        'team': volunteer.team or 'Unassigned'
+                    }
+                )
+                count += 1
+
+        return count
+
+    def _generate_prayer_insights(self) -> int:
+        """Generate insights for volunteers with recent prayer requests."""
+        from .models import VolunteerInsight
+
+        seven_days_ago = self.now - timedelta(days=7)
+
+        # Find recent prayer requests
+        recent_prayers = ExtractedKnowledge.objects.filter(
+            knowledge_type='prayer_request',
+            is_current=True,
+            created_at__gte=seven_days_ago
+        ).select_related('volunteer')
+
+        count = 0
+        for prayer in recent_prayers:
+            # Check if we already have an active insight for this prayer
+            existing = VolunteerInsight.objects.filter(
+                volunteer=prayer.volunteer,
+                insight_type='prayer_need',
+                status='active',
+                context_data__contains={'prayer_id': prayer.id}
+            ).exists()
+
+            if not existing:
+                VolunteerInsight.objects.create(
+                    volunteer=prayer.volunteer,
+                    insight_type='prayer_need',
+                    priority='medium',
+                    title=f"Prayer request from {prayer.volunteer.name}",
+                    message=f"{prayer.volunteer.name} shared a prayer request: {prayer.value[:100]}{'...' if len(prayer.value) > 100 else ''}",
+                    suggested_action="Follow up to see how they're doing and if there's anything the team can do to help.",
+                    context_data={
+                        'prayer_id': prayer.id,
+                        'prayer_text': prayer.value,
+                        'logged_date': prayer.created_at.isoformat()
+                    }
+                )
+                count += 1
+
+        return count
+
+    def _generate_birthday_insights(self) -> int:
+        """Generate insights for upcoming volunteer birthdays."""
+        from .models import VolunteerInsight
+
+        # Get birthdays from extracted knowledge
+        birthday_knowledge = ExtractedKnowledge.objects.filter(
+            knowledge_type='birthday',
+            is_current=True
+        ).select_related('volunteer')
+
+        count = 0
+        for bk in birthday_knowledge:
+            try:
+                # Parse the birthday
+                birthday_str = bk.value.strip()
+                birthday_date = None
+
+                for fmt in ['%B %d', '%b %d', '%m/%d', '%m-%d', '%B %d, %Y', '%m/%d/%Y']:
+                    try:
+                        parsed = datetime.strptime(birthday_str, fmt)
+                        birthday_date = parsed.replace(year=self.today.year).date()
+                        if birthday_date < self.today:
+                            birthday_date = birthday_date.replace(year=self.today.year + 1)
+                        break
+                    except ValueError:
+                        continue
+
+                if birthday_date:
+                    days_until = (birthday_date - self.today).days
+
+                    # Only create insights for birthdays within 7 days
+                    if 0 <= days_until <= 7:
+                        existing = VolunteerInsight.objects.filter(
+                            volunteer=bk.volunteer,
+                            insight_type='birthday_upcoming',
+                            status='active'
+                        ).exists()
+
+                        if not existing:
+                            if days_until == 0:
+                                priority = 'urgent'
+                                title = f"Today is {bk.volunteer.name}'s birthday!"
+                            elif days_until == 1:
+                                priority = 'high'
+                                title = f"{bk.volunteer.name}'s birthday is tomorrow"
+                            else:
+                                priority = 'medium'
+                                title = f"{bk.volunteer.name}'s birthday in {days_until} days"
+
+                            VolunteerInsight.objects.create(
+                                volunteer=bk.volunteer,
+                                insight_type='birthday_upcoming',
+                                priority=priority,
+                                title=title,
+                                message=f"{bk.volunteer.name}'s birthday is {birthday_str}. "
+                                        f"Consider sending a card or acknowledgment.",
+                                suggested_action="Send a birthday message or coordinate with the team for a small celebration.",
+                                context_data={
+                                    'birthday': birthday_str,
+                                    'days_until': days_until
+                                }
+                            )
+                            count += 1
+            except Exception:
+                continue
+
+        return count
+
+    def _generate_overdue_followup_insights(self) -> int:
+        """Generate insights for overdue follow-ups."""
+        from .models import VolunteerInsight
+
+        overdue_followups = FollowUp.objects.filter(
+            status='pending',
+            follow_up_date__lt=self.today,
+            volunteer__isnull=False
+        ).select_related('volunteer')
+
+        count = 0
+        for followup in overdue_followups:
+            existing = VolunteerInsight.objects.filter(
+                volunteer=followup.volunteer,
+                insight_type='overdue_followup',
+                status='active',
+                context_data__contains={'followup_id': followup.id}
+            ).exists()
+
+            if not existing:
+                days_overdue = (self.today - followup.follow_up_date).days
+
+                if days_overdue > 14:
+                    priority = 'urgent'
+                elif days_overdue > 7:
+                    priority = 'high'
+                else:
+                    priority = 'medium'
+
+                VolunteerInsight.objects.create(
+                    volunteer=followup.volunteer,
+                    insight_type='overdue_followup',
+                    priority=priority,
+                    title=f"Overdue follow-up for {followup.volunteer.name}",
+                    message=f"Follow-up '{followup.title}' was due {days_overdue} days ago.",
+                    suggested_action=f"Complete or reschedule the follow-up: {followup.title}",
+                    context_data={
+                        'followup_id': followup.id,
+                        'followup_title': followup.title,
+                        'due_date': followup.follow_up_date.isoformat(),
+                        'days_overdue': days_overdue
+                    }
+                )
+                count += 1
+
+        return count
+
+    def _generate_new_volunteer_insights(self) -> int:
+        """Generate insights for new volunteers who may need check-ins."""
+        from .models import VolunteerInsight
+
+        # Volunteers created in the last 30 days
+        thirty_days_ago = self.now - timedelta(days=30)
+
+        new_volunteers = Volunteer.objects.filter(
+            created_at__gte=thirty_days_ago
+        ).annotate(
+            interaction_count=Count('interactions')
+        )
+
+        count = 0
+        for volunteer in new_volunteers:
+            # Only flag if they have few interactions (may be falling through cracks)
+            if volunteer.interaction_count < 2:
+                existing = VolunteerInsight.objects.filter(
+                    volunteer=volunteer,
+                    insight_type='new_volunteer',
+                    status='active'
+                ).exists()
+
+                if not existing:
+                    days_since_added = (self.now - volunteer.created_at).days
+
+                    VolunteerInsight.objects.create(
+                        volunteer=volunteer,
+                        insight_type='new_volunteer',
+                        priority='medium',
+                        title=f"New volunteer {volunteer.name} may need attention",
+                        message=f"{volunteer.name} was added {days_since_added} days ago but only has "
+                                f"{volunteer.interaction_count} logged interaction(s). "
+                                f"Consider scheduling an onboarding check-in.",
+                        suggested_action="Schedule a welcome call or check-in to see how they're settling in.",
+                        context_data={
+                            'days_since_added': days_since_added,
+                            'interaction_count': volunteer.interaction_count,
+                            'team': volunteer.team or 'Unassigned'
+                        }
+                    )
+                    count += 1
+
+        return count
+
+    def get_proactive_care_dashboard(self) -> dict:
+        """
+        Get data for the proactive care dashboard.
+
+        Returns:
+            Dict with active insights grouped by priority and type.
+        """
+        from .models import VolunteerInsight
+
+        active_insights = VolunteerInsight.objects.filter(
+            status='active'
+        ).select_related('volunteer').order_by('-priority', '-created_at')
+
+        # Group by priority
+        by_priority = {
+            'urgent': [],
+            'high': [],
+            'medium': [],
+            'low': [],
+        }
+
+        # Group by type
+        by_type = defaultdict(list)
+
+        for insight in active_insights:
+            insight_data = {
+                'id': insight.id,
+                'volunteer_id': insight.volunteer.id,
+                'volunteer_name': insight.volunteer.name,
+                'volunteer_team': insight.volunteer.team,
+                'insight_type': insight.insight_type,
+                'insight_type_display': insight.get_insight_type_display(),
+                'priority': insight.priority,
+                'title': insight.title,
+                'message': insight.message,
+                'suggested_action': insight.suggested_action,
+                'context_data': insight.context_data,
+                'created_at': insight.created_at,
+            }
+
+            by_priority[insight.priority].append(insight_data)
+            by_type[insight.insight_type].append(insight_data)
+
+        # Summary counts
+        total_active = active_insights.count()
+        urgent_count = len(by_priority['urgent'])
+        high_count = len(by_priority['high'])
+
+        return {
+            'generated_at': self.now,
+            'total_active': total_active,
+            'urgent_count': urgent_count,
+            'high_count': high_count,
+            'needs_attention': urgent_count + high_count,
+            'by_priority': by_priority,
+            'by_type': dict(by_type),
+            'type_counts': {
+                insight_type: len(insights)
+                for insight_type, insights in by_type.items()
+            }
+        }
+
+
+def get_proactive_care_for_aria() -> str:
+    """
+    Generate a proactive care summary for Aria.
+    """
+    generator = ProactiveCareGenerator()
+    dashboard = generator.get_proactive_care_dashboard()
+
+    if dashboard['total_active'] == 0:
+        return "Great news! There are no volunteers currently flagged as needing special attention."
+
+    text_parts = [
+        f"**Proactive Care Summary**",
+        f"",
+        f"**{dashboard['total_active']}** volunteers need attention:",
+    ]
+
+    if dashboard['urgent_count'] > 0:
+        text_parts.append(f"- **{dashboard['urgent_count']} urgent** (immediate action needed)")
+
+    if dashboard['high_count'] > 0:
+        text_parts.append(f"- **{dashboard['high_count']} high priority**")
+
+    text_parts.append("")
+    text_parts.append("**Top priorities:**")
+
+    # Show top 5 urgent/high priority items
+    all_urgent_high = dashboard['by_priority']['urgent'] + dashboard['by_priority']['high']
+    for insight in all_urgent_high[:5]:
+        text_parts.append(f"- {insight['title']}")
+
+    text_parts.append("")
+    text_parts.append("View the [Proactive Care Dashboard](/care/) for full details.")
 
     return "\n".join(text_parts)
