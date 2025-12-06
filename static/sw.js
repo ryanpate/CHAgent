@@ -118,29 +118,95 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Handle push notifications (for future use)
+// Handle push notifications
 self.addEventListener('push', (event) => {
+  console.log('Push notification received:', event);
+
+  let data = {
+    title: 'Cherry Hills WA',
+    body: 'New notification',
+    icon: '/static/icons/icon-192x192.png',
+    badge: '/static/icons/badge-72x72.png',
+    url: '/',
+    tag: 'default',
+    data: {}
+  };
+
   if (event.data) {
-    const data = event.data.json();
-    const options = {
-      body: data.body || 'New notification',
-      icon: '/static/icons/icon-192x192.png',
-      badge: '/static/icons/icon-72x72.png',
-      vibrate: [100, 50, 100],
-      data: {
-        url: data.url || '/'
-      }
-    };
-    event.waitUntil(
-      self.registration.showNotification(data.title || 'Cherry Hills WA', options)
-    );
+    try {
+      const payload = event.data.json();
+      data = { ...data, ...payload };
+    } catch (e) {
+      console.error('Error parsing push data:', e);
+      data.body = event.data.text();
+    }
   }
+
+  const options = {
+    body: data.body,
+    icon: data.icon,
+    badge: data.badge,
+    vibrate: [100, 50, 100, 50, 100],
+    tag: data.tag,
+    renotify: true,
+    requireInteraction: data.requireInteraction || false,
+    data: {
+      url: data.url,
+      ...data.data
+    },
+    actions: data.actions || []
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
 });
 
 // Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
+  console.log('Notification clicked:', event);
   event.notification.close();
+
+  const urlToOpen = event.notification.data?.url || '/';
+
+  // Handle action button clicks
+  if (event.action) {
+    console.log('Action clicked:', event.action);
+    // Could handle different actions here
+  }
+
   event.waitUntil(
-    clients.openWindow(event.notification.data.url || '/')
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        // Check if there's already a window open
+        for (const client of clientList) {
+          if (client.url.includes(self.location.origin) && 'focus' in client) {
+            client.navigate(urlToOpen);
+            return client.focus();
+          }
+        }
+        // Open new window if none exists
+        if (clients.openWindow) {
+          return clients.openWindow(urlToOpen);
+        }
+      })
   );
+
+  // Track notification click (fire and forget)
+  if (event.notification.data?.notificationLogId) {
+    fetch('/notifications/clicked/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        log_id: event.notification.data.notificationLogId
+      })
+    }).catch(() => {});
+  }
+});
+
+// Handle notification close (dismissed without clicking)
+self.addEventListener('notificationclose', (event) => {
+  console.log('Notification closed:', event);
 });

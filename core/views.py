@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST, require_http_methods
+from django.views.decorators.csrf import csrf_exempt
 from django.db import models
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -1358,13 +1359,22 @@ def announcement_create(request):
         is_pinned = request.POST.get('is_pinned') == 'on'
 
         if title and content:
-            Announcement.objects.create(
+            announcement = Announcement.objects.create(
                 title=title,
                 content=content,
                 priority=priority,
                 is_pinned=is_pinned,
                 author=request.user
             )
+
+            # Send push notifications
+            try:
+                from .notifications import notify_new_announcement
+                notify_new_announcement(announcement)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to send announcement notifications: {e}")
+
             return redirect('announcements_list')
 
     return render(request, 'core/comms/announcement_create.html')
@@ -1428,6 +1438,23 @@ def channel_send_message(request, slug):
             author=request.user,
             content=content
         )
+
+        # Check for @mentions and send notifications
+        try:
+            from .notifications import notify_channel_message
+            from accounts.models import User
+            import re
+
+            # Parse @mentions from content
+            mentioned_usernames = re.findall(r'@(\w+)', content)
+            mentioned_users = []
+            if mentioned_usernames:
+                mentioned_users = list(User.objects.filter(username__in=mentioned_usernames))
+
+            notify_channel_message(message, mentioned_users=mentioned_users if mentioned_users else None)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to send channel message notification: {e}")
 
         if request.headers.get('HX-Request'):
             return render(request, 'core/partials/channel_message.html', {
@@ -1552,6 +1579,14 @@ def dm_send(request, user_id):
             content=content
         )
 
+        # Send push notification
+        try:
+            from .notifications import notify_new_dm
+            notify_new_dm(message)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to send DM notification: {e}")
+
         if request.headers.get('HX-Request'):
             return render(request, 'core/partials/dm_message.html', {
                 'message': message,
@@ -1572,3 +1607,259 @@ def dm_new(request):
         'users': users,
     }
     return render(request, 'core/comms/dm_new.html', context)
+
+
+# ============================================================================
+# Push Notification Views
+# ============================================================================
+
+@login_required
+def push_vapid_key(request):
+    """Return the VAPID public key for the frontend."""
+    from .notifications import get_vapid_keys
+
+    vapid_keys = get_vapid_keys()
+    return JsonResponse({
+        'public_key': vapid_keys['public_key'],
+    })
+
+
+@login_required
+@require_POST
+def push_subscribe(request):
+    """
+    Register a push subscription for the current user.
+
+    Expects JSON body with:
+    - endpoint: Push service endpoint URL
+    - keys.p256dh: Public key for encryption
+    - keys.auth: Auth secret
+    """
+    from .models import PushSubscription
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    endpoint = data.get('endpoint')
+    keys = data.get('keys', {})
+    p256dh = keys.get('p256dh')
+    auth = keys.get('auth')
+
+    if not all([endpoint, p256dh, auth]):
+        return JsonResponse({'error': 'Missing required subscription data'}, status=400)
+
+    # Get device info from user agent
+    user_agent = request.META.get('HTTP_USER_AGENT', '')
+    device_name = _parse_device_name(user_agent)
+
+    # Create or update subscription
+    subscription, created = PushSubscription.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={
+            'user': request.user,
+            'p256dh_key': p256dh,
+            'auth_key': auth,
+            'user_agent': user_agent,
+            'device_name': device_name,
+            'is_active': True,
+        }
+    )
+
+    return JsonResponse({
+        'success': True,
+        'created': created,
+        'subscription_id': subscription.id,
+        'device_name': device_name,
+    })
+
+
+def _parse_device_name(user_agent: str) -> str:
+    """Parse user agent to get a friendly device name."""
+    ua_lower = user_agent.lower()
+
+    # Detect mobile devices first
+    if 'iphone' in ua_lower:
+        return 'iPhone'
+    elif 'ipad' in ua_lower:
+        return 'iPad'
+    elif 'android' in ua_lower:
+        if 'mobile' in ua_lower:
+            return 'Android Phone'
+        return 'Android Tablet'
+
+    # Detect browsers on desktop
+    browser = 'Browser'
+    if 'chrome' in ua_lower and 'edg' not in ua_lower:
+        browser = 'Chrome'
+    elif 'firefox' in ua_lower:
+        browser = 'Firefox'
+    elif 'safari' in ua_lower and 'chrome' not in ua_lower:
+        browser = 'Safari'
+    elif 'edg' in ua_lower:
+        browser = 'Edge'
+
+    # Detect OS
+    os_name = ''
+    if 'macintosh' in ua_lower or 'mac os' in ua_lower:
+        os_name = 'Mac'
+    elif 'windows' in ua_lower:
+        os_name = 'Windows'
+    elif 'linux' in ua_lower:
+        os_name = 'Linux'
+
+    if os_name:
+        return f'{browser} on {os_name}'
+    return browser
+
+
+@login_required
+@require_POST
+def push_unsubscribe(request):
+    """
+    Remove a push subscription.
+
+    Expects JSON body with:
+    - endpoint: Push service endpoint URL to remove
+    """
+    from .models import PushSubscription
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    endpoint = data.get('endpoint')
+    if not endpoint:
+        return JsonResponse({'error': 'Missing endpoint'}, status=400)
+
+    # Delete subscription
+    deleted, _ = PushSubscription.objects.filter(
+        user=request.user,
+        endpoint=endpoint
+    ).delete()
+
+    return JsonResponse({
+        'success': True,
+        'deleted': deleted > 0,
+    })
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def push_preferences(request):
+    """
+    View and update notification preferences.
+    """
+    from .models import NotificationPreference, PushSubscription
+
+    prefs = NotificationPreference.get_or_create_for_user(request.user)
+    subscriptions = PushSubscription.objects.filter(user=request.user, is_active=True)
+
+    if request.method == 'POST':
+        # Update preferences from form
+        prefs.announcements = request.POST.get('announcements') == 'on'
+        prefs.announcements_urgent_only = request.POST.get('announcements_urgent_only') == 'on'
+        prefs.direct_messages = request.POST.get('direct_messages') == 'on'
+        prefs.channel_messages = request.POST.get('channel_messages') == 'on'
+        prefs.channel_mentions_only = request.POST.get('channel_mentions_only') == 'on'
+        prefs.care_alerts = request.POST.get('care_alerts') == 'on'
+        prefs.care_urgent_only = request.POST.get('care_urgent_only') == 'on'
+        prefs.followup_reminders = request.POST.get('followup_reminders') == 'on'
+        prefs.quiet_hours_enabled = request.POST.get('quiet_hours_enabled') == 'on'
+
+        # Parse quiet hours
+        quiet_start = request.POST.get('quiet_hours_start', '')
+        quiet_end = request.POST.get('quiet_hours_end', '')
+
+        if quiet_start:
+            try:
+                from datetime import datetime
+                prefs.quiet_hours_start = datetime.strptime(quiet_start, '%H:%M').time()
+            except ValueError:
+                pass
+
+        if quiet_end:
+            try:
+                from datetime import datetime
+                prefs.quiet_hours_end = datetime.strptime(quiet_end, '%H:%M').time()
+            except ValueError:
+                pass
+
+        prefs.save()
+
+        if request.headers.get('HX-Request'):
+            return HttpResponse('<span class="text-green-500">Preferences saved!</span>')
+
+        return redirect('push_preferences')
+
+    context = {
+        'prefs': prefs,
+        'subscriptions': subscriptions,
+    }
+    return render(request, 'core/notifications/preferences.html', context)
+
+
+@login_required
+@require_POST
+def push_test(request):
+    """
+    Send a test notification to the current user.
+    """
+    from .notifications import send_test_notification
+
+    sent = send_test_notification(request.user)
+
+    if request.headers.get('HX-Request'):
+        if sent > 0:
+            return HttpResponse(f'<span class="text-green-500">Test notification sent to {sent} device(s)!</span>')
+        else:
+            return HttpResponse('<span class="text-yellow-500">No active subscriptions found. Enable notifications first.</span>')
+
+    return JsonResponse({
+        'success': sent > 0,
+        'sent': sent,
+    })
+
+
+@csrf_exempt
+@require_POST
+def notification_clicked(request):
+    """
+    Track when a notification is clicked (called from service worker).
+    """
+    from .models import NotificationLog
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    log_id = data.get('log_id')
+    if log_id:
+        NotificationLog.objects.filter(pk=log_id).update(
+            status='clicked',
+            clicked_at=timezone.now()
+        )
+
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def push_remove_device(request, subscription_id):
+    """
+    Remove a specific device/subscription.
+    """
+    from .models import PushSubscription
+
+    deleted, _ = PushSubscription.objects.filter(
+        pk=subscription_id,
+        user=request.user
+    ).delete()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('')  # Remove the row
+
+    return JsonResponse({'success': deleted > 0})
