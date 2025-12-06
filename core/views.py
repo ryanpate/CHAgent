@@ -1074,3 +1074,153 @@ def analytics_refresh_cache(request):
         return HttpResponse('<span class="text-green-500">Cache cleared!</span>')
 
     return redirect('analytics_dashboard')
+
+
+# ============================================================================
+# Proactive Care Dashboard Views
+# ============================================================================
+
+@login_required
+def care_dashboard(request):
+    """
+    Proactive care dashboard showing volunteers who need attention.
+
+    Displays insights organized by priority and type, with quick actions
+    for addressing each item.
+    """
+    from .reports import ProactiveCareGenerator, serialize_for_json
+    from .models import VolunteerInsight
+
+    # Generate new insights if requested
+    if request.GET.get('refresh') == '1':
+        generator = ProactiveCareGenerator()
+        generator.generate_all_insights()
+        return redirect('care_dashboard')
+
+    # Get dashboard data
+    generator = ProactiveCareGenerator()
+    dashboard = serialize_for_json(generator.get_proactive_care_dashboard())
+
+    # Get filter parameters
+    filter_type = request.GET.get('type', '')
+    filter_priority = request.GET.get('priority', '')
+
+    # Filter insights if needed
+    filtered_insights = []
+    all_insights = (
+        dashboard['by_priority']['urgent'] +
+        dashboard['by_priority']['high'] +
+        dashboard['by_priority']['medium'] +
+        dashboard['by_priority']['low']
+    )
+
+    for insight in all_insights:
+        if filter_type and insight['insight_type'] != filter_type:
+            continue
+        if filter_priority and insight['priority'] != filter_priority:
+            continue
+        filtered_insights.append(insight)
+
+    # Get type choices for filter dropdown
+    type_choices = [
+        ('no_recent_contact', 'No Recent Contact'),
+        ('prayer_need', 'Prayer Need'),
+        ('birthday_upcoming', 'Birthday Upcoming'),
+        ('overdue_followup', 'Overdue Follow-up'),
+        ('new_volunteer', 'New Volunteer'),
+    ]
+
+    context = {
+        'dashboard': dashboard,
+        'insights': filtered_insights if (filter_type or filter_priority) else all_insights,
+        'filter_type': filter_type,
+        'filter_priority': filter_priority,
+        'type_choices': type_choices,
+    }
+    return render(request, 'core/care/dashboard.html', context)
+
+
+@login_required
+@require_POST
+def care_dismiss_insight(request, pk):
+    """
+    Dismiss an insight (mark as addressed/dismissed).
+    """
+    from .models import VolunteerInsight
+
+    insight = get_object_or_404(VolunteerInsight, pk=pk)
+    action = request.POST.get('action', 'dismiss')
+    notes = request.POST.get('notes', '')
+
+    if action == 'address':
+        insight.status = 'addressed'
+    else:
+        insight.status = 'dismissed'
+
+    insight.addressed_by = request.user
+    insight.addressed_at = timezone.now()
+    if notes:
+        insight.context_data['resolution_notes'] = notes
+        insight.save()
+    else:
+        insight.save()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('')  # Remove the card from UI
+
+    return redirect('care_dashboard')
+
+
+@login_required
+@require_POST
+def care_create_followup(request, pk):
+    """
+    Create a follow-up from an insight.
+    """
+    from .models import VolunteerInsight
+
+    insight = get_object_or_404(VolunteerInsight, pk=pk)
+
+    # Create a follow-up based on the insight
+    followup = FollowUp.objects.create(
+        created_by=request.user,
+        volunteer=insight.volunteer,
+        title=insight.title,
+        description=f"{insight.message}\n\nSuggested action: {insight.suggested_action}",
+        priority='high' if insight.priority in ['urgent', 'high'] else 'medium',
+        category='care',
+    )
+
+    # Mark insight as addressed
+    insight.status = 'addressed'
+    insight.addressed_by = request.user
+    insight.addressed_at = timezone.now()
+    insight.context_data['created_followup_id'] = followup.id
+    insight.save()
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/care_insight_actioned.html', {
+            'insight': insight,
+            'followup': followup,
+        })
+
+    return redirect('followup_detail', pk=followup.pk)
+
+
+@login_required
+@require_POST
+def care_refresh_insights(request):
+    """
+    Generate new proactive care insights.
+    """
+    from .reports import ProactiveCareGenerator
+
+    generator = ProactiveCareGenerator()
+    results = generator.generate_all_insights()
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/care_refresh_result.html', {
+            'results': results,
+        })
+
+    return redirect('care_dashboard')

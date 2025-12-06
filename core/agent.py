@@ -126,6 +126,15 @@ def is_analytics_query(message: str) -> Tuple[bool, str]:
             r'(?:upcoming|pending)\s+(?:birthdays?|anniversaries?)',
             r'volunteers?\s+(?:to|we\s+should)\s+(?:check\s+(?:in\s+)?(?:on|with)|reach\s+out)',
         ],
+        'proactive': [
+            r'proactive\s+care',
+            r'care\s+(?:dashboard|insights?|alerts?)',
+            r'who\s+(?:needs?|requires?)\s+(?:my|our|special)\s+attention',
+            r'volunteers?\s+(?:I|we)\s+(?:should|need\s+to)\s+(?:be\s+)?(?:aware\s+of|watching|monitoring)',
+            r'(?:urgent|high\s+priority)\s+(?:care|volunteer)\s+(?:needs?|items?|alerts?)',
+            r'what\s+(?:should|do)\s+(?:I|we)\s+(?:focus|work)\s+on\s+(?:today|this\s+week)',
+            r'care\s+priorities?',
+        ],
         'trends': [
             r'interaction\s+(?:trend|trends|history|over\s+time)',
             r'(?:how|what)\s+(?:has|have)\s+(?:been\s+)?(?:the\s+)?interactions?',
@@ -239,6 +248,10 @@ For detailed reports, visit the [Analytics Dashboard](/analytics/)."""
         response += "\nFor the full care report, visit [Team Care](/analytics/care/)."
         return response
 
+    elif report_type == 'proactive':
+        from .reports import get_proactive_care_for_aria
+        return get_proactive_care_for_aria()
+
     elif report_type == 'trends':
         report = generator.interaction_trends_report(group_by='week')
         stats = report.get('total_stats', {})
@@ -302,7 +315,7 @@ For detailed reports, visit the [Analytics Dashboard](/analytics/)."""
         response += "\nFor detailed AI metrics, visit [AI Performance](/analytics/ai/)."
         return response
 
-    return "I can provide team analytics. Try asking about:\n- Team overview/summary\n- Volunteer engagement\n- Team care needs\n- Interaction trends\n- Prayer request summary\n- AI performance"
+    return "I can provide team analytics. Try asking about:\n- Team overview/summary\n- Volunteer engagement\n- Proactive care / who needs attention\n- Team care needs\n- Interaction trends\n- Prayer request summary\n- AI performance"
 
 
 def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:

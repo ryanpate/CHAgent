@@ -36,4 +36,9 @@ urlpatterns = [
     path('analytics/ai/', views.analytics_ai_performance, name='analytics_ai_performance'),
     path('analytics/export/<str:report_type>/', views.analytics_export, name='analytics_export'),
     path('analytics/refresh/', views.analytics_refresh_cache, name='analytics_refresh_cache'),
+    # Proactive Care Dashboard
+    path('care/', views.care_dashboard, name='care_dashboard'),
+    path('care/dismiss/<int:pk>/', views.care_dismiss_insight, name='care_dismiss_insight'),
+    path('care/followup/<int:pk>/', views.care_create_followup, name='care_create_followup'),
+    path('care/refresh/', views.care_refresh_insights, name='care_refresh_insights'),
 ]

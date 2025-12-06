@@ -1,0 +1,31 @@
+<div class="bg-ch-dark rounded-lg p-4 mb-4 border-l-4 border-ch-gold">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <div>
+                <p class="font-medium">Scan Complete</p>
+                <p class="text-sm text-gray-400">
+                    {% if results.total_new > 0 %}
+                    Found <span class="text-ch-gold font-semibold">{{ results.total_new }}</span> new insight(s)
+                    {% else %}
+                    No new insights found
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        {% if results.total_new > 0 %}
+        <a href="{% url 'care_dashboard' %}" class="text-ch-gold hover:underline text-sm">Refresh page</a>
+        {% endif %}
+    </div>
+    {% if results.by_type %}
+    <div class="mt-3 flex flex-wrap gap-2 text-xs">
+        {% for type_name, count in results.by_type.items %}
+        {% if count > 0 %}
+        <span class="bg-ch-gray px-2 py-1 rounded">{{ type_name|title }}: {{ count }}</span>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
