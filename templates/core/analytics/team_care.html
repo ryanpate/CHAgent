@@ -48,7 +48,7 @@
                             {% if followup.volunteer_name %}
                             <a href="{% url 'volunteer_detail' followup.volunteer_id %}" class="text-ch-gold hover:underline">{{ followup.volunteer_name }}</a> &bull;
                             {% endif %}
-                            Due {{ followup.due_date|date:"M d" }} &bull;
+                            Due {{ followup.due_date|slice:":10" }} &bull;
                             <span class="text-red-400">{{ followup.days_overdue }} days overdue</span>
                         </p>
                         <div class="flex items-center gap-2 mt-2">
@@ -92,7 +92,7 @@
                         <p class="font-medium text-sm">{{ followup.title }}</p>
                         <p class="text-xs text-gray-500">
                             {% if followup.volunteer_name %}{{ followup.volunteer_name }} &bull; {% endif %}
-                            Due {{ followup.due_date|date:"M d" }}
+                            Due {{ followup.due_date|slice:":10" }}
                         </p>
                     </div>
                     <span class="px-2 py-1 text-xs rounded
@@ -166,7 +166,7 @@
             <div class="bg-ch-gray/50 rounded p-4">
                 <div class="flex items-center justify-between mb-2">
                     <a href="{% url 'volunteer_detail' pr.volunteer_id %}" class="font-medium text-ch-gold hover:underline">{{ pr.volunteer_name }}</a>
-                    <span class="text-xs text-gray-500">{{ pr.date|date:"M d, Y" }}</span>
+                    <span class="text-xs text-gray-500">{{ pr.date|slice:":10" }}</span>
                 </div>
                 <p class="text-sm text-gray-300">{{ pr.request }}</p>
                 {% if pr.is_verified %}

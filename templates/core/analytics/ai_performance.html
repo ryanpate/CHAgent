@@ -135,7 +135,7 @@
                 <div class="flex flex-col md:flex-row md:items-start justify-between gap-2 mb-2">
                     <div class="flex items-center gap-2">
                         <span class="px-2 py-0.5 text-xs rounded bg-red-500/20 text-red-400">{{ issue.issue_type_display }}</span>
-                        <span class="text-xs text-gray-500">{{ issue.created_at|timesince }} ago</span>
+                        <span class="text-xs text-gray-500">{{ issue.created_at|slice:":10" }}</span>
                     </div>
                     <span class="text-xs text-gray-400">by {{ issue.user }}</span>
                 </div>

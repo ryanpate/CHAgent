@@ -67,7 +67,7 @@
                         <p class="font-medium text-sm">{{ followup.title }}</p>
                         <p class="text-xs text-gray-500">
                             {% if followup.volunteer_name %}{{ followup.volunteer_name }}{% endif %}
-                            {% if followup.due_date %} &bull; Due {{ followup.due_date|date:"M d" }}{% endif %}
+                            {% if followup.due_date %} &bull; Due {{ followup.due_date|slice:":10" }}{% endif %}
                         </p>
                     </div>
                     <a href="{% url 'followup_detail' followup.id %}" class="text-ch-gold text-sm hover:underline">View</a>
@@ -91,7 +91,7 @@
                         {% if pr.is_verified %}
                         <span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">Verified</span>
                         {% endif %}
-                        <span class="text-xs text-gray-500">{{ pr.date|date:"M d, Y" }}</span>
+                        <span class="text-xs text-gray-500">{{ pr.date|slice:":10" }}</span>
                     </div>
                 </div>
                 <p class="text-gray-300">{{ pr.request }}</p>
@@ -120,7 +120,7 @@
                     {% for req in requests|slice:":3" %}
                     <div class="text-sm text-gray-300 border-l-2 border-gray-600 pl-3">
                         {{ req.request|truncatewords:20 }}
-                        <span class="text-xs text-gray-500 block">{{ req.date|date:"M d" }}</span>
+                        <span class="text-xs text-gray-500 block">{{ req.date|slice:":10" }}</span>
                     </div>
                     {% endfor %}
                     {% if requests|length > 3 %}
