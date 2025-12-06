@@ -9,7 +9,8 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST, require_http_methods
-from django.db.models import Count
+from django.db import models
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from .models import Interaction, Volunteer, ChatMessage, ConversationContext, FollowUp, ResponseFeedback
@@ -1224,3 +1225,350 @@ def care_refresh_insights(request):
         })
 
     return redirect('care_dashboard')
+
+
+# ============================================================================
+# Team Communication Hub Views
+# ============================================================================
+
+@login_required
+def comms_hub(request):
+    """
+    Main communication hub - shows announcements, channels, and messages.
+    """
+    from .models import Announcement, Channel, DirectMessage, AnnouncementRead
+
+    # Get active announcements
+    now = timezone.now()
+    announcements = Announcement.objects.filter(
+        is_active=True
+    ).filter(
+        models.Q(publish_at__isnull=True) | models.Q(publish_at__lte=now)
+    ).filter(
+        models.Q(expires_at__isnull=True) | models.Q(expires_at__gte=now)
+    ).select_related('author')[:10]
+
+    # Mark read status for each announcement
+    read_ids = set(
+        AnnouncementRead.objects.filter(
+            user=request.user,
+            announcement__in=announcements
+        ).values_list('announcement_id', flat=True)
+    )
+    for ann in announcements:
+        ann.is_read = ann.id in read_ids
+
+    # Get channels user can access
+    channels = Channel.objects.filter(
+        is_archived=False
+    ).filter(
+        models.Q(is_private=False) | models.Q(members=request.user)
+    ).distinct()
+
+    # Get unread DM count
+    unread_dm_count = DirectMessage.objects.filter(
+        recipient=request.user,
+        is_read=False
+    ).count()
+
+    # Get recent DM conversations
+    recent_dms = DirectMessage.objects.filter(
+        models.Q(sender=request.user) | models.Q(recipient=request.user)
+    ).select_related('sender', 'recipient').order_by('-created_at')[:20]
+
+    # Group by conversation partner
+    conversations = {}
+    for dm in recent_dms:
+        partner = dm.recipient if dm.sender == request.user else dm.sender
+        if partner and partner.id not in conversations:
+            conversations[partner.id] = {
+                'partner': partner,
+                'last_message': dm,
+                'unread': not dm.is_read and dm.recipient == request.user
+            }
+
+    context = {
+        'announcements': announcements,
+        'channels': channels,
+        'conversations': list(conversations.values())[:10],
+        'unread_dm_count': unread_dm_count,
+    }
+    return render(request, 'core/comms/hub.html', context)
+
+
+@login_required
+def announcements_list(request):
+    """List all announcements."""
+    from .models import Announcement, AnnouncementRead
+
+    now = timezone.now()
+    announcements = Announcement.objects.filter(
+        is_active=True
+    ).filter(
+        models.Q(publish_at__isnull=True) | models.Q(publish_at__lte=now)
+    ).filter(
+        models.Q(expires_at__isnull=True) | models.Q(expires_at__gte=now)
+    ).select_related('author')
+
+    # Mark read status
+    read_ids = set(
+        AnnouncementRead.objects.filter(
+            user=request.user,
+            announcement__in=announcements
+        ).values_list('announcement_id', flat=True)
+    )
+    for ann in announcements:
+        ann.is_read = ann.id in read_ids
+
+    context = {
+        'announcements': announcements,
+    }
+    return render(request, 'core/comms/announcements.html', context)
+
+
+@login_required
+def announcement_detail(request, pk):
+    """View a single announcement and mark as read."""
+    from .models import Announcement, AnnouncementRead
+
+    announcement = get_object_or_404(Announcement, pk=pk)
+
+    # Mark as read
+    AnnouncementRead.objects.get_or_create(
+        announcement=announcement,
+        user=request.user
+    )
+
+    context = {
+        'announcement': announcement,
+    }
+    return render(request, 'core/comms/announcement_detail.html', context)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def announcement_create(request):
+    """Create a new announcement."""
+    from .models import Announcement
+
+    if request.method == 'POST':
+        title = request.POST.get('title', '').strip()
+        content = request.POST.get('content', '').strip()
+        priority = request.POST.get('priority', 'normal')
+        is_pinned = request.POST.get('is_pinned') == 'on'
+
+        if title and content:
+            Announcement.objects.create(
+                title=title,
+                content=content,
+                priority=priority,
+                is_pinned=is_pinned,
+                author=request.user
+            )
+            return redirect('announcements_list')
+
+    return render(request, 'core/comms/announcement_create.html')
+
+
+@login_required
+def channel_list(request):
+    """List all accessible channels."""
+    from .models import Channel
+
+    channels = Channel.objects.filter(
+        is_archived=False
+    ).filter(
+        models.Q(is_private=False) | models.Q(members=request.user)
+    ).distinct().annotate(
+        message_count=models.Count('messages')
+    )
+
+    context = {
+        'channels': channels,
+    }
+    return render(request, 'core/comms/channels.html', context)
+
+
+@login_required
+def channel_detail(request, slug):
+    """View a channel and its messages."""
+    from .models import Channel, ChannelMessage
+
+    channel = get_object_or_404(Channel, slug=slug)
+
+    # Check access
+    if not channel.can_access(request.user):
+        return redirect('channel_list')
+
+    messages = channel.messages.select_related('author').order_by('-created_at')[:50]
+    messages = list(reversed(messages))  # Show oldest first
+
+    context = {
+        'channel': channel,
+        'messages': messages,
+    }
+    return render(request, 'core/comms/channel_detail.html', context)
+
+
+@login_required
+@require_POST
+def channel_send_message(request, slug):
+    """Send a message to a channel."""
+    from .models import Channel, ChannelMessage
+
+    channel = get_object_or_404(Channel, slug=slug)
+
+    if not channel.can_access(request.user):
+        return HttpResponse('Access denied', status=403)
+
+    content = request.POST.get('content', '').strip()
+    if content:
+        message = ChannelMessage.objects.create(
+            channel=channel,
+            author=request.user,
+            content=content
+        )
+
+        if request.headers.get('HX-Request'):
+            return render(request, 'core/partials/channel_message.html', {
+                'message': message,
+            })
+
+    return redirect('channel_detail', slug=slug)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def channel_create(request):
+    """Create a new channel."""
+    from .models import Channel
+    from django.utils.text import slugify
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        channel_type = request.POST.get('channel_type', 'general')
+        is_private = request.POST.get('is_private') == 'on'
+
+        if name:
+            slug = slugify(name)
+            # Ensure unique slug
+            base_slug = slug
+            counter = 1
+            while Channel.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+
+            channel = Channel.objects.create(
+                name=name,
+                slug=slug,
+                description=description,
+                channel_type=channel_type,
+                is_private=is_private,
+                created_by=request.user
+            )
+            if is_private:
+                channel.members.add(request.user)
+
+            return redirect('channel_detail', slug=channel.slug)
+
+    return render(request, 'core/comms/channel_create.html')
+
+
+@login_required
+def dm_list(request):
+    """List direct message conversations."""
+    from .models import DirectMessage
+
+    # Get all DMs for user
+    dms = DirectMessage.objects.filter(
+        models.Q(sender=request.user) | models.Q(recipient=request.user)
+    ).select_related('sender', 'recipient').order_by('-created_at')
+
+    # Group by conversation partner
+    conversations = {}
+    for dm in dms:
+        partner = dm.recipient if dm.sender == request.user else dm.sender
+        if partner and partner.id not in conversations:
+            unread_count = DirectMessage.objects.filter(
+                sender=partner,
+                recipient=request.user,
+                is_read=False
+            ).count()
+            conversations[partner.id] = {
+                'partner': partner,
+                'last_message': dm,
+                'unread_count': unread_count
+            }
+
+    context = {
+        'conversations': list(conversations.values()),
+    }
+    return render(request, 'core/comms/dm_list.html', context)
+
+
+@login_required
+def dm_conversation(request, user_id):
+    """View conversation with a specific user."""
+    from .models import DirectMessage
+    from accounts.models import User
+
+    partner = get_object_or_404(User, pk=user_id)
+
+    # Get messages in this conversation
+    messages = DirectMessage.objects.filter(
+        models.Q(sender=request.user, recipient=partner) |
+        models.Q(sender=partner, recipient=request.user)
+    ).select_related('sender', 'recipient').order_by('created_at')[:100]
+
+    # Mark unread messages as read
+    DirectMessage.objects.filter(
+        sender=partner,
+        recipient=request.user,
+        is_read=False
+    ).update(is_read=True, read_at=timezone.now())
+
+    context = {
+        'partner': partner,
+        'messages': messages,
+    }
+    return render(request, 'core/comms/dm_conversation.html', context)
+
+
+@login_required
+@require_POST
+def dm_send(request, user_id):
+    """Send a direct message to a user."""
+    from .models import DirectMessage
+    from accounts.models import User
+
+    recipient = get_object_or_404(User, pk=user_id)
+    content = request.POST.get('content', '').strip()
+
+    if content:
+        message = DirectMessage.objects.create(
+            sender=request.user,
+            recipient=recipient,
+            content=content
+        )
+
+        if request.headers.get('HX-Request'):
+            return render(request, 'core/partials/dm_message.html', {
+                'message': message,
+                'is_sender': True,
+            })
+
+    return redirect('dm_conversation', user_id=user_id)
+
+
+@login_required
+def dm_new(request):
+    """Start a new DM conversation."""
+    from accounts.models import User
+
+    users = User.objects.exclude(pk=request.user.pk).order_by('display_name', 'username')
+
+    context = {
+        'users': users,
+    }
+    return render(request, 'core/comms/dm_new.html', context)

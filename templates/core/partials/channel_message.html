@@ -1,0 +1,12 @@
+<div class="flex gap-3" id="message-{{ message.id }}">
+    <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center text-sm font-medium text-ch-gold flex-shrink-0">
+        {{ message.author.display_name|default:message.author.username|slice:":1"|upper }}
+    </div>
+    <div class="flex-1 min-w-0">
+        <div class="flex items-baseline gap-2">
+            <span class="font-medium">{{ message.author.display_name|default:message.author.username }}</span>
+            <span class="text-xs text-gray-500">{{ message.created_at|date:"M j, g:i A" }}</span>
+        </div>
+        <p class="text-gray-300 break-words">{{ message.content }}</p>
+    </div>
+</div>

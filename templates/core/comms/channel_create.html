@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Channel{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <a href="{% url 'channel_list' %}" class="text-ch-gold hover:underline text-sm mb-4 inline-block">
+        &larr; Back to Channels
+    </a>
+
+    <div class="bg-ch-dark rounded-lg p-8">
+        <h2 class="text-2xl font-bold mb-6">Create Channel</h2>
+
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+
+            <div>
+                <label for="name" class="block text-sm font-medium mb-2">Channel Name</label>
+                <div class="flex items-center bg-ch-gray border border-gray-700 rounded-lg">
+                    <span class="px-4 text-gray-400 text-xl">#</span>
+                    <input type="text" id="name" name="name" required
+                           class="flex-1 bg-transparent py-3 pr-4 focus:outline-none"
+                           placeholder="e.g., vocals, band, sunday-planning">
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Use lowercase letters, numbers, and hyphens only</p>
+            </div>
+
+            <div>
+                <label for="description" class="block text-sm font-medium mb-2">Description (optional)</label>
+                <textarea id="description" name="description" rows="3"
+                          class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold"
+                          placeholder="What's this channel about?"></textarea>
+            </div>
+
+            <div>
+                <label for="channel_type" class="block text-sm font-medium mb-2">Channel Type</label>
+                <select id="channel_type" name="channel_type"
+                        class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold">
+                    <option value="general">General</option>
+                    <option value="team">Team Channel</option>
+                    <option value="topic">Topic Channel</option>
+                    <option value="project">Project Channel</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" name="is_private" class="w-5 h-5 rounded bg-ch-gray border-gray-700">
+                    <div>
+                        <span class="font-medium">Make this a private channel</span>
+                        <p class="text-xs text-gray-400">Only members you invite can see and post in this channel</p>
+                    </div>
+                </label>
+            </div>
+
+            <div class="flex gap-4 pt-4">
+                <button type="submit"
+                        class="flex-1 px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                    Create Channel
+                </button>
+                <a href="{% url 'channel_list' %}"
+                   class="px-6 py-3 bg-ch-gray hover:bg-gray-600 rounded-lg transition text-center">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}#{{ channel.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Channel Header -->
+    <div class="bg-ch-dark rounded-lg p-4 mb-4">
+        <div class="flex items-center gap-4">
+            <a href="{% url 'channel_list' %}" class="text-gray-400 hover:text-white">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </a>
+            <div class="flex-1">
+                <div class="flex items-center gap-2">
+                    <h2 class="text-xl font-bold">#{{ channel.name }}</h2>
+                    {% if channel.is_private %}
+                    <svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% endif %}
+                </div>
+                {% if channel.description %}
+                <p class="text-sm text-gray-400">{{ channel.description }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    <div id="messages-container" class="bg-ch-dark rounded-lg p-4 mb-4 h-[500px] overflow-y-auto space-y-4">
+        {% for message in messages %}
+        <div class="flex gap-3" id="message-{{ message.id }}">
+            <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center text-sm font-medium text-ch-gold flex-shrink-0">
+                {{ message.author.display_name|default:message.author.username|slice:":1"|upper }}
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-baseline gap-2">
+                    <span class="font-medium">{{ message.author.display_name|default:message.author.username }}</span>
+                    <span class="text-xs text-gray-500">{{ message.created_at|date:"M j, g:i A" }}</span>
+                    {% if message.is_edited %}
+                    <span class="text-xs text-gray-600">(edited)</span>
+                    {% endif %}
+                </div>
+                <p class="text-gray-300 break-words">{{ message.content }}</p>
+            </div>
+        </div>
+        {% empty %}
+        <div class="text-center py-12 text-gray-400">
+            <p>No messages yet. Start the conversation!</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Message Input -->
+    <form hx-post="{% url 'channel_send_message' channel.slug %}"
+          hx-target="#messages-container"
+          hx-swap="beforeend"
+          hx-on::after-request="this.reset(); document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;"
+          class="bg-ch-dark rounded-lg p-4">
+        {% csrf_token %}
+        <div class="flex gap-4">
+            <input type="text" name="content"
+                   placeholder="Message #{{ channel.name }}..."
+                   autocomplete="off"
+                   class="flex-1 bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold">
+            <button type="submit"
+                    class="px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                Send
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+// Auto-scroll to bottom on load
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('messages-container');
+    container.scrollTop = container.scrollHeight;
+});
+</script>
+{% endblock %}

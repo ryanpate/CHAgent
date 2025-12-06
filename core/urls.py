@@ -41,4 +41,17 @@ urlpatterns = [
     path('care/dismiss/<int:pk>/', views.care_dismiss_insight, name='care_dismiss_insight'),
     path('care/followup/<int:pk>/', views.care_create_followup, name='care_create_followup'),
     path('care/refresh/', views.care_refresh_insights, name='care_refresh_insights'),
+    # Team Communication Hub
+    path('comms/', views.comms_hub, name='comms_hub'),
+    path('comms/announcements/', views.announcements_list, name='announcements_list'),
+    path('comms/announcements/<int:pk>/', views.announcement_detail, name='announcement_detail'),
+    path('comms/announcements/new/', views.announcement_create, name='announcement_create'),
+    path('comms/channels/', views.channel_list, name='channel_list'),
+    path('comms/channels/new/', views.channel_create, name='channel_create'),
+    path('comms/channels/<slug:slug>/', views.channel_detail, name='channel_detail'),
+    path('comms/channels/<slug:slug>/send/', views.channel_send_message, name='channel_send_message'),
+    path('comms/messages/', views.dm_list, name='dm_list'),
+    path('comms/messages/new/', views.dm_new, name='dm_new'),
+    path('comms/messages/<int:user_id>/', views.dm_conversation, name='dm_conversation'),
+    path('comms/messages/<int:user_id>/send/', views.dm_send, name='dm_send'),
 ]
