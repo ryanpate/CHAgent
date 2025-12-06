@@ -1153,12 +1153,12 @@ def care_dismiss_insight(request, pk):
     notes = request.POST.get('notes', '')
 
     if action == 'address':
-        insight.status = 'addressed'
+        insight.status = 'actioned'
     else:
         insight.status = 'dismissed'
 
-    insight.addressed_by = request.user
-    insight.addressed_at = timezone.now()
+    insight.acknowledged_by = request.user
+    insight.acknowledged_at = timezone.now()
     if notes:
         insight.context_data['resolution_notes'] = notes
         insight.save()
@@ -1191,10 +1191,10 @@ def care_create_followup(request, pk):
         category='care',
     )
 
-    # Mark insight as addressed
-    insight.status = 'addressed'
-    insight.addressed_by = request.user
-    insight.addressed_at = timezone.now()
+    # Mark insight as actioned
+    insight.status = 'actioned'
+    insight.acknowledged_by = request.user
+    insight.acknowledged_at = timezone.now()
     insight.context_data['created_followup_id'] = followup.id
     insight.save()
 
