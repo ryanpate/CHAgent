@@ -21,10 +21,15 @@ logger = logging.getLogger(__name__)
 
 def get_vapid_keys():
     """Get VAPID keys from settings/environment."""
+    claims_email = getattr(settings, 'VAPID_CLAIMS_EMAIL', '') or 'mailto:wcwa@cherryhillsfamily.org'
+    # Ensure it has mailto: prefix
+    if claims_email and not claims_email.startswith('mailto:'):
+        claims_email = f'mailto:{claims_email}'
+
     return {
         'public_key': getattr(settings, 'VAPID_PUBLIC_KEY', ''),
         'private_key': getattr(settings, 'VAPID_PRIVATE_KEY', ''),
-        'claims_email': getattr(settings, 'VAPID_CLAIMS_EMAIL', 'mailto:admin@cherryhills.org'),
+        'claims_email': claims_email,
     }
 
 
