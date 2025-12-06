@@ -128,7 +128,7 @@
                         <a href="{% url 'volunteer_detail' volunteer.id %}" class="font-medium hover:text-ch-gold transition">{{ volunteer.name }}</a>
                         <p class="text-xs text-gray-500">{{ volunteer.team|default:"No team assigned" }}</p>
                     </div>
-                    <span class="text-gray-400 text-sm">{{ volunteer.created_at|date:"M d" }}</span>
+                    <span class="text-gray-400 text-sm">{{ volunteer.created_at|slice:":10" }}</span>
                 </div>
                 {% empty %}
                 <p class="text-gray-500 text-sm text-center py-4">No new volunteers in this period</p>
