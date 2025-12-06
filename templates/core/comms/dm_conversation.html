@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Chat with {{ partner.display_name|default:partner.username }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="bg-ch-dark rounded-lg p-4 mb-4">
+        <div class="flex items-center gap-4">
+            <a href="{% url 'dm_list' %}" class="text-gray-400 hover:text-white">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </a>
+            <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center text-lg font-medium text-ch-gold">
+                {{ partner.display_name|default:partner.username|slice:":1"|upper }}
+            </div>
+            <div>
+                <h2 class="text-lg font-bold">{{ partner.display_name|default:partner.username }}</h2>
+                <p class="text-sm text-gray-400">Direct message</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    <div id="messages-container" class="bg-ch-dark rounded-lg p-4 mb-4 h-[500px] overflow-y-auto space-y-4">
+        {% for message in messages %}
+        <div class="flex gap-3 {% if message.sender == request.user %}flex-row-reverse{% endif %}" id="dm-{{ message.id }}">
+            <div class="w-10 h-10 bg-{% if message.sender == request.user %}ch-gold{% else %}gray-600{% endif %}/20 rounded-full flex items-center justify-center text-sm font-medium {% if message.sender == request.user %}text-ch-gold{% else %}text-gray-400{% endif %} flex-shrink-0">
+                {{ message.sender.display_name|default:message.sender.username|slice:":1"|upper }}
+            </div>
+            <div class="max-w-[70%]">
+                <div class="{% if message.sender == request.user %}bg-ch-gold/20 text-white{% else %}bg-ch-gray{% endif %} rounded-lg px-4 py-2">
+                    <p class="break-words">{{ message.content }}</p>
+                </div>
+                <p class="text-xs text-gray-500 mt-1 {% if message.sender == request.user %}text-right{% endif %}">
+                    {{ message.created_at|date:"g:i A" }}
+                </p>
+            </div>
+        </div>
+        {% empty %}
+        <div class="text-center py-12 text-gray-400">
+            <p>Start your conversation with {{ partner.display_name|default:partner.username }}!</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Message Input -->
+    <form hx-post="{% url 'dm_send' partner.id %}"
+          hx-target="#messages-container"
+          hx-swap="beforeend"
+          hx-on::after-request="this.reset(); document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;"
+          class="bg-ch-dark rounded-lg p-4">
+        {% csrf_token %}
+        <div class="flex gap-4">
+            <input type="text" name="content"
+                   placeholder="Write a message..."
+                   autocomplete="off"
+                   class="flex-1 bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold">
+            <button type="submit"
+                    class="px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                Send
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('messages-container');
+    container.scrollTop = container.scrollHeight;
+});
+</script>
+{% endblock %}

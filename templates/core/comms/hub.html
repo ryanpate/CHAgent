@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block title %}Team Hub{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-ch-gold">Team Communication Hub</h2>
+            <p class="text-gray-400 text-sm mt-1">Stay connected with your worship arts team</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'announcement_create' %}" class="px-4 py-2 bg-ch-gold text-black rounded text-sm font-medium hover:bg-yellow-500 transition">
+                New Announcement
+            </a>
+            <a href="{% url 'channel_create' %}" class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition text-sm">
+                New Channel
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Announcements Column -->
+        <div class="lg:col-span-2">
+            <div class="bg-ch-dark rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path>
+                        </svg>
+                        Announcements
+                    </h3>
+                    <a href="{% url 'announcements_list' %}" class="text-ch-gold hover:underline text-sm">View all</a>
+                </div>
+
+                <div class="space-y-4">
+                    {% for announcement in announcements %}
+                    <a href="{% url 'announcement_detail' announcement.id %}"
+                       class="block bg-ch-gray/50 rounded-lg p-4 hover:bg-ch-gray transition
+                              {% if not announcement.is_read %}border-l-4 border-ch-gold{% endif %}">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    {% if announcement.is_pinned %}
+                                    <span class="text-ch-gold text-xs">Pinned</span>
+                                    {% endif %}
+                                    {% if announcement.priority == 'urgent' %}
+                                    <span class="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded">Urgent</span>
+                                    {% elif announcement.priority == 'important' %}
+                                    <span class="bg-orange-500/20 text-orange-400 text-xs px-2 py-0.5 rounded">Important</span>
+                                    {% endif %}
+                                </div>
+                                <h4 class="font-medium mb-1">{{ announcement.title }}</h4>
+                                <p class="text-gray-400 text-sm line-clamp-2">{{ announcement.content|truncatewords:30 }}</p>
+                            </div>
+                            <div class="text-xs text-gray-500 whitespace-nowrap">
+                                {{ announcement.created_at|timesince }} ago
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">By {{ announcement.author.display_name|default:announcement.author.username }}</p>
+                    </a>
+                    {% empty %}
+                    <div class="text-center py-8 text-gray-400">
+                        <p>No announcements yet.</p>
+                        <a href="{% url 'announcement_create' %}" class="text-ch-gold hover:underline text-sm mt-2 inline-block">Create the first one</a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Channels -->
+            <div class="bg-ch-dark rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
+                        </svg>
+                        Channels
+                    </h3>
+                    <a href="{% url 'channel_list' %}" class="text-ch-gold hover:underline text-sm">All</a>
+                </div>
+                <div class="space-y-2">
+                    {% for channel in channels %}
+                    <a href="{% url 'channel_detail' channel.slug %}"
+                       class="flex items-center gap-2 px-3 py-2 rounded hover:bg-ch-gray transition text-sm">
+                        <span class="text-gray-400">#</span>
+                        <span>{{ channel.name }}</span>
+                        {% if channel.is_private %}
+                        <svg class="w-3 h-3 text-gray-500 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
+                        </svg>
+                        {% endif %}
+                    </a>
+                    {% empty %}
+                    <p class="text-gray-400 text-sm text-center py-4">No channels yet</p>
+                    {% endfor %}
+                </div>
+                <a href="{% url 'channel_create' %}" class="block mt-4 text-center text-sm text-ch-gold hover:underline">
+                    + Create Channel
+                </a>
+            </div>
+
+            <!-- Direct Messages -->
+            <div class="bg-ch-dark rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                        </svg>
+                        Messages
+                        {% if unread_dm_count %}
+                        <span class="bg-ch-gold text-black text-xs px-2 py-0.5 rounded-full">{{ unread_dm_count }}</span>
+                        {% endif %}
+                    </h3>
+                    <a href="{% url 'dm_list' %}" class="text-ch-gold hover:underline text-sm">All</a>
+                </div>
+                <div class="space-y-2">
+                    {% for conv in conversations %}
+                    <a href="{% url 'dm_conversation' conv.partner.id %}"
+                       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-ch-gray transition">
+                        <div class="w-8 h-8 bg-ch-gold/20 rounded-full flex items-center justify-center text-sm font-medium text-ch-gold">
+                            {{ conv.partner.display_name|default:conv.partner.username|slice:":1"|upper }}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium truncate">{{ conv.partner.display_name|default:conv.partner.username }}</p>
+                            <p class="text-xs text-gray-400 truncate">{{ conv.last_message.content|truncatewords:5 }}</p>
+                        </div>
+                        {% if conv.unread %}
+                        <span class="w-2 h-2 bg-ch-gold rounded-full"></span>
+                        {% endif %}
+                    </a>
+                    {% empty %}
+                    <p class="text-gray-400 text-sm text-center py-4">No conversations yet</p>
+                    {% endfor %}
+                </div>
+                <a href="{% url 'dm_new' %}" class="block mt-4 text-center text-sm text-ch-gold hover:underline">
+                    + New Message
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

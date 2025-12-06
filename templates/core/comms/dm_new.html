@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}New Message{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <a href="{% url 'dm_list' %}" class="text-ch-gold hover:underline text-sm mb-4 inline-block">
+        &larr; Back to Messages
+    </a>
+
+    <div class="bg-ch-dark rounded-lg p-8">
+        <h2 class="text-2xl font-bold mb-6">Start a Conversation</h2>
+        <p class="text-gray-400 mb-6">Select a team member to message:</p>
+
+        <div class="space-y-2 max-h-[400px] overflow-y-auto">
+            {% for user in users %}
+            <a href="{% url 'dm_conversation' user.id %}"
+               class="flex items-center gap-4 p-4 rounded-lg hover:bg-ch-gray transition">
+                <div class="w-12 h-12 bg-ch-gold/20 rounded-full flex items-center justify-center text-lg font-medium text-ch-gold">
+                    {{ user.display_name|default:user.username|slice:":1"|upper }}
+                </div>
+                <div>
+                    <h3 class="font-semibold">{{ user.display_name|default:user.username }}</h3>
+                    {% if user.email %}
+                    <p class="text-sm text-gray-400">{{ user.email }}</p>
+                    {% endif %}
+                </div>
+            </a>
+            {% empty %}
+            <p class="text-center py-8 text-gray-400">No other team members found.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

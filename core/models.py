@@ -1344,3 +1344,258 @@ class VolunteerInsight(models.Model):
             volunteer_id=volunteer_id,
             status='active'
         ).order_by('-priority', '-created_at')
+
+
+# =============================================================================
+# Team Communication Hub Models
+# =============================================================================
+
+class Announcement(models.Model):
+    """
+    Team-wide announcements that all members can see.
+
+    Used for important updates, reminders, and information
+    that needs to reach the entire Worship Arts team.
+    """
+    PRIORITY_CHOICES = [
+        ('normal', 'Normal'),
+        ('important', 'Important'),
+        ('urgent', 'Urgent'),
+    ]
+
+    title = models.CharField(max_length=200)
+    content = models.TextField(help_text="Announcement content (supports markdown)")
+
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='announcements'
+    )
+
+    priority = models.CharField(
+        max_length=10,
+        choices=PRIORITY_CHOICES,
+        default='normal'
+    )
+
+    # Optional: target specific teams
+    target_teams = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of team names to target, empty means all teams"
+    )
+
+    # Pinned announcements stay at top
+    is_pinned = models.BooleanField(default=False)
+
+    # Scheduling
+    publish_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Schedule announcement for future (null = immediate)"
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Auto-hide after this date"
+    )
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_pinned', '-priority', '-created_at']
+        verbose_name = 'Announcement'
+        verbose_name_plural = 'Announcements'
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def is_published(self):
+        """Check if announcement should be visible."""
+        now = timezone.now()
+        if not self.is_active:
+            return False
+        if self.publish_at and self.publish_at > now:
+            return False
+        if self.expires_at and self.expires_at < now:
+            return False
+        return True
+
+
+class AnnouncementRead(models.Model):
+    """Track which users have read which announcements."""
+    announcement = models.ForeignKey(
+        Announcement,
+        on_delete=models.CASCADE,
+        related_name='reads'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='announcement_reads'
+    )
+    read_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['announcement', 'user']
+
+
+class Channel(models.Model):
+    """
+    Chat channels for team communication.
+
+    Channels can be team-specific (e.g., "Vocals", "Band") or
+    topic-specific (e.g., "Sunday Planning", "Equipment").
+    """
+    CHANNEL_TYPE_CHOICES = [
+        ('team', 'Team Channel'),
+        ('topic', 'Topic Channel'),
+        ('project', 'Project Channel'),
+        ('general', 'General'),
+    ]
+
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+
+    channel_type = models.CharField(
+        max_length=10,
+        choices=CHANNEL_TYPE_CHOICES,
+        default='general'
+    )
+
+    # For team channels, link to team name
+    team_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="For team channels, the team this channel is for"
+    )
+
+    # Members (if empty, all users can access)
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='channels'
+    )
+
+    # Channel settings
+    is_private = models.BooleanField(
+        default=False,
+        help_text="Private channels require membership"
+    )
+    is_archived = models.BooleanField(default=False)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_channels'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Channel'
+        verbose_name_plural = 'Channels'
+
+    def __str__(self):
+        return f"#{self.name}"
+
+    def can_access(self, user):
+        """Check if user can access this channel."""
+        if not self.is_private:
+            return True
+        return self.members.filter(pk=user.pk).exists()
+
+
+class ChannelMessage(models.Model):
+    """
+    Messages within a channel.
+    """
+    channel = models.ForeignKey(
+        Channel,
+        on_delete=models.CASCADE,
+        related_name='messages'
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='channel_messages'
+    )
+
+    content = models.TextField()
+
+    # Optional: attach to a volunteer or interaction
+    mentioned_volunteers = models.ManyToManyField(
+        Volunteer,
+        blank=True,
+        related_name='channel_mentions'
+    )
+
+    # For replies/threads
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='replies'
+    )
+
+    is_edited = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Channel Message'
+        verbose_name_plural = 'Channel Messages'
+
+    def __str__(self):
+        return f"{self.author} in {self.channel}: {self.content[:50]}"
+
+
+class DirectMessage(models.Model):
+    """
+    Private direct messages between two users.
+    """
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='sent_messages'
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='received_messages'
+    )
+
+    content = models.TextField()
+
+    # Read status
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Direct Message'
+        verbose_name_plural = 'Direct Messages'
+
+    def __str__(self):
+        return f"DM from {self.sender} to {self.recipient}"
+
+    def mark_as_read(self):
+        """Mark message as read."""
+        if not self.is_read:
+            self.is_read = True
+            self.read_at = timezone.now()
+            self.save(update_fields=['is_read', 'read_at'])

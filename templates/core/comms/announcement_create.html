@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}New Announcement{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <a href="{% url 'announcements_list' %}" class="text-ch-gold hover:underline text-sm mb-4 inline-block">
+        &larr; Back to Announcements
+    </a>
+
+    <div class="bg-ch-dark rounded-lg p-8">
+        <h2 class="text-2xl font-bold mb-6">Create Announcement</h2>
+
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+
+            <div>
+                <label for="title" class="block text-sm font-medium mb-2">Title</label>
+                <input type="text" id="title" name="title" required
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold"
+                       placeholder="Announcement title...">
+            </div>
+
+            <div>
+                <label for="content" class="block text-sm font-medium mb-2">Content</label>
+                <textarea id="content" name="content" rows="8" required
+                          class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold"
+                          placeholder="Write your announcement here... Markdown is supported."></textarea>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="priority" class="block text-sm font-medium mb-2">Priority</label>
+                    <select id="priority" name="priority"
+                            class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold">
+                        <option value="normal">Normal</option>
+                        <option value="important">Important</option>
+                        <option value="urgent">Urgent</option>
+                    </select>
+                </div>
+
+                <div class="flex items-end">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" name="is_pinned" class="w-5 h-5 rounded bg-ch-gray border-gray-700">
+                        <span>Pin this announcement</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex gap-4 pt-4">
+                <button type="submit"
+                        class="flex-1 px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                    Post Announcement
+                </button>
+                <a href="{% url 'announcements_list' %}"
+                   class="px-6 py-3 bg-ch-gray hover:bg-gray-600 rounded-lg transition text-center">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
