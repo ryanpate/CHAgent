@@ -54,4 +54,12 @@ urlpatterns = [
     path('comms/messages/new/', views.dm_new, name='dm_new'),
     path('comms/messages/<int:user_id>/', views.dm_conversation, name='dm_conversation'),
     path('comms/messages/<int:user_id>/send/', views.dm_send, name='dm_send'),
+    # Push Notifications
+    path('notifications/', views.push_preferences, name='push_preferences'),
+    path('notifications/vapid-key/', views.push_vapid_key, name='push_vapid_key'),
+    path('notifications/subscribe/', views.push_subscribe, name='push_subscribe'),
+    path('notifications/unsubscribe/', views.push_unsubscribe, name='push_unsubscribe'),
+    path('notifications/test/', views.push_test, name='push_test'),
+    path('notifications/clicked/', views.notification_clicked, name='notification_clicked'),
+    path('notifications/device/<int:subscription_id>/remove/', views.push_remove_device, name='push_remove_device'),
 ]

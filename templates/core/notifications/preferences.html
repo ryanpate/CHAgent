@@ -1,0 +1,371 @@
+{% extends 'base.html' %}
+
+{% block title %}Notification Settings{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">Notification Settings</h1>
+
+    <!-- Push Notification Status -->
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h2 class="text-lg font-semibold">Push Notifications</h2>
+                <p class="text-gray-400 text-sm">Receive notifications on this device</p>
+            </div>
+            <div id="push-status" class="flex items-center gap-2">
+                <span id="push-status-text" class="text-sm text-gray-400">Checking...</span>
+                <button id="push-toggle"
+                        class="px-4 py-2 rounded-lg font-medium transition hidden"
+                        onclick="togglePushNotifications()">
+                    Enable
+                </button>
+            </div>
+        </div>
+
+        <!-- Registered Devices -->
+        {% if subscriptions %}
+        <div class="border-t border-gray-700 pt-4 mt-4">
+            <h3 class="text-sm font-medium text-gray-400 mb-3">Registered Devices</h3>
+            <div class="space-y-2">
+                {% for sub in subscriptions %}
+                <div class="flex items-center justify-between py-2 px-3 bg-ch-gray rounded-lg" id="device-{{ sub.id }}">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl">
+                            {% if 'iPhone' in sub.device_name or 'iPad' in sub.device_name %}
+                            📱
+                            {% elif 'Android' in sub.device_name %}
+                            📱
+                            {% else %}
+                            💻
+                            {% endif %}
+                        </span>
+                        <div>
+                            <span class="font-medium">{{ sub.device_name }}</span>
+                            <p class="text-xs text-gray-500">Last active: {{ sub.last_used_at|timesince }} ago</p>
+                        </div>
+                    </div>
+                    <button hx-post="{% url 'push_remove_device' sub.id %}"
+                            hx-target="#device-{{ sub.id }}"
+                            hx-swap="outerHTML"
+                            class="text-gray-400 hover:text-red-500 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Test Notification -->
+        <div class="border-t border-gray-700 pt-4 mt-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-medium">Test Notifications</h3>
+                    <p class="text-xs text-gray-400">Send a test notification to verify it's working</p>
+                </div>
+                <button hx-post="{% url 'push_test' %}"
+                        hx-target="#test-result"
+                        hx-swap="innerHTML"
+                        class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded-lg transition text-sm">
+                    Send Test
+                </button>
+            </div>
+            <div id="test-result" class="mt-2 text-sm"></div>
+        </div>
+    </div>
+
+    <!-- Notification Preferences Form -->
+    <form method="POST" class="bg-ch-dark rounded-lg p-6">
+        {% csrf_token %}
+
+        <h2 class="text-lg font-semibold mb-4">Notification Preferences</h2>
+
+        <div class="space-y-6">
+            <!-- Announcements -->
+            <div class="border-b border-gray-700 pb-6">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="font-medium">Announcements</h3>
+                        <p class="text-sm text-gray-400">Team announcements and updates</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="announcements" class="sr-only peer" {% if prefs.announcements %}checked{% endif %}>
+                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-ch-gold"></div>
+                    </label>
+                </div>
+                <div class="mt-3 ml-4">
+                    <label class="flex items-center gap-2 text-sm text-gray-400">
+                        <input type="checkbox" name="announcements_urgent_only"
+                               class="rounded bg-ch-gray border-gray-600"
+                               {% if prefs.announcements_urgent_only %}checked{% endif %}>
+                        Only urgent announcements
+                    </label>
+                </div>
+            </div>
+
+            <!-- Direct Messages -->
+            <div class="border-b border-gray-700 pb-6">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="font-medium">Direct Messages</h3>
+                        <p class="text-sm text-gray-400">New private messages from team members</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="direct_messages" class="sr-only peer" {% if prefs.direct_messages %}checked{% endif %}>
+                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-ch-gold"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Channel Messages -->
+            <div class="border-b border-gray-700 pb-6">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="font-medium">Channel Messages</h3>
+                        <p class="text-sm text-gray-400">Messages in team channels</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="channel_messages" class="sr-only peer" {% if prefs.channel_messages %}checked{% endif %}>
+                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-ch-gold"></div>
+                    </label>
+                </div>
+                <div class="mt-3 ml-4">
+                    <label class="flex items-center gap-2 text-sm text-gray-400">
+                        <input type="checkbox" name="channel_mentions_only"
+                               class="rounded bg-ch-gray border-gray-600"
+                               {% if prefs.channel_mentions_only %}checked{% endif %}>
+                        Only when mentioned
+                    </label>
+                </div>
+            </div>
+
+            <!-- Care Alerts -->
+            <div class="border-b border-gray-700 pb-6">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="font-medium">Care Alerts</h3>
+                        <p class="text-sm text-gray-400">Proactive care alerts for volunteers</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="care_alerts" class="sr-only peer" {% if prefs.care_alerts %}checked{% endif %}>
+                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-ch-gold"></div>
+                    </label>
+                </div>
+                <div class="mt-3 ml-4">
+                    <label class="flex items-center gap-2 text-sm text-gray-400">
+                        <input type="checkbox" name="care_urgent_only"
+                               class="rounded bg-ch-gray border-gray-600"
+                               {% if prefs.care_urgent_only %}checked{% endif %}>
+                        Only urgent alerts
+                    </label>
+                </div>
+            </div>
+
+            <!-- Follow-up Reminders -->
+            <div class="border-b border-gray-700 pb-6">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="font-medium">Follow-up Reminders</h3>
+                        <p class="text-sm text-gray-400">Reminders for scheduled follow-ups</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="followup_reminders" class="sr-only peer" {% if prefs.followup_reminders %}checked{% endif %}>
+                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-ch-gold"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Quiet Hours -->
+            <div>
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="font-medium">Quiet Hours</h3>
+                        <p class="text-sm text-gray-400">Don't send notifications during these hours</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="quiet_hours_enabled" class="sr-only peer"
+                               {% if prefs.quiet_hours_enabled %}checked{% endif %}
+                               onchange="document.getElementById('quiet-hours-times').classList.toggle('hidden', !this.checked)">
+                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-ch-gold"></div>
+                    </label>
+                </div>
+                <div id="quiet-hours-times" class="mt-3 ml-4 flex items-center gap-4 {% if not prefs.quiet_hours_enabled %}hidden{% endif %}">
+                    <div>
+                        <label class="text-xs text-gray-400">From</label>
+                        <input type="time" name="quiet_hours_start"
+                               value="{{ prefs.quiet_hours_start|default:'22:00'|time:'H:i' }}"
+                               class="bg-ch-gray border border-gray-600 rounded px-3 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">To</label>
+                        <input type="time" name="quiet_hours_end"
+                               value="{{ prefs.quiet_hours_end|default:'07:00'|time:'H:i' }}"
+                               class="bg-ch-gray border border-gray-600 rounded px-3 py-1 text-sm">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="mt-8 flex items-center justify-between">
+            <div id="save-result"></div>
+            <button type="submit"
+                    hx-post="{% url 'push_preferences' %}"
+                    hx-target="#save-result"
+                    hx-swap="innerHTML"
+                    class="px-6 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                Save Preferences
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+// Push notification management
+const VAPID_PUBLIC_KEY_URL = '{% url "push_vapid_key" %}';
+const SUBSCRIBE_URL = '{% url "push_subscribe" %}';
+const UNSUBSCRIBE_URL = '{% url "push_unsubscribe" %}';
+
+async function checkPushStatus() {
+    const statusText = document.getElementById('push-status-text');
+    const toggleBtn = document.getElementById('push-toggle');
+
+    // Check if push is supported
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        statusText.textContent = 'Not supported in this browser';
+        statusText.className = 'text-sm text-yellow-500';
+        return;
+    }
+
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+
+        if (subscription) {
+            statusText.textContent = 'Enabled';
+            statusText.className = 'text-sm text-green-500';
+            toggleBtn.textContent = 'Disable';
+            toggleBtn.className = 'px-4 py-2 bg-gray-600 hover:bg-red-600 text-white rounded-lg font-medium transition';
+        } else {
+            statusText.textContent = 'Disabled';
+            statusText.className = 'text-sm text-gray-400';
+            toggleBtn.textContent = 'Enable';
+            toggleBtn.className = 'px-4 py-2 bg-ch-gold hover:bg-yellow-500 text-black rounded-lg font-medium transition';
+        }
+        toggleBtn.classList.remove('hidden');
+    } catch (error) {
+        console.error('Error checking push status:', error);
+        statusText.textContent = 'Error checking status';
+        statusText.className = 'text-sm text-red-500';
+    }
+}
+
+async function togglePushNotifications() {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+
+    if (subscription) {
+        // Disable - unsubscribe
+        await unsubscribeFromPush(subscription);
+    } else {
+        // Enable - subscribe
+        await subscribeToPush(registration);
+    }
+
+    // Refresh status and page to update device list
+    await checkPushStatus();
+    location.reload();
+}
+
+async function subscribeToPush(registration) {
+    try {
+        // Request notification permission
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            alert('Notification permission denied. Please enable notifications in your browser settings.');
+            return;
+        }
+
+        // Get VAPID public key
+        const response = await fetch(VAPID_PUBLIC_KEY_URL);
+        const { public_key } = await response.json();
+
+        if (!public_key) {
+            alert('Push notifications are not configured on the server.');
+            return;
+        }
+
+        // Convert VAPID key to Uint8Array
+        const applicationServerKey = urlBase64ToUint8Array(public_key);
+
+        // Subscribe to push
+        const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: applicationServerKey
+        });
+
+        // Send subscription to server
+        const subscribeResponse = await fetch(SUBSCRIBE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(subscription.toJSON())
+        });
+
+        const result = await subscribeResponse.json();
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to subscribe');
+        }
+
+    } catch (error) {
+        console.error('Error subscribing to push:', error);
+        alert('Failed to enable notifications: ' + error.message);
+    }
+}
+
+async function unsubscribeFromPush(subscription) {
+    try {
+        // Unsubscribe from push manager
+        await subscription.unsubscribe();
+
+        // Tell server to remove subscription
+        await fetch(UNSUBSCRIBE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ endpoint: subscription.endpoint })
+        });
+
+    } catch (error) {
+        console.error('Error unsubscribing from push:', error);
+        alert('Failed to disable notifications: ' + error.message);
+    }
+}
+
+// Helper function to convert VAPID key
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+// Check status on page load
+document.addEventListener('DOMContentLoaded', checkPushStatus);
+</script>
+{% endblock %}

@@ -1599,3 +1599,171 @@ class DirectMessage(models.Model):
             self.is_read = True
             self.read_at = timezone.now()
             self.save(update_fields=['is_read', 'read_at'])
+
+
+# =============================================================================
+# Push Notification Models
+# =============================================================================
+
+class PushSubscription(models.Model):
+    """
+    Stores push notification subscriptions for users.
+
+    Each subscription represents a browser/device that can receive
+    push notifications via the Web Push API.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='push_subscriptions'
+    )
+
+    # Web Push subscription data
+    endpoint = models.TextField(unique=True)
+    p256dh_key = models.CharField(max_length=200, help_text="Public key for encryption")
+    auth_key = models.CharField(max_length=100, help_text="Auth secret for encryption")
+
+    # Device info for user management
+    user_agent = models.TextField(blank=True)
+    device_name = models.CharField(max_length=100, blank=True, help_text="Friendly name like 'iPhone' or 'Chrome on Mac'")
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Push Subscription'
+        verbose_name_plural = 'Push Subscriptions'
+
+    def __str__(self):
+        return f"{self.user.username} - {self.device_name or 'Unknown device'}"
+
+    def to_webpush_dict(self):
+        """Return subscription info in format needed by pywebpush."""
+        return {
+            "endpoint": self.endpoint,
+            "keys": {
+                "p256dh": self.p256dh_key,
+                "auth": self.auth_key
+            }
+        }
+
+
+class NotificationPreference(models.Model):
+    """
+    User preferences for what notifications they want to receive.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notification_preferences'
+    )
+
+    # Notification types
+    announcements = models.BooleanField(default=True, help_text="New team announcements")
+    announcements_urgent_only = models.BooleanField(default=False, help_text="Only urgent announcements")
+
+    direct_messages = models.BooleanField(default=True, help_text="New direct messages")
+
+    channel_messages = models.BooleanField(default=False, help_text="New channel messages")
+    channel_mentions_only = models.BooleanField(default=True, help_text="Only when mentioned in channels")
+
+    care_alerts = models.BooleanField(default=True, help_text="Proactive care alerts")
+    care_urgent_only = models.BooleanField(default=False, help_text="Only urgent care alerts")
+
+    followup_reminders = models.BooleanField(default=True, help_text="Follow-up due date reminders")
+
+    # Quiet hours (don't send notifications during these times)
+    quiet_hours_enabled = models.BooleanField(default=False)
+    quiet_hours_start = models.TimeField(null=True, blank=True, help_text="Start of quiet hours (e.g., 22:00)")
+    quiet_hours_end = models.TimeField(null=True, blank=True, help_text="End of quiet hours (e.g., 07:00)")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Notification Preference'
+        verbose_name_plural = 'Notification Preferences'
+
+    def __str__(self):
+        return f"Notification preferences for {self.user.username}"
+
+    def should_send_now(self):
+        """Check if we're outside quiet hours."""
+        if not self.quiet_hours_enabled:
+            return True
+
+        if not self.quiet_hours_start or not self.quiet_hours_end:
+            return True
+
+        now = timezone.localtime().time()
+        start = self.quiet_hours_start
+        end = self.quiet_hours_end
+
+        # Handle overnight quiet hours (e.g., 22:00 - 07:00)
+        if start > end:
+            # Quiet if after start OR before end
+            return not (now >= start or now <= end)
+        else:
+            # Quiet if between start and end
+            return not (start <= now <= end)
+
+    @classmethod
+    def get_or_create_for_user(cls, user):
+        """Get or create notification preferences for a user."""
+        prefs, created = cls.objects.get_or_create(user=user)
+        return prefs
+
+
+class NotificationLog(models.Model):
+    """
+    Log of notifications sent for debugging and analytics.
+    """
+    NOTIFICATION_TYPES = [
+        ('announcement', 'Announcement'),
+        ('dm', 'Direct Message'),
+        ('channel', 'Channel Message'),
+        ('care', 'Care Alert'),
+        ('followup', 'Follow-up Reminder'),
+        ('test', 'Test Notification'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+        ('clicked', 'Clicked'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notification_logs'
+    )
+    subscription = models.ForeignKey(
+        PushSubscription,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
+    title = models.CharField(max_length=200)
+    body = models.TextField()
+    url = models.CharField(max_length=500, blank=True, help_text="URL to open when notification clicked")
+    data = models.JSONField(default=dict, blank=True, help_text="Additional data sent with notification")
+
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    error_message = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    clicked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Notification Log'
+        verbose_name_plural = 'Notification Logs'
+
+    def __str__(self):
+        return f"{self.notification_type}: {self.title} -> {self.user.username}"
