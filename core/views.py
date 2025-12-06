@@ -1237,7 +1237,12 @@ def comms_hub(request):
     """
     Main communication hub - shows announcements, channels, and messages.
     """
-    from .models import Announcement, Channel, DirectMessage, AnnouncementRead
+    from .models import Announcement, Channel, DirectMessage, AnnouncementRead, Project
+
+    # Get user's projects
+    projects = Project.objects.filter(
+        models.Q(owner=request.user) | models.Q(members=request.user)
+    ).exclude(status='archived').distinct().order_by('-updated_at')[:5]
 
     # Get active announcements
     now = timezone.now()
@@ -1291,6 +1296,7 @@ def comms_hub(request):
     context = {
         'announcements': announcements,
         'channels': channels,
+        'projects': projects,
         'conversations': list(conversations.values())[:10],
         'unread_dm_count': unread_dm_count,
     }
@@ -1607,6 +1613,387 @@ def dm_new(request):
         'users': users,
     }
     return render(request, 'core/comms/dm_new.html', context)
+
+
+# ============================================================================
+# Project and Task Views
+# ============================================================================
+
+@login_required
+def project_list(request):
+    """List all projects the user has access to."""
+    from .models import Project
+
+    # Get filter parameters
+    status_filter = request.GET.get('status', '')
+    my_projects = request.GET.get('mine', '') == '1'
+
+    # Base queryset - projects user owns or is a member of
+    projects = Project.objects.filter(
+        models.Q(owner=request.user) | models.Q(members=request.user)
+    ).distinct().select_related('owner').prefetch_related('members', 'tasks')
+
+    if status_filter:
+        projects = projects.filter(status=status_filter)
+
+    if my_projects:
+        projects = projects.filter(owner=request.user)
+
+    # Add task counts
+    projects = projects.annotate(
+        task_count=models.Count('tasks'),
+        completed_task_count=models.Count('tasks', filter=models.Q(tasks__status='completed'))
+    )
+
+    context = {
+        'projects': projects,
+        'status_filter': status_filter,
+        'my_projects': my_projects,
+        'status_choices': Project.STATUS_CHOICES,
+    }
+    return render(request, 'core/comms/project_list.html', context)
+
+
+@login_required
+def project_detail(request, pk):
+    """View a project and its tasks."""
+    from .models import Project, Task
+    from accounts.models import User
+
+    project = get_object_or_404(Project, pk=pk)
+
+    # Check access
+    if project.owner != request.user and request.user not in project.members.all():
+        return redirect('project_list')
+
+    # Get tasks grouped by status
+    tasks = project.tasks.select_related('created_by').prefetch_related('assignees')
+
+    tasks_by_status = {
+        'todo': tasks.filter(status='todo'),
+        'in_progress': tasks.filter(status='in_progress'),
+        'review': tasks.filter(status='review'),
+        'completed': tasks.filter(status='completed'),
+    }
+
+    # Get available users for assignment
+    available_users = User.objects.filter(is_active=True).order_by('display_name', 'username')
+
+    context = {
+        'project': project,
+        'tasks': tasks,
+        'tasks_by_status': tasks_by_status,
+        'available_users': available_users,
+        'priority_choices': Task.PRIORITY_CHOICES,
+    }
+    return render(request, 'core/comms/project_detail.html', context)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def project_create(request):
+    """Create a new project."""
+    from .models import Project, Channel
+    from accounts.models import User
+    from django.utils.text import slugify
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        priority = request.POST.get('priority', 'medium')
+        due_date_str = request.POST.get('due_date', '')
+        create_channel = request.POST.get('create_channel') == 'on'
+        member_ids = request.POST.getlist('members')
+
+        if name:
+            # Parse due date
+            due_date = None
+            if due_date_str:
+                try:
+                    from datetime import datetime
+                    due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    pass
+
+            # Create project
+            project = Project.objects.create(
+                name=name,
+                description=description,
+                priority=priority,
+                due_date=due_date,
+                owner=request.user,
+                status='active'
+            )
+
+            # Add members and notify them
+            if member_ids:
+                for member_id in member_ids:
+                    try:
+                        user = User.objects.get(pk=int(member_id))
+                        project.add_member(user, notify=True)
+                    except (ValueError, User.DoesNotExist):
+                        pass
+
+            # Optionally create a channel for the project
+            if create_channel:
+                slug = slugify(name)
+                base_slug = slug
+                counter = 1
+                while Channel.objects.filter(slug=slug).exists():
+                    slug = f"{base_slug}-{counter}"
+                    counter += 1
+
+                channel = Channel.objects.create(
+                    name=f"proj-{name[:50]}",
+                    slug=slug,
+                    description=f"Discussion channel for {name}",
+                    channel_type='project',
+                    is_private=True,
+                    created_by=request.user
+                )
+                channel.members.add(request.user)
+                channel.members.add(*project.members.all())
+                project.channel = channel
+                project.save()
+
+            return redirect('project_detail', pk=project.pk)
+
+    # Get available users
+    from accounts.models import User
+    available_users = User.objects.filter(is_active=True).exclude(pk=request.user.pk)
+
+    context = {
+        'available_users': available_users,
+        'priority_choices': Project.PRIORITY_CHOICES,
+    }
+    return render(request, 'core/comms/project_create.html', context)
+
+
+@login_required
+@require_POST
+def project_add_member(request, pk):
+    """Add a member to a project."""
+    from .models import Project
+    from accounts.models import User
+
+    project = get_object_or_404(Project, pk=pk)
+
+    # Only owner can add members
+    if project.owner != request.user:
+        return HttpResponse('Access denied', status=403)
+
+    user_id = request.POST.get('user_id')
+    if user_id:
+        try:
+            user = User.objects.get(pk=int(user_id))
+            project.add_member(user, notify=True)
+
+            # Also add to project channel if exists
+            if project.channel:
+                project.channel.members.add(user)
+        except (ValueError, User.DoesNotExist):
+            pass
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/project_members.html', {'project': project})
+
+    return redirect('project_detail', pk=pk)
+
+
+@login_required
+@require_POST
+def project_update_status(request, pk):
+    """Update project status."""
+    from .models import Project
+
+    project = get_object_or_404(Project, pk=pk)
+
+    if project.owner != request.user:
+        return HttpResponse('Access denied', status=403)
+
+    status = request.POST.get('status')
+    if status in dict(Project.STATUS_CHOICES):
+        project.status = status
+        if status == 'completed':
+            project.completed_at = timezone.now()
+        project.save()
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/project_status.html', {'project': project})
+
+    return redirect('project_detail', pk=pk)
+
+
+@login_required
+@require_POST
+def task_create(request, project_pk):
+    """Create a new task in a project."""
+    from .models import Project, Task
+    from accounts.models import User
+
+    project = get_object_or_404(Project, pk=project_pk)
+
+    # Check access
+    if project.owner != request.user and request.user not in project.members.all():
+        return HttpResponse('Access denied', status=403)
+
+    title = request.POST.get('title', '').strip()
+    description = request.POST.get('description', '').strip()
+    priority = request.POST.get('priority', 'medium')
+    due_date_str = request.POST.get('due_date', '')
+    assignee_ids = request.POST.getlist('assignees')
+
+    if title:
+        # Parse due date
+        due_date = None
+        if due_date_str:
+            try:
+                from datetime import datetime
+                due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        task = Task.objects.create(
+            project=project,
+            title=title,
+            description=description,
+            priority=priority,
+            due_date=due_date,
+            created_by=request.user
+        )
+
+        # Assign users and notify them
+        if assignee_ids:
+            for assignee_id in assignee_ids:
+                try:
+                    user = User.objects.get(pk=int(assignee_id))
+                    task.assign_to(user, notify=True)
+                except (ValueError, User.DoesNotExist):
+                    pass
+
+        if request.headers.get('HX-Request'):
+            return render(request, 'core/partials/task_card.html', {'task': task})
+
+    return redirect('project_detail', pk=project_pk)
+
+
+@login_required
+@require_POST
+def task_update_status(request, pk):
+    """Update task status."""
+    from .models import Task
+
+    task = get_object_or_404(Task, pk=pk)
+
+    # Check access
+    project = task.project
+    if project.owner != request.user and request.user not in project.members.all():
+        return HttpResponse('Access denied', status=403)
+
+    status = request.POST.get('status')
+    if status in dict(Task.STATUS_CHOICES):
+        task.status = status
+        if status == 'completed':
+            task.completed_at = timezone.now()
+        task.save()
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/task_card.html', {'task': task})
+
+    return redirect('project_detail', pk=task.project.pk)
+
+
+@login_required
+@require_POST
+def task_assign(request, pk):
+    """Assign a user to a task."""
+    from .models import Task
+    from accounts.models import User
+
+    task = get_object_or_404(Task, pk=pk)
+
+    # Check access
+    project = task.project
+    if project.owner != request.user and request.user not in project.members.all():
+        return HttpResponse('Access denied', status=403)
+
+    user_id = request.POST.get('user_id')
+    if user_id:
+        try:
+            user = User.objects.get(pk=int(user_id))
+            task.assign_to(user, notify=True)
+        except (ValueError, User.DoesNotExist):
+            pass
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/task_assignees.html', {'task': task})
+
+    return redirect('project_detail', pk=task.project.pk)
+
+
+@login_required
+@require_POST
+def task_comment(request, pk):
+    """Add a comment to a task."""
+    from .models import Task, TaskComment
+    from accounts.models import User
+    import re
+
+    task = get_object_or_404(Task, pk=pk)
+
+    # Check access
+    project = task.project
+    if project.owner != request.user and request.user not in project.members.all():
+        return HttpResponse('Access denied', status=403)
+
+    content = request.POST.get('content', '').strip()
+    if content:
+        comment = TaskComment.objects.create(
+            task=task,
+            author=request.user,
+            content=content
+        )
+
+        # Parse @mentions
+        mentioned_usernames = re.findall(r'@(\w+)', content)
+        if mentioned_usernames:
+            mentioned_users = User.objects.filter(username__in=mentioned_usernames)
+            comment.mentioned_users.set(mentioned_users)
+
+        # Send notifications
+        try:
+            from .notifications import notify_task_comment
+            notify_task_comment(comment)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to send task comment notification: {e}")
+
+        if request.headers.get('HX-Request'):
+            return render(request, 'core/partials/task_comment.html', {'comment': comment})
+
+    return redirect('project_detail', pk=task.project.pk)
+
+
+@login_required
+def task_detail(request, project_pk, pk):
+    """View a task's details."""
+    from .models import Project, Task
+
+    project = get_object_or_404(Project, pk=project_pk)
+    task = get_object_or_404(Task, pk=pk, project=project)
+
+    # Check access
+    if project.owner != request.user and request.user not in project.members.all():
+        return redirect('project_list')
+
+    comments = task.comments.select_related('author').prefetch_related('mentioned_users')
+
+    context = {
+        'project': project,
+        'task': task,
+        'comments': comments,
+    }
+    return render(request, 'core/comms/task_detail.html', context)
 
 
 # ============================================================================

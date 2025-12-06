@@ -11,7 +11,10 @@
             <p class="text-gray-400 text-sm mt-1">Stay connected with your worship arts team</p>
         </div>
         <div class="flex gap-2">
-            <a href="{% url 'announcement_create' %}" class="px-4 py-2 bg-ch-gold text-black rounded text-sm font-medium hover:bg-yellow-500 transition">
+            <a href="{% url 'project_create' %}" class="px-4 py-2 bg-ch-gold text-black rounded text-sm font-medium hover:bg-yellow-500 transition">
+                New Project
+            </a>
+            <a href="{% url 'announcement_create' %}" class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition text-sm">
                 New Announcement
             </a>
             <a href="{% url 'channel_create' %}" class="px-4 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded transition text-sm">
@@ -101,6 +104,42 @@
                 </div>
                 <a href="{% url 'channel_create' %}" class="block mt-4 text-center text-sm text-ch-gold hover:underline">
                     + Create Channel
+                </a>
+            </div>
+
+            <!-- Projects -->
+            <div class="bg-ch-dark rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                        </svg>
+                        Projects
+                    </h3>
+                    <a href="{% url 'project_list' %}" class="text-ch-gold hover:underline text-sm">All</a>
+                </div>
+                <div class="space-y-2">
+                    {% for project in projects %}
+                    <a href="{% url 'project_detail' project.pk %}"
+                       class="flex items-center justify-between px-3 py-2 rounded hover:bg-ch-gray transition text-sm">
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium truncate">{{ project.name }}</p>
+                            <p class="text-xs text-gray-500">{{ project.tasks.count }} tasks</p>
+                        </div>
+                        <span class="px-2 py-0.5 text-xs rounded
+                            {% if project.status == 'active' %}bg-green-900/50 text-green-400
+                            {% elif project.status == 'planning' %}bg-blue-900/50 text-blue-400
+                            {% elif project.status == 'on_hold' %}bg-yellow-900/50 text-yellow-400
+                            {% else %}bg-gray-700 text-gray-400{% endif %}">
+                            {{ project.get_status_display }}
+                        </span>
+                    </a>
+                    {% empty %}
+                    <p class="text-gray-400 text-sm text-center py-4">No projects yet</p>
+                    {% endfor %}
+                </div>
+                <a href="{% url 'project_create' %}" class="block mt-4 text-center text-sm text-ch-gold hover:underline">
+                    + Create Project
                 </a>
             </div>
 

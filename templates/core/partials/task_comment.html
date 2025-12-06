@@ -1,0 +1,24 @@
+<!-- Task Comment -->
+<div class="flex gap-3">
+    <div class="flex-shrink-0">
+        <div class="w-8 h-8 rounded-full bg-ch-gold text-black flex items-center justify-center text-sm font-medium">
+            {{ comment.author.display_name|default:comment.author.username|slice:":1"|upper }}
+        </div>
+    </div>
+    <div class="flex-1">
+        <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-sm">{{ comment.author.display_name|default:comment.author.username }}</span>
+            <span class="text-xs text-gray-500">{{ comment.created_at|timesince }} ago</span>
+        </div>
+        <div class="text-sm text-gray-300">
+            {{ comment.content|linebreaks }}
+        </div>
+        {% if comment.mentioned_users.exists %}
+        <div class="mt-2 flex flex-wrap gap-1">
+            {% for mentioned in comment.mentioned_users.all %}
+            <span class="text-xs text-ch-gold">@{{ mentioned.display_name|default:mentioned.username }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>

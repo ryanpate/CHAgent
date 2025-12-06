@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ task.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+        <a href="{% url 'project_list' %}" class="hover:text-white">Projects</a>
+        <span>/</span>
+        <a href="{% url 'project_detail' project.pk %}" class="hover:text-white">{{ project.name }}</a>
+        <span>/</span>
+        <span class="text-white">{{ task.title }}</span>
+    </div>
+
+    <!-- Task Header -->
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <div class="flex items-start justify-between mb-4">
+            <div class="flex-1">
+                <div class="flex items-center gap-3 mb-2">
+                    <h1 class="text-2xl font-bold">{{ task.title }}</h1>
+                    <span class="px-2 py-1 text-xs rounded-full
+                        {% if task.priority == 'urgent' %}bg-red-900/50 text-red-400
+                        {% elif task.priority == 'high' %}bg-orange-900/50 text-orange-400
+                        {% elif task.priority == 'medium' %}bg-yellow-900/50 text-yellow-400
+                        {% else %}bg-gray-700 text-gray-400{% endif %}">
+                        {{ task.get_priority_display }}
+                    </span>
+                </div>
+                {% if task.description %}
+                <p class="text-gray-400">{{ task.description }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Status Dropdown -->
+            <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open"
+                        class="px-3 py-2 rounded-lg text-sm
+                            {% if task.status == 'completed' %}bg-green-900/50 text-green-400
+                            {% elif task.status == 'in_progress' %}bg-blue-900/50 text-blue-400
+                            {% elif task.status == 'review' %}bg-yellow-900/50 text-yellow-400
+                            {% else %}bg-gray-700 text-gray-400{% endif %}">
+                    {{ task.get_status_display }}
+                    <svg class="w-4 h-4 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                <div x-show="open" @click.away="open = false"
+                     class="absolute right-0 mt-2 w-40 bg-ch-dark border border-gray-700 rounded-lg shadow-xl z-10">
+                    <form hx-post="{% url 'task_update_status' task.pk %}"
+                          hx-swap="none"
+                          hx-on::after-request="location.reload()"
+                          class="p-2">
+                        {% csrf_token %}
+                        <button type="submit" name="status" value="todo"
+                                class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">To Do</button>
+                        <button type="submit" name="status" value="in_progress"
+                                class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">In Progress</button>
+                        <button type="submit" name="status" value="review"
+                                class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">In Review</button>
+                        <button type="submit" name="status" value="completed"
+                                class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">Completed</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Meta -->
+        <div class="flex flex-wrap gap-6 text-sm">
+            {% if task.due_date %}
+            <div>
+                <span class="text-gray-500">Due Date</span>
+                <p class="{% if task.is_overdue %}text-red-400{% endif %}">
+                    {{ task.due_date|date:"M d, Y" }}
+                    {% if task.due_time %} at {{ task.due_time|time:"g:i A" }}{% endif %}
+                    {% if task.is_overdue %}(Overdue){% endif %}
+                </p>
+            </div>
+            {% endif %}
+
+            <div>
+                <span class="text-gray-500">Created</span>
+                <p>{{ task.created_at|date:"M d, Y" }} by {{ task.created_by.display_name|default:task.created_by.username }}</p>
+            </div>
+
+            <div>
+                <span class="text-gray-500">Assignees</span>
+                <div class="flex items-center gap-1 mt-1">
+                    {% for assignee in task.assignees.all %}
+                    <div class="px-2 py-1 bg-ch-gray rounded text-xs">
+                        {{ assignee.display_name|default:assignee.username }}
+                    </div>
+                    {% empty %}
+                    <span class="text-gray-400">Unassigned</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comments Section -->
+    <div class="bg-ch-dark rounded-lg p-6">
+        <h2 class="font-semibold mb-4">Comments</h2>
+
+        <div class="space-y-4 mb-6" id="task-comments">
+            {% for comment in comments %}
+            {% include 'core/partials/task_comment.html' %}
+            {% empty %}
+            <p class="text-gray-400 text-sm text-center py-4">No comments yet. Be the first to comment!</p>
+            {% endfor %}
+        </div>
+
+        <!-- Add Comment Form -->
+        <form hx-post="{% url 'task_comment' task.pk %}"
+              hx-target="#task-comments"
+              hx-swap="beforeend"
+              hx-on::after-request="this.reset()"
+              class="border-t border-gray-700 pt-4">
+            {% csrf_token %}
+            <textarea name="content" rows="2" required
+                      placeholder="Add a comment... Use @username to mention someone"
+                      class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold mb-2"></textarea>
+            <div class="flex justify-end">
+                <button type="submit"
+                        class="px-4 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition text-sm">
+                    Post Comment
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
