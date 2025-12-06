@@ -836,9 +836,8 @@ def analytics_dashboard(request):
     """
     Main analytics dashboard with overview metrics and quick links to reports.
     """
-    from .reports import ReportGenerator
+    from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
-    from datetime import datetime
 
     # Parse date range from request
     days = int(request.GET.get('days', 30))
@@ -853,7 +852,7 @@ def analytics_dashboard(request):
         summary = cached
     else:
         generator = ReportGenerator(date_from=date_from, date_to=date_to)
-        summary = generator.dashboard_summary()
+        summary = serialize_for_json(generator.dashboard_summary())
         # Cache for 15 minutes
         ReportCache.set_cached_report('dashboard_summary', summary, cache_params, ttl_minutes=15)
 
@@ -863,7 +862,7 @@ def analytics_dashboard(request):
         care_report = care_cached
     else:
         generator = ReportGenerator(date_from=date_from, date_to=date_to)
-        care_report = generator.team_care_report()
+        care_report = serialize_for_json(generator.team_care_report())
         ReportCache.set_cached_report('team_care', care_report, cache_params, ttl_minutes=15)
 
     context = {
@@ -881,7 +880,7 @@ def analytics_volunteer_engagement(request):
     """
     Detailed volunteer engagement report.
     """
-    from .reports import ReportGenerator
+    from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
 
     days = int(request.GET.get('days', 90))
@@ -895,7 +894,7 @@ def analytics_volunteer_engagement(request):
         report = cached
     else:
         generator = ReportGenerator(date_from=date_from, date_to=date_to)
-        report = generator.volunteer_engagement_report()
+        report = serialize_for_json(generator.volunteer_engagement_report())
         ReportCache.set_cached_report('volunteer_engagement', report, cache_params, ttl_minutes=30)
 
     context = {
@@ -910,7 +909,7 @@ def analytics_team_care(request):
     """
     Team care report - volunteers needing attention.
     """
-    from .reports import ReportGenerator
+    from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
 
     days = int(request.GET.get('days', 30))
@@ -924,7 +923,7 @@ def analytics_team_care(request):
         report = cached
     else:
         generator = ReportGenerator(date_from=date_from, date_to=date_to)
-        report = generator.team_care_report()
+        report = serialize_for_json(generator.team_care_report())
         ReportCache.set_cached_report('team_care', report, cache_params, ttl_minutes=15)
 
     context = {
@@ -939,7 +938,7 @@ def analytics_interaction_trends(request):
     """
     Interaction trends over time.
     """
-    from .reports import ReportGenerator
+    from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
 
     days = int(request.GET.get('days', 90))
@@ -954,7 +953,7 @@ def analytics_interaction_trends(request):
         report = cached
     else:
         generator = ReportGenerator(date_from=date_from, date_to=date_to)
-        report = generator.interaction_trends_report(group_by=group_by)
+        report = serialize_for_json(generator.interaction_trends_report(group_by=group_by))
         ReportCache.set_cached_report('interaction_trends', report, cache_params, ttl_minutes=30)
 
     context = {
@@ -970,7 +969,7 @@ def analytics_prayer_requests(request):
     """
     Prayer request summary and themes.
     """
-    from .reports import ReportGenerator
+    from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
 
     days = int(request.GET.get('days', 90))
@@ -984,7 +983,7 @@ def analytics_prayer_requests(request):
         report = cached
     else:
         generator = ReportGenerator(date_from=date_from, date_to=date_to)
-        report = generator.prayer_request_summary()
+        report = serialize_for_json(generator.prayer_request_summary())
         ReportCache.set_cached_report('prayer_summary', report, cache_params, ttl_minutes=30)
 
     context = {
@@ -999,7 +998,7 @@ def analytics_ai_performance(request):
     """
     AI (Aria) performance metrics.
     """
-    from .reports import ReportGenerator
+    from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
 
     days = int(request.GET.get('days', 30))
@@ -1013,7 +1012,7 @@ def analytics_ai_performance(request):
         report = cached
     else:
         generator = ReportGenerator(date_from=date_from, date_to=date_to)
-        report = generator.ai_performance_report()
+        report = serialize_for_json(generator.ai_performance_report())
         ReportCache.set_cached_report('ai_performance', report, cache_params, ttl_minutes=15)
 
     context = {
@@ -1028,8 +1027,7 @@ def analytics_export(request, report_type):
     """
     Export a report as JSON.
     """
-    from .reports import ReportGenerator
-    import json
+    from .reports import ReportGenerator, serialize_for_json
 
     days = int(request.GET.get('days', 90))
     date_to = timezone.now()
@@ -1051,15 +1049,9 @@ def analytics_export(request, report_type):
     if report_type not in report_methods:
         return JsonResponse({'error': 'Unknown report type'}, status=400)
 
-    report_data = report_methods[report_type]()
+    report_data = serialize_for_json(report_methods[report_type]())
 
-    # Convert datetime objects to strings for JSON serialization
-    def json_serializer(obj):
-        if hasattr(obj, 'isoformat'):
-            return obj.isoformat()
-        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
-    response = JsonResponse(report_data, json_dumps_params={'default': json_serializer, 'indent': 2})
+    response = JsonResponse(report_data, json_dumps_params={'indent': 2})
     response['Content-Disposition'] = f'attachment; filename="{report_type}_report.json"'
     return response
 

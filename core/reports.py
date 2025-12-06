@@ -9,9 +9,9 @@ This module provides comprehensive reporting capabilities:
 - Service participation analysis
 - AI performance metrics
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from collections import Counter, defaultdict
-from typing import Optional
+from typing import Optional, Any
 import logging
 
 from django.db.models import Count, Q, Avg, F
@@ -28,6 +28,28 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def serialize_for_json(obj: Any) -> Any:
+    """
+    Recursively convert datetime objects to ISO format strings for JSON serialization.
+
+    Args:
+        obj: Any object (dict, list, datetime, etc.)
+
+    Returns:
+        JSON-serializable version of the object
+    """
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {key: serialize_for_json(value) for key, value in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [serialize_for_json(item) for item in obj]
+    elif hasattr(obj, '__dict__'):
+        # Handle model instances or other objects with __dict__
+        return str(obj)
+    return obj
 
 
 class ReportGenerator:
