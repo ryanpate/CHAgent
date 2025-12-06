@@ -54,6 +54,17 @@ urlpatterns = [
     path('comms/messages/new/', views.dm_new, name='dm_new'),
     path('comms/messages/<int:user_id>/', views.dm_conversation, name='dm_conversation'),
     path('comms/messages/<int:user_id>/send/', views.dm_send, name='dm_send'),
+    # Projects and Tasks
+    path('comms/projects/', views.project_list, name='project_list'),
+    path('comms/projects/new/', views.project_create, name='project_create'),
+    path('comms/projects/<int:pk>/', views.project_detail, name='project_detail'),
+    path('comms/projects/<int:pk>/add-member/', views.project_add_member, name='project_add_member'),
+    path('comms/projects/<int:pk>/status/', views.project_update_status, name='project_update_status'),
+    path('comms/projects/<int:project_pk>/tasks/new/', views.task_create, name='task_create'),
+    path('comms/projects/<int:project_pk>/tasks/<int:pk>/', views.task_detail, name='task_detail'),
+    path('tasks/<int:pk>/status/', views.task_update_status, name='task_update_status'),
+    path('tasks/<int:pk>/assign/', views.task_assign, name='task_assign'),
+    path('tasks/<int:pk>/comment/', views.task_comment, name='task_comment'),
     # Push Notifications
     path('notifications/', views.push_preferences, name='push_preferences'),
     path('notifications/vapid-key/', views.push_vapid_key, name='push_vapid_key'),

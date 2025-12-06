@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block title %}New Project{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="flex items-center gap-3 mb-6">
+        <a href="{% url 'project_list' %}" class="text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+        </a>
+        <h1 class="text-2xl font-bold">New Project</h1>
+    </div>
+
+    <form method="POST" class="bg-ch-dark rounded-lg p-6">
+        {% csrf_token %}
+
+        <div class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Project Name</label>
+                <input type="text" name="name" required
+                       placeholder="e.g., Easter 2025 Planning"
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Description</label>
+                <textarea name="description" rows="3"
+                          placeholder="What is this project about?"
+                          class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold"></textarea>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Priority</label>
+                    <select name="priority"
+                            class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2">
+                        {% for value, label in priority_choices %}
+                        <option value="{{ value }}" {% if value == 'medium' %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Due Date</label>
+                    <input type="date" name="due_date"
+                           class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Team Members</label>
+                <select name="members" multiple
+                        class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 h-32">
+                    {% for user in available_users %}
+                    <option value="{{ user.pk }}">{{ user.display_name|default:user.username }}</option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple team members. They'll be notified when added.</p>
+            </div>
+
+            <div>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="create_channel" checked
+                           class="rounded bg-ch-gray border-gray-600">
+                    <span class="text-sm">Create a discussion channel for this project</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-700">
+            <a href="{% url 'project_list' %}"
+               class="px-4 py-2 text-gray-400 hover:text-white transition">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="px-6 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                Create Project
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

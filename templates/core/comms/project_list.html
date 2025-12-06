@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+
+{% block title %}Projects{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold">Projects</h1>
+            <p class="text-gray-400 text-sm">Manage team projects and tasks</p>
+        </div>
+        <a href="{% url 'project_create' %}"
+           class="px-4 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+            New Project
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex gap-4 mb-6">
+        <select onchange="window.location.href='?status=' + this.value + '{% if my_projects %}&mine=1{% endif %}'"
+                class="bg-ch-dark border border-gray-700 rounded-lg px-3 py-2 text-sm">
+            <option value="">All Statuses</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox"
+                   {% if my_projects %}checked{% endif %}
+                   onchange="window.location.href='?{% if status_filter %}status={{ status_filter }}&{% endif %}mine=' + (this.checked ? '1' : '')"
+                   class="rounded bg-ch-dark border-gray-600">
+            My Projects Only
+        </label>
+    </div>
+
+    <!-- Projects Grid -->
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for project in projects %}
+        <a href="{% url 'project_detail' project.pk %}"
+           class="bg-ch-dark rounded-lg p-5 hover:bg-ch-gray transition border border-gray-800 hover:border-ch-gold">
+            <div class="flex items-start justify-between mb-3">
+                <h3 class="font-semibold text-lg">{{ project.name }}</h3>
+                <span class="px-2 py-1 text-xs rounded-full
+                    {% if project.status == 'active' %}bg-green-900/50 text-green-400
+                    {% elif project.status == 'completed' %}bg-blue-900/50 text-blue-400
+                    {% elif project.status == 'on_hold' %}bg-yellow-900/50 text-yellow-400
+                    {% else %}bg-gray-700 text-gray-400{% endif %}">
+                    {{ project.get_status_display }}
+                </span>
+            </div>
+
+            {% if project.description %}
+            <p class="text-gray-400 text-sm mb-3 line-clamp-2">{{ project.description }}</p>
+            {% endif %}
+
+            <!-- Progress bar -->
+            <div class="mb-3">
+                <div class="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>Progress</span>
+                    <span>{{ project.progress_percent }}%</span>
+                </div>
+                <div class="h-2 bg-ch-gray rounded-full overflow-hidden">
+                    <div class="h-full bg-ch-gold rounded-full transition-all"
+                         style="width: {{ project.progress_percent }}%"></div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between text-sm">
+                <div class="flex items-center gap-2 text-gray-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    {{ project.completed_task_count }}/{{ project.task_count }} tasks
+                </div>
+
+                {% if project.due_date %}
+                <span class="{% if project.is_overdue %}text-red-400{% else %}text-gray-500{% endif %}">
+                    Due {{ project.due_date|date:"M d" }}
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- Members -->
+            <div class="flex items-center gap-1 mt-3">
+                {% for member in project.members.all|slice:":4" %}
+                <div class="w-7 h-7 rounded-full bg-ch-gold text-black flex items-center justify-center text-xs font-medium">
+                    {{ member.display_name|default:member.username|slice:":1"|upper }}
+                </div>
+                {% endfor %}
+                {% if project.members.count > 4 %}
+                <span class="text-xs text-gray-500">+{{ project.members.count|add:"-4" }}</span>
+                {% endif %}
+            </div>
+        </a>
+        {% empty %}
+        <div class="col-span-full text-center py-12 text-gray-400">
+            <svg class="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            </svg>
+            <p>No projects yet</p>
+            <a href="{% url 'project_create' %}" class="text-ch-gold hover:underline">Create your first project</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

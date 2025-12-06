@@ -1,0 +1,60 @@
+<!-- Task Card for Kanban Board -->
+<a href="{% url 'task_detail' task.project.pk task.pk %}"
+   class="block bg-ch-gray rounded-lg p-4 hover:bg-gray-700 transition group">
+    <div class="flex items-start justify-between mb-2">
+        <h4 class="font-medium group-hover:text-ch-gold transition">{{ task.title }}</h4>
+        <span class="px-2 py-0.5 text-xs rounded-full flex-shrink-0
+            {% if task.priority == 'urgent' %}bg-red-900/50 text-red-400
+            {% elif task.priority == 'high' %}bg-orange-900/50 text-orange-400
+            {% elif task.priority == 'medium' %}bg-yellow-900/50 text-yellow-400
+            {% else %}bg-gray-700 text-gray-400{% endif %}">
+            {{ task.get_priority_display }}
+        </span>
+    </div>
+
+    {% if task.description %}
+    <p class="text-sm text-gray-400 mb-3 line-clamp-2">{{ task.description|truncatewords:15 }}</p>
+    {% endif %}
+
+    <div class="flex items-center justify-between text-xs">
+        <!-- Due Date -->
+        {% if task.due_date %}
+        <span class="{% if task.is_overdue %}text-red-400{% else %}text-gray-500{% endif %}">
+            <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            {{ task.due_date|date:"M d" }}
+            {% if task.is_overdue %}(Overdue){% endif %}
+        </span>
+        {% else %}
+        <span></span>
+        {% endif %}
+
+        <!-- Assignees -->
+        <div class="flex -space-x-2">
+            {% for assignee in task.assignees.all|slice:":3" %}
+            <div class="w-6 h-6 rounded-full bg-ch-gold text-black flex items-center justify-center text-xs font-medium border-2 border-ch-gray"
+                 title="{{ assignee.display_name|default:assignee.username }}">
+                {{ assignee.display_name|default:assignee.username|slice:":1"|upper }}
+            </div>
+            {% endfor %}
+            {% if task.assignees.count > 3 %}
+            <div class="w-6 h-6 rounded-full bg-gray-600 text-gray-300 flex items-center justify-center text-xs border-2 border-ch-gray">
+                +{{ task.assignees.count|add:"-3" }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Comment Count -->
+    {% if task.comments.count > 0 %}
+    <div class="mt-2 pt-2 border-t border-gray-600 text-xs text-gray-500">
+        <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+        </svg>
+        {{ task.comments.count }} comment{{ task.comments.count|pluralize }}
+    </div>
+    {% endif %}
+</a>

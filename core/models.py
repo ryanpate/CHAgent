@@ -1531,6 +1531,13 @@ class ChannelMessage(models.Model):
 
     content = models.TextField()
 
+    # @mentions of users
+    mentioned_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='channel_mentions_received'
+    )
+
     # Optional: attach to a volunteer or interaction
     mentioned_volunteers = models.ManyToManyField(
         Volunteer,
@@ -1599,6 +1606,243 @@ class DirectMessage(models.Model):
             self.is_read = True
             self.read_at = timezone.now()
             self.save(update_fields=['is_read', 'read_at'])
+
+
+# =============================================================================
+# Project and Task Management Models
+# =============================================================================
+
+class Project(models.Model):
+    """
+    Projects for team coordination with tasks and deadlines.
+    """
+    STATUS_CHOICES = [
+        ('planning', 'Planning'),
+        ('active', 'Active'),
+        ('on_hold', 'On Hold'),
+        ('completed', 'Completed'),
+        ('archived', 'Archived'),
+    ]
+
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('urgent', 'Urgent'),
+    ]
+
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='planning'
+    )
+    priority = models.CharField(
+        max_length=10,
+        choices=PRIORITY_CHOICES,
+        default='medium'
+    )
+
+    # Dates
+    start_date = models.DateField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Team members
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='owned_projects'
+    )
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='projects'
+    )
+
+    # Optional: link to a channel for project discussions
+    channel = models.OneToOneField(
+        Channel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='project'
+    )
+
+    # For service-specific projects (e.g., "Easter 2025")
+    service_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="For service-specific projects"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Project'
+        verbose_name_plural = 'Projects'
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def is_overdue(self):
+        """Check if project is overdue."""
+        if self.due_date and self.status not in ['completed', 'archived']:
+            return timezone.now().date() > self.due_date
+        return False
+
+    @property
+    def progress_percent(self):
+        """Calculate project progress based on completed tasks."""
+        total = self.tasks.count()
+        if total == 0:
+            return 0
+        completed = self.tasks.filter(status='completed').count()
+        return int((completed / total) * 100)
+
+    def add_member(self, user, notify=True):
+        """Add a member to the project and optionally send notification."""
+        if user not in self.members.all():
+            self.members.add(user)
+            if notify:
+                from .notifications import notify_project_assignment
+                notify_project_assignment(self, user)
+
+
+class Task(models.Model):
+    """
+    Tasks within a project with assignments and due dates.
+    """
+    STATUS_CHOICES = [
+        ('todo', 'To Do'),
+        ('in_progress', 'In Progress'),
+        ('review', 'In Review'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('urgent', 'Urgent'),
+    ]
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='tasks'
+    )
+
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='todo'
+    )
+    priority = models.CharField(
+        max_length=10,
+        choices=PRIORITY_CHOICES,
+        default='medium'
+    )
+
+    # Assignment
+    assignees = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='assigned_tasks'
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_tasks'
+    )
+
+    # Dates
+    due_date = models.DateField(null=True, blank=True)
+    due_time = models.TimeField(null=True, blank=True, help_text="Optional specific time")
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Ordering within project
+    order = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', '-priority', 'due_date', 'created_at']
+        verbose_name = 'Task'
+        verbose_name_plural = 'Tasks'
+
+    def __str__(self):
+        return f"{self.title} ({self.project.name})"
+
+    @property
+    def is_overdue(self):
+        """Check if task is overdue."""
+        if self.due_date and self.status not in ['completed', 'cancelled']:
+            return timezone.now().date() > self.due_date
+        return False
+
+    def assign_to(self, user, notify=True):
+        """Assign task to a user and optionally send notification."""
+        if user not in self.assignees.all():
+            self.assignees.add(user)
+            if notify:
+                from .notifications import notify_task_assignment
+                notify_task_assignment(self, user)
+
+    def mark_completed(self):
+        """Mark task as completed."""
+        self.status = 'completed'
+        self.completed_at = timezone.now()
+        self.save(update_fields=['status', 'completed_at', 'updated_at'])
+
+
+class TaskComment(models.Model):
+    """
+    Comments on tasks for discussion and updates.
+    """
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='comments'
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='task_comments'
+    )
+
+    content = models.TextField()
+
+    # @mentions in comments
+    mentioned_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='task_comment_mentions'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Task Comment'
+        verbose_name_plural = 'Task Comments'
+
+    def __str__(self):
+        return f"Comment by {self.author} on {self.task.title}"
 
 
 # =============================================================================

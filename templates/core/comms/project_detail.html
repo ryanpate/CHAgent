@@ -1,0 +1,274 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="flex items-start justify-between mb-6">
+        <div>
+            <div class="flex items-center gap-3 mb-2">
+                <a href="{% url 'project_list' %}" class="text-gray-400 hover:text-white">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-bold">{{ project.name }}</h1>
+                <span class="px-2 py-1 text-xs rounded-full
+                    {% if project.status == 'active' %}bg-green-900/50 text-green-400
+                    {% elif project.status == 'completed' %}bg-blue-900/50 text-blue-400
+                    {% elif project.status == 'on_hold' %}bg-yellow-900/50 text-yellow-400
+                    {% else %}bg-gray-700 text-gray-400{% endif %}">
+                    {{ project.get_status_display }}
+                </span>
+            </div>
+            {% if project.description %}
+            <p class="text-gray-400">{{ project.description }}</p>
+            {% endif %}
+        </div>
+
+        <div class="flex items-center gap-2">
+            {% if project.channel %}
+            <a href="{% url 'channel_detail' project.channel.slug %}"
+               class="px-3 py-2 bg-ch-gray hover:bg-ch-gold hover:text-black rounded-lg transition text-sm">
+                Open Channel
+            </a>
+            {% endif %}
+            {% if project.owner == request.user %}
+            <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open" class="p-2 hover:bg-ch-gray rounded-lg transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                    </svg>
+                </button>
+                <div x-show="open" @click.away="open = false"
+                     class="absolute right-0 mt-2 w-48 bg-ch-dark border border-gray-700 rounded-lg shadow-xl z-10">
+                    <form hx-post="{% url 'project_update_status' project.pk %}"
+                          hx-target="#project-status"
+                          class="p-2">
+                        {% csrf_token %}
+                        <p class="text-xs text-gray-500 px-2 mb-1">Change Status</p>
+                        {% for value, label in project.STATUS_CHOICES %}
+                        <button type="submit" name="status" value="{{ value }}"
+                                class="w-full text-left px-2 py-1 text-sm hover:bg-ch-gray rounded">
+                            {{ label }}
+                        </button>
+                        {% endfor %}
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Project Info Bar -->
+    <div class="bg-ch-dark rounded-lg p-4 mb-6 flex flex-wrap gap-6">
+        {% if project.due_date %}
+        <div>
+            <span class="text-xs text-gray-500">Due Date</span>
+            <p class="{% if project.is_overdue %}text-red-400{% else %}text-white{% endif %}">
+                {{ project.due_date|date:"M d, Y" }}
+                {% if project.is_overdue %}(Overdue){% endif %}
+            </p>
+        </div>
+        {% endif %}
+        <div>
+            <span class="text-xs text-gray-500">Progress</span>
+            <div class="flex items-center gap-2">
+                <div class="w-24 h-2 bg-ch-gray rounded-full overflow-hidden">
+                    <div class="h-full bg-ch-gold rounded-full" style="width: {{ project.progress_percent }}%"></div>
+                </div>
+                <span class="text-sm">{{ project.progress_percent }}%</span>
+            </div>
+        </div>
+        <div>
+            <span class="text-xs text-gray-500">Owner</span>
+            <p>{{ project.owner.display_name|default:project.owner.username }}</p>
+        </div>
+        <div id="project-members">
+            <span class="text-xs text-gray-500">Team ({{ project.members.count }})</span>
+            <div class="flex items-center gap-1">
+                {% for member in project.members.all|slice:":5" %}
+                <div class="w-6 h-6 rounded-full bg-ch-gold text-black flex items-center justify-center text-xs font-medium"
+                     title="{{ member.display_name|default:member.username }}">
+                    {{ member.display_name|default:member.username|slice:":1"|upper }}
+                </div>
+                {% endfor %}
+                {% if project.owner == request.user %}
+                <button onclick="document.getElementById('add-member-modal').classList.remove('hidden')"
+                        class="w-6 h-6 rounded-full bg-ch-gray hover:bg-ch-gold hover:text-black flex items-center justify-center text-xs transition">
+                    +
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Board -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">Tasks</h2>
+            <button onclick="document.getElementById('add-task-modal').classList.remove('hidden')"
+                    class="px-3 py-1.5 bg-ch-gray hover:bg-ch-gold hover:text-black rounded-lg transition text-sm">
+                Add Task
+            </button>
+        </div>
+
+        <div class="grid md:grid-cols-4 gap-4">
+            <!-- To Do Column -->
+            <div class="bg-ch-dark rounded-lg p-4">
+                <h3 class="font-medium text-gray-400 mb-3 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-gray-500"></span>
+                    To Do
+                    <span class="text-xs">({{ tasks_by_status.todo.count }})</span>
+                </h3>
+                <div class="space-y-2" id="tasks-todo">
+                    {% for task in tasks_by_status.todo %}
+                    {% include 'core/partials/task_card.html' %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- In Progress Column -->
+            <div class="bg-ch-dark rounded-lg p-4">
+                <h3 class="font-medium text-blue-400 mb-3 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                    In Progress
+                    <span class="text-xs">({{ tasks_by_status.in_progress.count }})</span>
+                </h3>
+                <div class="space-y-2" id="tasks-in-progress">
+                    {% for task in tasks_by_status.in_progress %}
+                    {% include 'core/partials/task_card.html' %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- In Review Column -->
+            <div class="bg-ch-dark rounded-lg p-4">
+                <h3 class="font-medium text-yellow-400 mb-3 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
+                    In Review
+                    <span class="text-xs">({{ tasks_by_status.review.count }})</span>
+                </h3>
+                <div class="space-y-2" id="tasks-review">
+                    {% for task in tasks_by_status.review %}
+                    {% include 'core/partials/task_card.html' %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Completed Column -->
+            <div class="bg-ch-dark rounded-lg p-4">
+                <h3 class="font-medium text-green-400 mb-3 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    Completed
+                    <span class="text-xs">({{ tasks_by_status.completed.count }})</span>
+                </h3>
+                <div class="space-y-2" id="tasks-completed">
+                    {% for task in tasks_by_status.completed %}
+                    {% include 'core/partials/task_card.html' %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Task Modal -->
+<div id="add-task-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-ch-dark rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-semibold mb-4">Add Task</h3>
+        <form hx-post="{% url 'task_create' project.pk %}"
+              hx-target="#tasks-todo"
+              hx-swap="beforeend"
+              hx-on::after-request="document.getElementById('add-task-modal').classList.add('hidden'); this.reset();">
+            {% csrf_token %}
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Title</label>
+                    <input type="text" name="title" required
+                           class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-ch-gold">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <textarea name="description" rows="2"
+                              class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-ch-gold"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Priority</label>
+                        <select name="priority"
+                                class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2">
+                            {% for value, label in priority_choices %}
+                            <option value="{{ value }}" {% if value == 'medium' %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Due Date</label>
+                        <input type="date" name="due_date"
+                               class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Assign To</label>
+                    <select name="assignees" multiple
+                            class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 h-24">
+                        {% for user in available_users %}
+                        <option value="{{ user.pk }}">{{ user.display_name|default:user.username }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button type="button"
+                        onclick="document.getElementById('add-task-modal').classList.add('hidden')"
+                        class="px-4 py-2 text-gray-400 hover:text-white transition">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                    Add Task
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Add Member Modal -->
+<div id="add-member-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-ch-dark rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-semibold mb-4">Add Team Member</h3>
+        <form hx-post="{% url 'project_add_member' project.pk %}"
+              hx-target="#project-members"
+              hx-swap="outerHTML"
+              hx-on::after-request="document.getElementById('add-member-modal').classList.add('hidden')">
+            {% csrf_token %}
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Select User</label>
+                <select name="user_id" required
+                        class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2">
+                    <option value="">Choose a team member...</option>
+                    {% for user in available_users %}
+                    {% if user not in project.members.all and user != project.owner %}
+                    <option value="{{ user.pk }}">{{ user.display_name|default:user.username }}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button type="button"
+                        onclick="document.getElementById('add-member-modal').classList.add('hidden')"
+                        class="px-4 py-2 text-gray-400 hover:text-white transition">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                    Add Member
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
