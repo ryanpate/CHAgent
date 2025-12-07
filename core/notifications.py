@@ -299,21 +299,37 @@ def notify_new_announcement(announcement):
     Send notifications for a new announcement.
     """
     from accounts.models import User
+    from .models import PushSubscription
 
     priority = announcement.priority  # 'normal', 'important', 'urgent'
 
     # Get all active users (or filter by target_teams if specified)
     users = User.objects.filter(is_active=True)
+    total_users = users.count()
 
     # Don't notify the author
     if announcement.author:
         users = users.exclude(pk=announcement.author.pk)
 
+    users_to_notify = list(users)
+    logger.info(
+        f"Announcement notification: {total_users} active users, "
+        f"{len(users_to_notify)} after excluding author"
+    )
+
+    # Check which users have push subscriptions
+    users_with_subs = []
+    for user in users_to_notify:
+        sub_count = PushSubscription.objects.filter(user=user, is_active=True).count()
+        if sub_count > 0:
+            users_with_subs.append(user.username)
+    logger.info(f"Users with active push subscriptions: {users_with_subs}")
+
     title = f"{'🚨 ' if priority == 'urgent' else '📢 '}{announcement.title}"
     body = announcement.content[:100] + ('...' if len(announcement.content) > 100 else '')
 
-    return send_notification_to_users(
-        users=users,
+    sent = send_notification_to_users(
+        users=users_to_notify,
         notification_type='announcement',
         title=title,
         body=body,
@@ -321,6 +337,9 @@ def notify_new_announcement(announcement):
         data={'announcement_id': announcement.id},
         priority=priority,
     )
+
+    logger.info(f"Announcement notifications sent: {sent}")
+    return sent
 
 
 def notify_new_dm(message):

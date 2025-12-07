@@ -1356,6 +1356,7 @@ def announcement_detail(request, pk):
 @require_http_methods(["GET", "POST"])
 def announcement_create(request):
     """Create a new announcement."""
+    from django.contrib import messages
     from .models import Announcement
 
     if request.method == 'POST':
@@ -1374,12 +1375,19 @@ def announcement_create(request):
             )
 
             # Send push notifications
+            notifications_sent = 0
             try:
                 from .notifications import notify_new_announcement
-                notify_new_announcement(announcement)
+                notifications_sent = notify_new_announcement(announcement)
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).error(f"Failed to send announcement notifications: {e}")
+                messages.error(request, f"Announcement created but notification failed: {e}")
+
+            if notifications_sent > 0:
+                messages.success(request, f"Announcement posted! {notifications_sent} notification(s) sent.")
+            else:
+                messages.info(request, "Announcement posted. No other users have push notifications enabled.")
 
             return redirect('announcements_list')
 
