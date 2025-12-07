@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Recurring Task{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <!-- Header -->
+    <div class="flex items-center gap-4 mb-6">
+        <a href="{% url 'template_list' %}" class="text-gray-400 hover:text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            </svg>
+        </a>
+        <div>
+            <h2 class="text-2xl font-bold text-ch-gold">Create Recurring Task Template</h2>
+            <p class="text-gray-400 text-sm">Set up a template for tasks that repeat on a schedule</p>
+        </div>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Basic Info -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="text-lg font-semibold mb-4">Basic Information</h3>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Template Name</label>
+                    <input type="text" name="name" required
+                           placeholder="e.g., Weekly Stage Set"
+                           class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                    <p class="text-xs text-gray-500 mt-1">Internal name to identify this template</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">Task Title Template</label>
+                    <input type="text" name="title_template" required
+                           placeholder="e.g., Stage Set {month} {day}"
+                           class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold font-mono">
+                    <p class="text-xs text-gray-500 mt-1">
+                        Available placeholders: <code class="bg-ch-gray px-1 rounded">{date}</code>
+                        <code class="bg-ch-gray px-1 rounded">{day}</code>
+                        <code class="bg-ch-gray px-1 rounded">{month}</code>
+                        <code class="bg-ch-gray px-1 rounded">{weekday}</code>
+                        <code class="bg-ch-gray px-1 rounded">{year}</code>
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">Description Template (Optional)</label>
+                    <textarea name="description_template" rows="3"
+                              placeholder="Optional description with same placeholders..."
+                              class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">Project</label>
+                    <select name="project" required
+                            class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                        <option value="">Select a project...</option>
+                        {% for project in projects %}
+                        <option value="{{ project.pk }}">{{ project.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recurrence Settings -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="text-lg font-semibold mb-4">Recurrence Pattern</h3>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Repeat</label>
+                    <select name="recurrence_type" id="recurrence_type"
+                            onchange="updateRecurrenceUI()"
+                            class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                        <option value="weekly">Weekly</option>
+                        <option value="biweekly">Every 2 Weeks</option>
+                        <option value="monthly">Monthly (same day)</option>
+                        <option value="monthly_weekday">Monthly (same weekday)</option>
+                        <option value="daily">Daily</option>
+                    </select>
+                </div>
+
+                <!-- Weekday Selection (for weekly/biweekly) -->
+                <div id="weekday_section">
+                    <label class="block text-sm font-medium mb-2">On these days</label>
+                    <div class="flex flex-wrap gap-2">
+                        {% for day in weekdays %}
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" name="weekday_{{ forloop.counter0 }}"
+                                   class="rounded bg-ch-gray border-gray-600 text-ch-gold focus:ring-ch-gold focus:ring-offset-ch-dark">
+                            <span class="ml-2 text-sm">{{ day }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Monthly Day Selection -->
+                <div id="monthly_section" class="hidden">
+                    <label class="block text-sm font-medium mb-2">Day(s) of month</label>
+                    <input type="text" name="month_days"
+                           placeholder="e.g., 1, 15 (comma-separated)"
+                           class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                </div>
+
+                <!-- Monthly Weekday Selection -->
+                <div id="monthly_weekday_section" class="hidden">
+                    <label class="block text-sm font-medium mb-2">Which occurrence</label>
+                    <select name="weekday_occurrence"
+                            class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                        <option value="1">1st occurrence</option>
+                        <option value="2">2nd occurrence</option>
+                        <option value="3">3rd occurrence</option>
+                        <option value="4">4th occurrence</option>
+                        <option value="-1">Last occurrence</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Defaults -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="text-lg font-semibold mb-4">Task Defaults</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Priority</label>
+                    <select name="default_priority"
+                            class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">Create task how many days before?</label>
+                    <input type="number" name="days_before_due" value="3" min="0" max="30"
+                           class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">Due Time (Optional)</label>
+                    <input type="time" name="due_time"
+                           class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <label class="block text-sm font-medium mb-2">Default Assignees</label>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-ch-gray rounded">
+                    {% for user in users %}
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" name="default_assignees" value="{{ user.pk }}"
+                               class="rounded bg-ch-dark border-gray-600 text-ch-gold focus:ring-ch-gold focus:ring-offset-ch-dark">
+                        <span class="ml-2 text-sm truncate">{{ user.display_name|default:user.username }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <p class="text-xs text-gray-500 mt-1">These team members will be automatically assigned to generated tasks</p>
+            </div>
+        </div>
+
+        <!-- Default Checklist -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h3 class="text-lg font-semibold mb-4">Default Checklist (Optional)</h3>
+            <p class="text-sm text-gray-400 mb-4">Add checklist items that will be created with each task. One item per line.</p>
+
+            <textarea name="default_checklist" rows="5"
+                      placeholder="Set up drum riser&#10;Position vocal mics&#10;Run cable management&#10;Test all inputs"
+                      class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold font-mono text-sm"></textarea>
+        </div>
+
+        <!-- Active Status -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <label class="flex items-center gap-3">
+                <input type="checkbox" name="is_active" checked
+                       class="rounded bg-ch-gray border-gray-600 text-ch-gold focus:ring-ch-gold focus:ring-offset-ch-dark w-5 h-5">
+                <div>
+                    <span class="font-medium">Active</span>
+                    <p class="text-sm text-gray-400">When active, tasks will be generated according to the schedule</p>
+                </div>
+            </label>
+        </div>
+
+        <!-- Submit -->
+        <div class="flex justify-end gap-4">
+            <a href="{% url 'template_list' %}"
+               class="px-6 py-2 bg-ch-gray hover:bg-gray-600 rounded transition">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="px-6 py-2 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition">
+                Create Template
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function updateRecurrenceUI() {
+    const type = document.getElementById('recurrence_type').value;
+    const weekdaySection = document.getElementById('weekday_section');
+    const monthlySection = document.getElementById('monthly_section');
+    const monthlyWeekdaySection = document.getElementById('monthly_weekday_section');
+
+    // Hide all
+    weekdaySection.classList.add('hidden');
+    monthlySection.classList.add('hidden');
+    monthlyWeekdaySection.classList.add('hidden');
+
+    // Show relevant
+    if (type === 'weekly' || type === 'biweekly' || type === 'monthly_weekday') {
+        weekdaySection.classList.remove('hidden');
+    }
+    if (type === 'monthly' || type === 'custom') {
+        monthlySection.classList.remove('hidden');
+    }
+    if (type === 'monthly_weekday') {
+        monthlyWeekdaySection.classList.remove('hidden');
+    }
+}
+
+// Initialize on load
+updateRecurrenceUI();
+</script>
+{% endblock %}

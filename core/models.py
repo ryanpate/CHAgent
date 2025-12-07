@@ -1845,6 +1845,388 @@ class TaskComment(models.Model):
         return f"Comment by {self.author} on {self.task.title}"
 
 
+class TaskChecklist(models.Model):
+    """
+    Checklist items (subtasks) within a task.
+    Allows breaking down complex tasks into smaller steps.
+    """
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='checklists'
+    )
+    title = models.CharField(max_length=200)
+    is_completed = models.BooleanField(default=False)
+    order = models.PositiveIntegerField(default=0)
+
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='completed_checklist_items'
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+        verbose_name = 'Task Checklist Item'
+        verbose_name_plural = 'Task Checklist Items'
+
+    def __str__(self):
+        status = "✓" if self.is_completed else "○"
+        return f"{status} {self.title}"
+
+    def mark_completed(self, user):
+        """Mark this checklist item as completed."""
+        self.is_completed = True
+        self.completed_by = user
+        self.completed_at = timezone.now()
+        self.save(update_fields=['is_completed', 'completed_by', 'completed_at', 'updated_at'])
+
+    def mark_incomplete(self):
+        """Mark this checklist item as incomplete."""
+        self.is_completed = False
+        self.completed_by = None
+        self.completed_at = None
+        self.save(update_fields=['is_completed', 'completed_by', 'completed_at', 'updated_at'])
+
+
+class TaskTemplate(models.Model):
+    """
+    Templates for recurring tasks with dynamic title generation.
+
+    Title placeholders:
+    - {date} - Full date (e.g., "December 3rd, 2024")
+    - {day} - Day with ordinal (e.g., "3rd")
+    - {day_num} - Day number (e.g., "3")
+    - {month} - Month name (e.g., "December")
+    - {month_short} - Short month (e.g., "Dec")
+    - {year} - Year (e.g., "2024")
+    - {weekday} - Weekday name (e.g., "Sunday")
+    - {weekday_short} - Short weekday (e.g., "Sun")
+
+    Example: "Stage Set {month} {day}" → "Stage Set December 3rd"
+    """
+    RECURRENCE_CHOICES = [
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('biweekly', 'Every 2 Weeks'),
+        ('monthly', 'Monthly (same day)'),
+        ('monthly_weekday', 'Monthly (same weekday)'),  # e.g., "2nd Sunday"
+        ('custom', 'Custom Days'),
+    ]
+
+    name = models.CharField(
+        max_length=200,
+        help_text="Internal name for this template (e.g., 'Weekly Stage Set')"
+    )
+    title_template = models.CharField(
+        max_length=200,
+        help_text="Task title with placeholders. Example: 'Stage Set {month} {day}'"
+    )
+    description_template = models.TextField(
+        blank=True,
+        help_text="Optional description with same placeholders"
+    )
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='task_templates'
+    )
+
+    # Recurrence settings
+    recurrence_type = models.CharField(
+        max_length=20,
+        choices=RECURRENCE_CHOICES,
+        default='weekly'
+    )
+    recurrence_days = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="For weekly: [0-6] (Mon-Sun). For monthly: [1-31]. For custom: specific dates."
+    )
+    # For monthly_weekday: which occurrence (1st, 2nd, 3rd, 4th, -1 for last)
+    weekday_occurrence = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="For monthly weekday: 1=first, 2=second, -1=last, etc."
+    )
+
+    # Default task settings
+    default_assignees = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='task_template_assignments',
+        help_text="Team members automatically assigned to generated tasks"
+    )
+    default_priority = models.CharField(
+        max_length=10,
+        choices=Task.PRIORITY_CHOICES,
+        default='medium'
+    )
+    default_status = models.CharField(
+        max_length=20,
+        choices=Task.STATUS_CHOICES,
+        default='todo'
+    )
+
+    # Timing
+    days_before_due = models.IntegerField(
+        default=3,
+        help_text="Create task this many days before the due date"
+    )
+    due_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Default due time for generated tasks"
+    )
+
+    # Default checklist items (created with each task)
+    default_checklist = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of checklist item titles to create with each task"
+    )
+
+    # Auto-generation tracking
+    is_active = models.BooleanField(default=True)
+    last_generated_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date of the last task generated from this template"
+    )
+    next_occurrence = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Next date a task will be generated for"
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_task_templates'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['project', 'name']
+        verbose_name = 'Task Template'
+        verbose_name_plural = 'Task Templates'
+
+    def __str__(self):
+        return f"{self.name} ({self.project.name})"
+
+    def _ordinal(self, n):
+        """Convert number to ordinal (1st, 2nd, 3rd, etc.)"""
+        if 11 <= (n % 100) <= 13:
+            suffix = 'th'
+        else:
+            suffix = ['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]
+        return f"{n}{suffix}"
+
+    def format_title(self, target_date):
+        """
+        Format the title template with the target date.
+
+        Args:
+            target_date: datetime.date object
+
+        Returns:
+            Formatted title string
+        """
+        placeholders = {
+            'date': target_date.strftime('%B ') + self._ordinal(target_date.day) + target_date.strftime(', %Y'),
+            'day': self._ordinal(target_date.day),
+            'day_num': str(target_date.day),
+            'month': target_date.strftime('%B'),
+            'month_short': target_date.strftime('%b'),
+            'year': str(target_date.year),
+            'weekday': target_date.strftime('%A'),
+            'weekday_short': target_date.strftime('%a'),
+        }
+
+        title = self.title_template
+        for key, value in placeholders.items():
+            title = title.replace('{' + key + '}', value)
+
+        return title
+
+    def format_description(self, target_date):
+        """Format the description template with the target date."""
+        if not self.description_template:
+            return ''
+
+        placeholders = {
+            'date': target_date.strftime('%B ') + self._ordinal(target_date.day) + target_date.strftime(', %Y'),
+            'day': self._ordinal(target_date.day),
+            'day_num': str(target_date.day),
+            'month': target_date.strftime('%B'),
+            'month_short': target_date.strftime('%b'),
+            'year': str(target_date.year),
+            'weekday': target_date.strftime('%A'),
+            'weekday_short': target_date.strftime('%a'),
+        }
+
+        description = self.description_template
+        for key, value in placeholders.items():
+            description = description.replace('{' + key + '}', value)
+
+        return description
+
+    def get_next_occurrences(self, from_date=None, count=5):
+        """
+        Calculate the next N occurrence dates based on recurrence settings.
+
+        Args:
+            from_date: Start calculating from this date (defaults to today)
+            count: Number of occurrences to return
+
+        Returns:
+            List of datetime.date objects
+        """
+        from datetime import timedelta
+        import calendar
+
+        if from_date is None:
+            from_date = timezone.now().date()
+
+        occurrences = []
+        current = from_date
+
+        # Maximum iterations to prevent infinite loops
+        max_iterations = 365 * 2
+
+        iteration = 0
+        while len(occurrences) < count and iteration < max_iterations:
+            iteration += 1
+
+            if self.recurrence_type == 'daily':
+                if current >= from_date:
+                    occurrences.append(current)
+                current += timedelta(days=1)
+
+            elif self.recurrence_type == 'weekly':
+                # recurrence_days is list of weekday numbers [0-6] where 0=Monday, 6=Sunday
+                weekday = current.weekday()
+                if weekday in self.recurrence_days and current >= from_date:
+                    occurrences.append(current)
+                current += timedelta(days=1)
+
+            elif self.recurrence_type == 'biweekly':
+                weekday = current.weekday()
+                if weekday in self.recurrence_days and current >= from_date:
+                    # Check if this is an "on" week (every other week)
+                    week_num = current.isocalendar()[1]
+                    if week_num % 2 == 0:  # Even weeks
+                        occurrences.append(current)
+                current += timedelta(days=1)
+
+            elif self.recurrence_type == 'monthly':
+                # recurrence_days is list of day numbers [1-31]
+                if current.day in self.recurrence_days and current >= from_date:
+                    occurrences.append(current)
+                current += timedelta(days=1)
+
+            elif self.recurrence_type == 'monthly_weekday':
+                # e.g., "2nd Sunday of every month"
+                weekday = current.weekday()
+                if weekday in self.recurrence_days and current >= from_date:
+                    # Check if this is the right occurrence
+                    occurrence_num = (current.day - 1) // 7 + 1
+                    if self.weekday_occurrence == -1:
+                        # Last occurrence of this weekday
+                        days_in_month = calendar.monthrange(current.year, current.month)[1]
+                        is_last = current.day + 7 > days_in_month
+                        if is_last:
+                            occurrences.append(current)
+                    elif occurrence_num == self.weekday_occurrence:
+                        occurrences.append(current)
+                current += timedelta(days=1)
+
+            elif self.recurrence_type == 'custom':
+                # recurrence_days contains specific date strings or patterns
+                # For simplicity, treat as specific day-of-month numbers
+                if current.day in self.recurrence_days and current >= from_date:
+                    occurrences.append(current)
+                current += timedelta(days=1)
+
+        return occurrences
+
+    def generate_task(self, target_date, created_by=None):
+        """
+        Generate a task for the specified target date.
+
+        Args:
+            target_date: The due date for the task
+            created_by: User creating the task (defaults to template creator)
+
+        Returns:
+            Created Task instance
+        """
+        title = self.format_title(target_date)
+        description = self.format_description(target_date)
+
+        task = Task.objects.create(
+            project=self.project,
+            title=title,
+            description=description,
+            status=self.default_status,
+            priority=self.default_priority,
+            due_date=target_date,
+            due_time=self.due_time,
+            created_by=created_by or self.created_by
+        )
+
+        # Add default assignees
+        for assignee in self.default_assignees.all():
+            task.assignees.add(assignee)
+
+        # Create default checklist items
+        for i, item_title in enumerate(self.default_checklist):
+            TaskChecklist.objects.create(
+                task=task,
+                title=item_title,
+                order=i
+            )
+
+        # Update tracking
+        self.last_generated_date = target_date
+        self.save(update_fields=['last_generated_date', 'updated_at'])
+
+        # Send notifications to assignees
+        from .notifications import notify_task_assignment
+        for assignee in task.assignees.all():
+            notify_task_assignment(task, assignee)
+
+        return task
+
+    def calculate_next_occurrence(self):
+        """Calculate and update the next occurrence date."""
+        today = timezone.now().date()
+        start_from = self.last_generated_date or today
+
+        # Get next occurrences starting from the day after the last generated
+        if self.last_generated_date:
+            start_from = self.last_generated_date + timezone.timedelta(days=1)
+
+        occurrences = self.get_next_occurrences(from_date=start_from, count=1)
+
+        if occurrences:
+            self.next_occurrence = occurrences[0]
+        else:
+            self.next_occurrence = None
+
+        self.save(update_fields=['next_occurrence', 'updated_at'])
+        return self.next_occurrence
+
+
 # =============================================================================
 # Push Notification Models
 # =============================================================================

@@ -1,0 +1,289 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ template.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-4">
+            <a href="{% url 'template_list' %}" class="text-gray-400 hover:text-white">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+            </a>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h2 class="text-2xl font-bold text-ch-gold">{{ template.name }}</h2>
+                    {% if not template.is_active %}
+                    <span class="px-2 py-0.5 text-xs rounded bg-gray-700 text-gray-400">Paused</span>
+                    {% endif %}
+                </div>
+                <p class="text-gray-400 text-sm">{{ template.project.name }}</p>
+            </div>
+        </div>
+
+        <form hx-post="{% url 'template_generate' template.pk %}" hx-swap="none">
+            {% csrf_token %}
+            <button type="submit"
+                    class="px-4 py-2 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition">
+                Generate Task Now
+            </button>
+        </form>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Content -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Preview -->
+            <div class="bg-ch-dark rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                    </svg>
+                    Upcoming Tasks Preview
+                </h3>
+
+                <div class="space-y-2">
+                    {% for date, title in preview_titles %}
+                    <div class="flex items-center justify-between p-3 bg-ch-gray rounded">
+                        <span class="font-medium">{{ title }}</span>
+                        <span class="text-sm text-gray-400">{{ date|date:"l, M d, Y" }}</span>
+                    </div>
+                    {% empty %}
+                    <p class="text-gray-400 text-sm">No upcoming occurrences based on current settings.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Edit Form -->
+            <form method="post" class="space-y-6">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update">
+
+                <div class="bg-ch-dark rounded-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4">Template Settings</h3>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Template Name</label>
+                            <input type="text" name="name" value="{{ template.name }}" required
+                                   class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Task Title Template</label>
+                            <input type="text" name="title_template" value="{{ template.title_template }}" required
+                                   class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold font-mono">
+                            <p class="text-xs text-gray-500 mt-1">
+                                Placeholders: <code class="bg-ch-gray px-1 rounded">{date}</code>
+                                <code class="bg-ch-gray px-1 rounded">{day}</code>
+                                <code class="bg-ch-gray px-1 rounded">{month}</code>
+                                <code class="bg-ch-gray px-1 rounded">{weekday}</code>
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Description Template</label>
+                            <textarea name="description_template" rows="3"
+                                      class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">{{ template.description_template }}</textarea>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Recurrence</label>
+                                <select name="recurrence_type" id="recurrence_type" onchange="updateRecurrenceUI()"
+                                        class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                                    <option value="daily" {% if template.recurrence_type == 'daily' %}selected{% endif %}>Daily</option>
+                                    <option value="weekly" {% if template.recurrence_type == 'weekly' %}selected{% endif %}>Weekly</option>
+                                    <option value="biweekly" {% if template.recurrence_type == 'biweekly' %}selected{% endif %}>Every 2 Weeks</option>
+                                    <option value="monthly" {% if template.recurrence_type == 'monthly' %}selected{% endif %}>Monthly (same day)</option>
+                                    <option value="monthly_weekday" {% if template.recurrence_type == 'monthly_weekday' %}selected{% endif %}>Monthly (same weekday)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Priority</label>
+                                <select name="default_priority"
+                                        class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                                    <option value="low" {% if template.default_priority == 'low' %}selected{% endif %}>Low</option>
+                                    <option value="medium" {% if template.default_priority == 'medium' %}selected{% endif %}>Medium</option>
+                                    <option value="high" {% if template.default_priority == 'high' %}selected{% endif %}>High</option>
+                                    <option value="urgent" {% if template.default_priority == 'urgent' %}selected{% endif %}>Urgent</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Weekday Selection -->
+                        <div id="weekday_section" {% if template.recurrence_type not in 'weekly,biweekly,monthly_weekday' %}class="hidden"{% endif %}>
+                            <label class="block text-sm font-medium mb-2">Days</label>
+                            <div class="flex flex-wrap gap-2">
+                                {% for day in weekdays %}
+                                <label class="inline-flex items-center">
+                                    <input type="checkbox" name="weekday_{{ forloop.counter0 }}"
+                                           {% if forloop.counter0 in template.recurrence_days %}checked{% endif %}
+                                           class="rounded bg-ch-gray border-gray-600 text-ch-gold focus:ring-ch-gold">
+                                    <span class="ml-2 text-sm">{{ day }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Monthly Days -->
+                        <div id="monthly_section" {% if template.recurrence_type not in 'monthly,custom' %}class="hidden"{% endif %}>
+                            <label class="block text-sm font-medium mb-2">Day(s) of month</label>
+                            <input type="text" name="month_days" value="{{ template.recurrence_days|join:', ' }}"
+                                   class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                        </div>
+
+                        <!-- Monthly Weekday Occurrence -->
+                        <div id="monthly_weekday_section" {% if template.recurrence_type != 'monthly_weekday' %}class="hidden"{% endif %}>
+                            <label class="block text-sm font-medium mb-2">Occurrence</label>
+                            <select name="weekday_occurrence"
+                                    class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                                <option value="1" {% if template.weekday_occurrence == 1 %}selected{% endif %}>1st</option>
+                                <option value="2" {% if template.weekday_occurrence == 2 %}selected{% endif %}>2nd</option>
+                                <option value="3" {% if template.weekday_occurrence == 3 %}selected{% endif %}>3rd</option>
+                                <option value="4" {% if template.weekday_occurrence == 4 %}selected{% endif %}>4th</option>
+                                <option value="-1" {% if template.weekday_occurrence == -1 %}selected{% endif %}>Last</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Days Before Due</label>
+                                <input type="number" name="days_before_due" value="{{ template.days_before_due }}" min="0"
+                                       class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Due Time</label>
+                                <input type="time" name="due_time" value="{{ template.due_time|time:'H:i' }}"
+                                       class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-ch-dark rounded-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4">Default Assignees</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-ch-gray rounded">
+                        {% for user in users %}
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" name="default_assignees" value="{{ user.pk }}"
+                                   {% if user in template.default_assignees.all %}checked{% endif %}
+                                   class="rounded bg-ch-dark border-gray-600 text-ch-gold">
+                            <span class="ml-2 text-sm truncate">{{ user.display_name|default:user.username }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="bg-ch-dark rounded-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4">Default Checklist</h3>
+                    <textarea name="default_checklist" rows="5"
+                              class="w-full bg-ch-gray border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-ch-gold font-mono text-sm">{% for item in template.default_checklist %}{{ item }}{% if not forloop.last %}
+{% endif %}{% endfor %}</textarea>
+                    <p class="text-xs text-gray-500 mt-1">One item per line</p>
+                </div>
+
+                <div class="bg-ch-dark rounded-lg p-6">
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" name="is_active" {% if template.is_active %}checked{% endif %}
+                               class="rounded bg-ch-gray border-gray-600 text-ch-gold w-5 h-5">
+                        <div>
+                            <span class="font-medium">Active</span>
+                            <p class="text-sm text-gray-400">Generate tasks according to schedule</p>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="flex justify-between">
+                    <button type="submit" name="action" value="delete"
+                            onclick="return confirm('Are you sure you want to delete this template?')"
+                            class="px-4 py-2 bg-red-900/50 text-red-400 rounded hover:bg-red-900 transition">
+                        Delete Template
+                    </button>
+                    <button type="submit"
+                            class="px-6 py-2 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Info -->
+            <div class="bg-ch-dark rounded-lg p-6">
+                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Info</h3>
+                <dl class="space-y-3 text-sm">
+                    <div>
+                        <dt class="text-gray-500">Created</dt>
+                        <dd>{{ template.created_at|date:"M d, Y" }}</dd>
+                    </div>
+                    {% if template.created_by %}
+                    <div>
+                        <dt class="text-gray-500">Created by</dt>
+                        <dd>{{ template.created_by.display_name|default:template.created_by.username }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if template.last_generated_date %}
+                    <div>
+                        <dt class="text-gray-500">Last Generated</dt>
+                        <dd>{{ template.last_generated_date|date:"M d, Y" }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if template.next_occurrence %}
+                    <div>
+                        <dt class="text-gray-500">Next Occurrence</dt>
+                        <dd class="text-ch-gold">{{ template.next_occurrence|date:"M d, Y" }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+
+            <!-- Recent Tasks -->
+            {% if recent_tasks %}
+            <div class="bg-ch-dark rounded-lg p-6">
+                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Recent Tasks</h3>
+                <div class="space-y-2">
+                    {% for task in recent_tasks %}
+                    <a href="{% url 'task_detail' task.project.pk task.pk %}"
+                       class="block p-2 rounded hover:bg-ch-gray transition text-sm">
+                        <div class="font-medium truncate">{{ task.title }}</div>
+                        <div class="text-xs text-gray-500">{{ task.created_at|date:"M d" }}</div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function updateRecurrenceUI() {
+    const type = document.getElementById('recurrence_type').value;
+    const weekdaySection = document.getElementById('weekday_section');
+    const monthlySection = document.getElementById('monthly_section');
+    const monthlyWeekdaySection = document.getElementById('monthly_weekday_section');
+
+    weekdaySection.classList.add('hidden');
+    monthlySection.classList.add('hidden');
+    monthlyWeekdaySection.classList.add('hidden');
+
+    if (['weekly', 'biweekly', 'monthly_weekday'].includes(type)) {
+        weekdaySection.classList.remove('hidden');
+    }
+    if (['monthly', 'custom'].includes(type)) {
+        monthlySection.classList.remove('hidden');
+    }
+    if (type === 'monthly_weekday') {
+        monthlyWeekdaySection.classList.remove('hidden');
+    }
+}
+</script>
+{% endblock %}
