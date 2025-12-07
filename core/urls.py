@@ -65,6 +65,17 @@ urlpatterns = [
     path('tasks/<int:pk>/status/', views.task_update_status, name='task_update_status'),
     path('tasks/<int:pk>/assign/', views.task_assign, name='task_assign'),
     path('tasks/<int:pk>/comment/', views.task_comment, name='task_comment'),
+    # My Tasks Dashboard
+    path('my-tasks/', views.my_tasks, name='my_tasks'),
+    # Task Templates (Recurring Tasks)
+    path('templates/', views.template_list, name='template_list'),
+    path('templates/new/', views.template_create, name='template_create'),
+    path('templates/<int:pk>/', views.template_detail, name='template_detail'),
+    path('templates/<int:pk>/generate/', views.template_generate, name='template_generate'),
+    # Task Checklists
+    path('checklists/<int:pk>/toggle/', views.checklist_toggle, name='checklist_toggle'),
+    path('tasks/<int:task_pk>/checklists/add/', views.checklist_add, name='checklist_add'),
+    path('checklists/<int:pk>/delete/', views.checklist_delete, name='checklist_delete'),
     # Push Notifications
     path('notifications/', views.push_preferences, name='push_preferences'),
     path('notifications/vapid-key/', views.push_vapid_key, name='push_vapid_key'),

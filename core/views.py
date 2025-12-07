@@ -1987,13 +1987,457 @@ def task_detail(request, project_pk, pk):
         return redirect('project_list')
 
     comments = task.comments.select_related('author').prefetch_related('mentioned_users')
+    checklists = task.checklists.all()
+    completed_count = checklists.filter(is_completed=True).count()
 
     context = {
         'project': project,
         'task': task,
         'comments': comments,
+        'checklists': checklists,
+        'completed_count': completed_count,
     }
     return render(request, 'core/comms/task_detail.html', context)
+
+
+# ============================================================================
+# My Tasks Dashboard
+# ============================================================================
+
+@login_required
+def my_tasks(request):
+    """
+    Personal task dashboard showing all tasks assigned to the current user.
+    """
+    from .models import Task, Project
+    from datetime import timedelta
+
+    today = timezone.now().date()
+
+    # Get filter from query params
+    filter_type = request.GET.get('filter', 'all')
+    sort_by = request.GET.get('sort', 'due_date')
+    project_id = request.GET.get('project')
+
+    # Base queryset - tasks assigned to current user
+    tasks = Task.objects.filter(
+        assignees=request.user
+    ).exclude(
+        status__in=['completed', 'cancelled']
+    ).select_related('project', 'created_by').prefetch_related('assignees')
+
+    # Apply filters
+    if filter_type == 'today':
+        tasks = tasks.filter(due_date=today)
+    elif filter_type == 'week':
+        week_end = today + timedelta(days=7)
+        tasks = tasks.filter(due_date__gte=today, due_date__lte=week_end)
+    elif filter_type == 'overdue':
+        tasks = tasks.filter(due_date__lt=today)
+    elif filter_type == 'upcoming':
+        tasks = tasks.filter(due_date__gt=today)
+    elif filter_type == 'no_date':
+        tasks = tasks.filter(due_date__isnull=True)
+
+    # Filter by project
+    if project_id:
+        tasks = tasks.filter(project_id=project_id)
+
+    # Apply sorting
+    if sort_by == 'due_date':
+        tasks = tasks.order_by('due_date', '-priority', 'title')
+    elif sort_by == 'priority':
+        # Custom priority ordering (urgent first)
+        priority_order = models.Case(
+            models.When(priority='urgent', then=0),
+            models.When(priority='high', then=1),
+            models.When(priority='medium', then=2),
+            models.When(priority='low', then=3),
+            default=4,
+        )
+        tasks = tasks.annotate(priority_order=priority_order).order_by('priority_order', 'due_date')
+    elif sort_by == 'project':
+        tasks = tasks.order_by('project__name', 'due_date')
+    elif sort_by == 'status':
+        tasks = tasks.order_by('status', 'due_date')
+
+    # Get counts for filter badges
+    all_count = Task.objects.filter(
+        assignees=request.user
+    ).exclude(status__in=['completed', 'cancelled']).count()
+
+    overdue_count = Task.objects.filter(
+        assignees=request.user,
+        due_date__lt=today
+    ).exclude(status__in=['completed', 'cancelled']).count()
+
+    today_count = Task.objects.filter(
+        assignees=request.user,
+        due_date=today
+    ).exclude(status__in=['completed', 'cancelled']).count()
+
+    week_end = today + timedelta(days=7)
+    week_count = Task.objects.filter(
+        assignees=request.user,
+        due_date__gte=today,
+        due_date__lte=week_end
+    ).exclude(status__in=['completed', 'cancelled']).count()
+
+    # Get user's projects for filter dropdown
+    projects = Project.objects.filter(
+        models.Q(owner=request.user) | models.Q(members=request.user)
+    ).distinct().order_by('name')
+
+    # Recently completed tasks
+    completed_tasks = Task.objects.filter(
+        assignees=request.user,
+        status='completed'
+    ).order_by('-completed_at')[:5]
+
+    context = {
+        'tasks': tasks,
+        'filter_type': filter_type,
+        'sort_by': sort_by,
+        'selected_project': project_id,
+        'projects': projects,
+        'all_count': all_count,
+        'overdue_count': overdue_count,
+        'today_count': today_count,
+        'week_count': week_count,
+        'completed_tasks': completed_tasks,
+        'today': today,
+    }
+    return render(request, 'core/comms/my_tasks.html', context)
+
+
+# ============================================================================
+# Task Template (Recurring Tasks) Views
+# ============================================================================
+
+@login_required
+def template_list(request):
+    """List all task templates the user has access to."""
+    from .models import TaskTemplate, Project
+
+    # Get projects user has access to
+    user_projects = Project.objects.filter(
+        models.Q(owner=request.user) | models.Q(members=request.user)
+    ).distinct()
+
+    templates = TaskTemplate.objects.filter(
+        project__in=user_projects
+    ).select_related('project', 'created_by').prefetch_related('default_assignees')
+
+    # Group by project
+    templates_by_project = {}
+    for template in templates:
+        if template.project not in templates_by_project:
+            templates_by_project[template.project] = []
+        templates_by_project[template.project].append(template)
+
+    context = {
+        'templates_by_project': templates_by_project,
+        'projects': user_projects,
+    }
+    return render(request, 'core/comms/template_list.html', context)
+
+
+@login_required
+def template_create(request):
+    """Create a new task template."""
+    from .models import TaskTemplate, Project
+    from accounts.models import User
+
+    # Get projects user has access to
+    projects = Project.objects.filter(
+        models.Q(owner=request.user) | models.Q(members=request.user)
+    ).distinct()
+
+    if request.method == 'POST':
+        project_id = request.POST.get('project')
+        project = get_object_or_404(Project, pk=project_id)
+
+        # Verify access
+        if project.owner != request.user and request.user not in project.members.all():
+            return redirect('template_list')
+
+        # Parse recurrence days
+        recurrence_type = request.POST.get('recurrence_type', 'weekly')
+        recurrence_days = []
+
+        if recurrence_type in ['weekly', 'biweekly']:
+            # Get selected weekdays (0-6)
+            for i in range(7):
+                if request.POST.get(f'weekday_{i}'):
+                    recurrence_days.append(i)
+        elif recurrence_type in ['monthly', 'custom']:
+            # Get selected days of month
+            days_str = request.POST.get('month_days', '')
+            if days_str:
+                recurrence_days = [int(d.strip()) for d in days_str.split(',') if d.strip().isdigit()]
+
+        # Parse checklist items
+        checklist_str = request.POST.get('default_checklist', '')
+        checklist = [item.strip() for item in checklist_str.split('\n') if item.strip()]
+
+        template = TaskTemplate.objects.create(
+            name=request.POST.get('name', ''),
+            title_template=request.POST.get('title_template', ''),
+            description_template=request.POST.get('description_template', ''),
+            project=project,
+            recurrence_type=recurrence_type,
+            recurrence_days=recurrence_days,
+            weekday_occurrence=int(request.POST.get('weekday_occurrence') or 0) or None,
+            default_priority=request.POST.get('default_priority', 'medium'),
+            days_before_due=int(request.POST.get('days_before_due', 3)),
+            due_time=request.POST.get('due_time') or None,
+            default_checklist=checklist,
+            is_active=request.POST.get('is_active') == 'on',
+            created_by=request.user
+        )
+
+        # Add default assignees
+        assignee_ids = request.POST.getlist('default_assignees')
+        for user_id in assignee_ids:
+            try:
+                user = User.objects.get(pk=user_id)
+                template.default_assignees.add(user)
+            except User.DoesNotExist:
+                pass
+
+        # Calculate next occurrence
+        template.calculate_next_occurrence()
+
+        return redirect('template_detail', pk=template.pk)
+
+    # Get all users for assignee selection
+    users = User.objects.filter(is_active=True).order_by('display_name', 'username')
+
+    context = {
+        'projects': projects,
+        'users': users,
+        'weekdays': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+    }
+    return render(request, 'core/comms/template_create.html', context)
+
+
+@login_required
+def template_detail(request, pk):
+    """View and edit a task template."""
+    from .models import TaskTemplate, Task
+    from accounts.models import User
+
+    template = get_object_or_404(TaskTemplate, pk=pk)
+
+    # Check access
+    project = template.project
+    if project.owner != request.user and request.user not in project.members.all():
+        return redirect('template_list')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'update':
+            # Update template
+            template.name = request.POST.get('name', template.name)
+            template.title_template = request.POST.get('title_template', template.title_template)
+            template.description_template = request.POST.get('description_template', '')
+            template.recurrence_type = request.POST.get('recurrence_type', template.recurrence_type)
+            template.default_priority = request.POST.get('default_priority', template.default_priority)
+            template.days_before_due = int(request.POST.get('days_before_due', 3))
+            template.due_time = request.POST.get('due_time') or None
+            template.is_active = request.POST.get('is_active') == 'on'
+
+            # Parse recurrence days
+            recurrence_days = []
+            if template.recurrence_type in ['weekly', 'biweekly']:
+                for i in range(7):
+                    if request.POST.get(f'weekday_{i}'):
+                        recurrence_days.append(i)
+            elif template.recurrence_type in ['monthly', 'custom']:
+                days_str = request.POST.get('month_days', '')
+                if days_str:
+                    recurrence_days = [int(d.strip()) for d in days_str.split(',') if d.strip().isdigit()]
+            template.recurrence_days = recurrence_days
+
+            template.weekday_occurrence = int(request.POST.get('weekday_occurrence') or 0) or None
+
+            # Parse checklist
+            checklist_str = request.POST.get('default_checklist', '')
+            template.default_checklist = [item.strip() for item in checklist_str.split('\n') if item.strip()]
+
+            template.save()
+
+            # Update assignees
+            template.default_assignees.clear()
+            for user_id in request.POST.getlist('default_assignees'):
+                try:
+                    user = User.objects.get(pk=user_id)
+                    template.default_assignees.add(user)
+                except User.DoesNotExist:
+                    pass
+
+            template.calculate_next_occurrence()
+
+        elif action == 'delete':
+            template.delete()
+            return redirect('template_list')
+
+    # Get upcoming occurrences preview
+    upcoming = template.get_next_occurrences(count=5)
+    preview_titles = [(date, template.format_title(date)) for date in upcoming]
+
+    # Get recently generated tasks
+    recent_tasks = Task.objects.filter(
+        project=template.project,
+        title__startswith=template.title_template.split('{')[0][:20]  # Match by title prefix
+    ).order_by('-created_at')[:5]
+
+    users = User.objects.filter(is_active=True).order_by('display_name', 'username')
+
+    context = {
+        'template': template,
+        'preview_titles': preview_titles,
+        'recent_tasks': recent_tasks,
+        'users': users,
+        'weekdays': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+    }
+    return render(request, 'core/comms/template_detail.html', context)
+
+
+@login_required
+@require_POST
+def template_generate(request, pk):
+    """Manually generate a task from a template."""
+    from .models import TaskTemplate
+    from datetime import datetime
+
+    template = get_object_or_404(TaskTemplate, pk=pk)
+
+    # Check access
+    project = template.project
+    if project.owner != request.user and request.user not in project.members.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+
+    # Get target date from POST or use next occurrence
+    date_str = request.POST.get('target_date')
+    if date_str:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    else:
+        target_date = template.next_occurrence or timezone.now().date()
+
+    # Generate the task
+    task = template.generate_task(target_date, created_by=request.user)
+
+    # Update next occurrence
+    template.calculate_next_occurrence()
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/task_card.html', {'task': task})
+
+    return redirect('task_detail', project_pk=project.pk, pk=task.pk)
+
+
+# ============================================================================
+# Task Checklist Views
+# ============================================================================
+
+@login_required
+@require_POST
+def checklist_toggle(request, pk):
+    """Toggle a checklist item's completion status."""
+    from .models import TaskChecklist
+
+    item = get_object_or_404(TaskChecklist, pk=pk)
+    task = item.task
+
+    # Check access
+    project = task.project
+    if project.owner != request.user and request.user not in project.members.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+
+    if item.is_completed:
+        item.mark_incomplete()
+    else:
+        item.mark_completed(request.user)
+
+    # Calculate task completion percentage
+    total = task.checklists.count()
+    completed = task.checklists.filter(is_completed=True).count()
+    percent = int((completed / total) * 100) if total > 0 else 0
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/checklist_item.html', {
+            'item': item,
+            'task': task,
+            'percent': percent,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'is_completed': item.is_completed,
+        'completed_count': completed,
+        'total_count': total,
+        'percent': percent,
+    })
+
+
+@login_required
+@require_POST
+def checklist_add(request, task_pk):
+    """Add a new checklist item to a task."""
+    from .models import Task, TaskChecklist
+
+    task = get_object_or_404(Task, pk=task_pk)
+
+    # Check access
+    project = task.project
+    if project.owner != request.user and request.user not in project.members.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+
+    title = request.POST.get('title', '').strip()
+    if not title:
+        return JsonResponse({'error': 'Title is required'}, status=400)
+
+    # Get max order
+    max_order = task.checklists.aggregate(models.Max('order'))['order__max'] or 0
+
+    item = TaskChecklist.objects.create(
+        task=task,
+        title=title,
+        order=max_order + 1
+    )
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/checklist_item.html', {'item': item, 'task': task})
+
+    return JsonResponse({
+        'success': True,
+        'id': item.pk,
+        'title': item.title,
+    })
+
+
+@login_required
+@require_POST
+def checklist_delete(request, pk):
+    """Delete a checklist item."""
+    from .models import TaskChecklist
+
+    item = get_object_or_404(TaskChecklist, pk=pk)
+    task = item.task
+
+    # Check access
+    project = task.project
+    if project.owner != request.user and request.user not in project.members.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+
+    item.delete()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('')
+
+    return JsonResponse({'success': True})
 
 
 # ============================================================================

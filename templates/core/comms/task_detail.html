@@ -98,6 +98,53 @@
         </div>
     </div>
 
+    <!-- Checklists Section -->
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                </svg>
+                Checklist
+                {% if checklists %}
+                <span class="text-sm font-normal text-gray-400">
+                    ({{ completed_count }}/{{ checklists|length }})
+                </span>
+                {% endif %}
+            </h2>
+            {% if checklists %}
+            <div class="w-32 h-2 bg-ch-gray rounded-full overflow-hidden">
+                <div class="h-full bg-green-600 transition-all"
+                     style="width: {% widthratio completed_count checklists|length 100 %}%"></div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div id="checklist-items" class="space-y-1 mb-4">
+            {% for item in checklists %}
+            {% include 'core/partials/checklist_item.html' %}
+            {% empty %}
+            <p class="text-gray-400 text-sm text-center py-4" id="no-checklists">No checklist items yet.</p>
+            {% endfor %}
+        </div>
+
+        <!-- Add Checklist Item Form -->
+        <form hx-post="{% url 'checklist_add' task.pk %}"
+              hx-target="#checklist-items"
+              hx-swap="beforeend"
+              hx-on::after-request="this.reset(); document.getElementById('no-checklists')?.remove();"
+              class="flex gap-2">
+            {% csrf_token %}
+            <input type="text" name="title" required
+                   placeholder="Add a checklist item..."
+                   class="flex-1 bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+            <button type="submit"
+                    class="px-4 py-2 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition text-sm">
+                Add
+            </button>
+        </form>
+    </div>
+
     <!-- Comments Section -->
     <div class="bg-ch-dark rounded-lg p-6">
         <h2 class="font-semibold mb-4">Comments</h2>
