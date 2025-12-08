@@ -1,0 +1,89 @@
+{% extends "core/onboarding/base_public.html" %}
+
+{% block title %}Invite Your Team{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <!-- Progress Steps -->
+    <div class="flex items-center justify-center mb-8">
+        <div class="flex items-center text-sm">
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gold text-ch-black font-bold">1</span>
+            <span class="ml-2 text-ch-gold">Account</span>
+            <div class="w-12 h-0.5 bg-ch-gold mx-4"></div>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gold text-ch-black font-bold">2</span>
+            <span class="ml-2 text-ch-gold">Plan</span>
+            <div class="w-12 h-0.5 bg-ch-gold mx-4"></div>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gold text-ch-black font-bold">3</span>
+            <span class="ml-2 text-ch-gold">Connect</span>
+            <div class="w-12 h-0.5 bg-ch-gold mx-4"></div>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gold text-ch-black font-bold">4</span>
+            <span class="ml-2 text-ch-gold">Team</span>
+        </div>
+    </div>
+
+    <div class="bg-ch-dark rounded-lg border border-ch-gray p-8">
+        <h1 class="text-2xl font-bold text-white mb-2">Invite Your Team</h1>
+        <p class="text-gray-400 mb-6">
+            Add team members to {{ organization.name }}. They'll receive an email invitation to join.
+        </p>
+
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Email Addresses</label>
+                <textarea name="emails" rows="4"
+                          placeholder="Enter email addresses, one per line or separated by commas"
+                          class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Role</label>
+                <select name="role"
+                        class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
+                    {% for value, label in role_choices %}
+                    <option value="{{ value }}" {% if value == 'member' %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <p class="text-gray-500 text-sm mt-1">
+                    <strong>Admin:</strong> Full access to settings and users |
+                    <strong>Leader:</strong> Manage volunteers and view analytics |
+                    <strong>Member:</strong> Basic access |
+                    <strong>Viewer:</strong> Read-only
+                </p>
+            </div>
+
+            <div class="flex gap-4">
+                <button type="submit" name="action" value="invite"
+                        class="flex-1 bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-3 px-6 rounded-lg transition-colors">
+                    Send Invitations
+                </button>
+            </div>
+        </form>
+
+        {% if pending_invitations %}
+        <div class="mt-8 border-t border-ch-gray pt-6">
+            <h3 class="text-lg font-semibold text-white mb-4">Pending Invitations</h3>
+            <ul class="space-y-2">
+                {% for invite in pending_invitations %}
+                <li class="flex items-center justify-between bg-ch-gray/50 rounded-lg px-4 py-2">
+                    <span class="text-gray-300">{{ invite.email }}</span>
+                    <span class="text-gray-500 text-sm">{{ invite.role }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="mt-8 border-t border-ch-gray pt-6">
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" name="action" value="complete"
+                        class="w-full bg-ch-gray hover:bg-ch-gray/80 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                    {% if pending_invitations %}Continue to Dashboard{% else %}Skip & Complete Setup{% endif %}
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

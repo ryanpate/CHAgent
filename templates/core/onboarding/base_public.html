@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Get Started{% endblock %} | Aria</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'ch-black': '#0f0f0f',
+                        'ch-dark': '#1a1a1a',
+                        'ch-gray': '#252525',
+                        'ch-gold': '#c9a227',
+                        'ch-gold-muted': '#8b7355',
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/static/css/fonts.css">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-ch-black text-gray-100 min-h-screen">
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-ch-dark border-b border-ch-gray py-4 px-6">
+            <div class="max-w-4xl mx-auto flex items-center justify-between">
+                <a href="/" class="text-2xl font-bold text-ch-gold">Aria</a>
+                <span class="text-gray-400 text-sm">Worship Arts Team Portal</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 py-8 px-4">
+            <div class="max-w-4xl mx-auto">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-ch-dark border-t border-ch-gray py-4 px-6 text-center text-gray-500 text-sm">
+            <p>&copy; {% now "Y" %} Aria. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+</html>

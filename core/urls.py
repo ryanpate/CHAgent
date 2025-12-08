@@ -84,4 +84,15 @@ urlpatterns = [
     path('notifications/test/', views.push_test, name='push_test'),
     path('notifications/clicked/', views.notification_clicked, name='notification_clicked'),
     path('notifications/device/<int:subscription_id>/remove/', views.push_remove_device, name='push_remove_device'),
+    # Organization Onboarding
+    path('signup/', views.onboarding_signup, name='onboarding_signup'),
+    path('onboarding/select-plan/', views.onboarding_select_plan, name='onboarding_select_plan'),
+    path('onboarding/checkout/', views.onboarding_checkout, name='onboarding_checkout'),
+    path('onboarding/checkout/success/', views.onboarding_checkout_success, name='onboarding_checkout_success'),
+    path('onboarding/checkout/cancel/', views.onboarding_checkout_cancel, name='onboarding_checkout_cancel'),
+    path('onboarding/connect-pco/', views.onboarding_connect_pco, name='onboarding_connect_pco'),
+    path('onboarding/invite-team/', views.onboarding_invite_team, name='onboarding_invite_team'),
+    path('onboarding/complete/', views.onboarding_complete, name='onboarding_complete'),
+    path('invite/<str:token>/', views.accept_invitation, name='accept_invitation'),
+    path('webhooks/stripe/', views.stripe_webhook, name='stripe_webhook'),
 ]

@@ -1,0 +1,88 @@
+{% extends "core/onboarding/base_public.html" %}
+
+{% block title %}Connect Planning Center{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <!-- Progress Steps -->
+    <div class="flex items-center justify-center mb-8">
+        <div class="flex items-center text-sm">
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gold text-ch-black font-bold">1</span>
+            <span class="ml-2 text-ch-gold">Account</span>
+            <div class="w-12 h-0.5 bg-ch-gold mx-4"></div>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gold text-ch-black font-bold">2</span>
+            <span class="ml-2 text-ch-gold">Plan</span>
+            <div class="w-12 h-0.5 bg-ch-gold mx-4"></div>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gold text-ch-black font-bold">3</span>
+            <span class="ml-2 text-ch-gold">Connect</span>
+            <div class="w-12 h-0.5 bg-ch-gray mx-4"></div>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gray text-gray-400 font-bold">4</span>
+            <span class="ml-2 text-gray-400">Team</span>
+        </div>
+    </div>
+
+    <div class="bg-ch-dark rounded-lg border border-ch-gray p-8">
+        <h1 class="text-2xl font-bold text-white mb-2">Connect Planning Center</h1>
+        <p class="text-gray-400 mb-6">
+            Connect your Planning Center account to import volunteers, schedules, and songs.
+            You can skip this step and set it up later.
+        </p>
+
+        {% if is_connected %}
+        <div class="bg-green-900/30 border border-green-500 rounded-lg p-4 mb-6">
+            <div class="flex items-center gap-3">
+                <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span class="text-green-300">Planning Center is connected!</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+
+            <div class="bg-ch-gray/50 rounded-lg p-6 border border-ch-gray">
+                <h3 class="text-lg font-semibold text-white mb-4">Manual API Credentials</h3>
+                <p class="text-gray-400 text-sm mb-4">
+                    Get your API credentials from
+                    <a href="https://api.planningcenteronline.com/oauth/applications" target="_blank" class="text-ch-gold hover:underline">
+                        Planning Center Developer Console
+                    </a>
+                </p>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Application ID</label>
+                        <input type="text" name="pco_app_id"
+                               value="{{ organization.planning_center_app_id }}"
+                               placeholder="Your PCO App ID"
+                               class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Secret</label>
+                        <input type="password" name="pco_secret"
+                               placeholder="Your PCO Secret"
+                               class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-4">
+                <button type="submit" name="action" value="connect"
+                        class="flex-1 bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-3 px-6 rounded-lg transition-colors">
+                    Connect Planning Center
+                </button>
+                <button type="submit" name="action" value="skip"
+                        class="px-6 py-3 bg-ch-gray hover:bg-ch-gray/80 text-white font-semibold rounded-lg transition-colors">
+                    Skip for Now
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="mt-8 text-center text-gray-500 text-sm">
+        <p>You can always connect Planning Center later from your organization settings.</p>
+    </div>
+</div>
+{% endblock %}

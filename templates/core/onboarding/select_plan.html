@@ -1,0 +1,152 @@
+{% extends "core/onboarding/base_public.html" %}
+
+{% block title %}Choose Your Plan{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+    <!-- Progress Steps -->
+    <div class="flex items-center justify-center mb-8">
+        <div class="flex items-center text-sm">
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gold text-ch-black font-bold">1</span>
+            <span class="ml-2 text-ch-gold">Account</span>
+            <div class="w-12 h-0.5 bg-ch-gold mx-4"></div>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gold text-ch-black font-bold">2</span>
+            <span class="ml-2 text-ch-gold">Plan</span>
+            <div class="w-12 h-0.5 bg-ch-gray mx-4"></div>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gray text-gray-400 font-bold">3</span>
+            <span class="ml-2 text-gray-400">Connect</span>
+            <div class="w-12 h-0.5 bg-ch-gray mx-4"></div>
+            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-ch-gray text-gray-400 font-bold">4</span>
+            <span class="ml-2 text-gray-400">Team</span>
+        </div>
+    </div>
+
+    <h1 class="text-3xl font-bold text-white text-center mb-2">Choose Your Plan</h1>
+    <p class="text-gray-400 text-center mb-8">All plans include a 14-day free trial. Cancel anytime.</p>
+
+    <!-- Billing Toggle -->
+    <div class="flex justify-center mb-8">
+        <div class="bg-ch-dark rounded-lg p-1 inline-flex">
+            <button type="button" id="monthly-toggle"
+                    class="px-4 py-2 rounded-lg text-sm font-medium transition-colors billing-toggle active">
+                Monthly
+            </button>
+            <button type="button" id="yearly-toggle"
+                    class="px-4 py-2 rounded-lg text-sm font-medium transition-colors billing-toggle">
+                Yearly <span class="text-green-400 ml-1">Save 20%</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Plans Grid -->
+    <div class="grid md:grid-cols-4 gap-6">
+        {% for plan in plans %}
+        <div class="bg-ch-dark rounded-lg border {% if plan == current_plan %}border-ch-gold{% else %}border-ch-gray{% endif %} p-6 relative
+                    {% if plan.name == 'Team' %}ring-2 ring-ch-gold{% endif %}">
+
+            {% if plan.name == 'Team' %}
+            <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <span class="bg-ch-gold text-ch-black text-xs font-bold px-3 py-1 rounded-full">MOST POPULAR</span>
+            </div>
+            {% endif %}
+
+            <h3 class="text-xl font-bold text-white mb-2">{{ plan.name }}</h3>
+
+            <div class="mb-4">
+                <span class="text-3xl font-bold text-white monthly-price">${{ plan.monthly_price|floatformat:0 }}</span>
+                <span class="text-3xl font-bold text-white yearly-price hidden">${{ plan.yearly_price|floatformat:0 }}</span>
+                <span class="text-gray-400 monthly-label">/month</span>
+                <span class="text-gray-400 yearly-label hidden">/year</span>
+            </div>
+
+            <p class="text-gray-400 text-sm mb-4">{{ plan.description }}</p>
+
+            <ul class="space-y-2 mb-6 text-sm">
+                <li class="flex items-start gap-2 text-gray-300">
+                    <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    {% if plan.max_users %}{{ plan.max_users }} team members{% else %}Unlimited team members{% endif %}
+                </li>
+                <li class="flex items-start gap-2 text-gray-300">
+                    <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    {% if plan.max_volunteers %}{{ plan.max_volunteers }} volunteers{% else %}Unlimited volunteers{% endif %}
+                </li>
+                {% if plan.features %}
+                    {% for feature in plan.features %}
+                    <li class="flex items-start gap-2 text-gray-300">
+                        <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        {{ feature }}
+                    </li>
+                    {% endfor %}
+                {% endif %}
+            </ul>
+
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="plan_id" value="{{ plan.id }}">
+                <input type="hidden" name="billing_cycle" class="billing-cycle-input" value="monthly">
+                <button type="submit"
+                        class="w-full {% if plan.name == 'Team' %}bg-ch-gold text-ch-black{% else %}bg-ch-gray text-white{% endif %} hover:opacity-90 font-semibold py-3 px-6 rounded-lg transition-colors">
+                    {% if plan == current_plan %}Current Plan{% else %}Select Plan{% endif %}
+                </button>
+            </form>
+        </div>
+        {% empty %}
+        <div class="col-span-4 text-center text-gray-400 py-8">
+            <p>No plans available. Please contact support.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <p class="text-center text-gray-500 text-sm mt-8">
+        Questions? <a href="mailto:support@aria.church" class="text-ch-gold hover:underline">Contact us</a>
+    </p>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const monthlyToggle = document.getElementById('monthly-toggle');
+    const yearlyToggle = document.getElementById('yearly-toggle');
+    const monthlyPrices = document.querySelectorAll('.monthly-price');
+    const yearlyPrices = document.querySelectorAll('.yearly-price');
+    const monthlyLabels = document.querySelectorAll('.monthly-label');
+    const yearlyLabels = document.querySelectorAll('.yearly-label');
+    const billingInputs = document.querySelectorAll('.billing-cycle-input');
+
+    function setMonthly() {
+        monthlyToggle.classList.add('bg-ch-gold', 'text-ch-black');
+        monthlyToggle.classList.remove('text-gray-400');
+        yearlyToggle.classList.remove('bg-ch-gold', 'text-ch-black');
+        yearlyToggle.classList.add('text-gray-400');
+        monthlyPrices.forEach(el => el.classList.remove('hidden'));
+        yearlyPrices.forEach(el => el.classList.add('hidden'));
+        monthlyLabels.forEach(el => el.classList.remove('hidden'));
+        yearlyLabels.forEach(el => el.classList.add('hidden'));
+        billingInputs.forEach(el => el.value = 'monthly');
+    }
+
+    function setYearly() {
+        yearlyToggle.classList.add('bg-ch-gold', 'text-ch-black');
+        yearlyToggle.classList.remove('text-gray-400');
+        monthlyToggle.classList.remove('bg-ch-gold', 'text-ch-black');
+        monthlyToggle.classList.add('text-gray-400');
+        monthlyPrices.forEach(el => el.classList.add('hidden'));
+        yearlyPrices.forEach(el => el.classList.remove('hidden'));
+        monthlyLabels.forEach(el => el.classList.add('hidden'));
+        yearlyLabels.forEach(el => el.classList.remove('hidden'));
+        billingInputs.forEach(el => el.value = 'yearly');
+    }
+
+    monthlyToggle.addEventListener('click', setMonthly);
+    yearlyToggle.addEventListener('click', setYearly);
+
+    // Initialize
+    setMonthly();
+});
+</script>
+{% endblock %}

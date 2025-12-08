@@ -1,0 +1,107 @@
+{% extends "core/onboarding/base_public.html" %}
+
+{% block title %}Sign Up{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto">
+    <div class="bg-ch-dark rounded-lg border border-ch-gray p-8">
+        <h1 class="text-2xl font-bold text-white mb-2">Create Your Organization</h1>
+        <p class="text-gray-400 mb-6">Start your 14-day free trial. No credit card required.</p>
+
+        {% if errors %}
+        <div class="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6">
+            <ul class="text-red-300 text-sm">
+                {% for error in errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Organization Name</label>
+                <input type="text" name="organization_name" value="{{ org_name|default:'' }}"
+                       required
+                       placeholder="e.g., First Baptist Church"
+                       class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">First Name</label>
+                    <input type="text" name="first_name" value="{{ first_name|default:'' }}"
+                           placeholder="John"
+                           class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Last Name</label>
+                    <input type="text" name="last_name" value="{{ last_name|default:'' }}"
+                           placeholder="Doe"
+                           class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Email Address</label>
+                <input type="email" name="email" value="{{ email|default:'' }}"
+                       required
+                       placeholder="john@church.org"
+                       class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Password</label>
+                <input type="password" name="password"
+                       required
+                       minlength="8"
+                       placeholder="At least 8 characters"
+                       class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
+            </div>
+
+            <button type="submit"
+                    class="w-full bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-3 px-6 rounded-lg transition-colors">
+                Start Free Trial
+            </button>
+        </form>
+
+        <p class="text-center text-gray-500 text-sm mt-6">
+            Already have an account?
+            <a href="{% url 'login' %}" class="text-ch-gold hover:underline">Sign in</a>
+        </p>
+    </div>
+
+    <!-- Features List -->
+    <div class="mt-8 text-center">
+        <p class="text-gray-400 mb-4">Your trial includes:</p>
+        <div class="grid grid-cols-2 gap-4 text-sm text-gray-300">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                AI-Powered Assistant
+            </div>
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Planning Center Integration
+            </div>
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Volunteer Care Tracking
+            </div>
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Team Communication
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
