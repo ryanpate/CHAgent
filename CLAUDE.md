@@ -22,12 +22,12 @@ The platform supports multiple churches/organizations with complete data isolati
 
 ### Subscription Plans
 
-| Plan | Price | Users | Volunteers | Key Features |
-|------|-------|-------|------------|--------------|
-| **Starter** | $29/mo | 5 | 50 | PCO Integration, Push Notifications |
-| **Team** | $79/mo | 15 | 200 | + Analytics, Care Insights |
-| **Ministry** | $149/mo | Unlimited | Unlimited | + API Access, Custom Branding |
-| **Enterprise** | Contact | Unlimited | Unlimited | + Multi-campus, Priority Support |
+| Plan | Monthly | Yearly | Users | Volunteers | Key Features |
+|------|---------|--------|-------|------------|--------------|
+| **Starter** | $9.99/mo | $100/yr | 5 | 50 | PCO Integration, Push Notifications |
+| **Team** | $39.99/mo | $400/yr | 15 | 200 | + Analytics, Care Insights |
+| **Ministry** | $79.99/mo | $800/yr | Unlimited | Unlimited | + API Access, Custom Branding |
+| **Enterprise** | Contact | Contact | Unlimited | Unlimited | + Multi-campus, Priority Support |
 
 ### Organization Model
 
