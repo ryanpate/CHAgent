@@ -30,6 +30,9 @@ django-htmx>=1.17.0
 # Web Push Notifications
 pywebpush>=1.14.0
 
+# Payment Processing
+stripe>=7.0.0
+
 # PDF Parsing (for chord chart extraction)
 pypdf>=4.0.0
 
