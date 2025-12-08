@@ -3408,8 +3408,10 @@ def onboarding_checkout(request):
     except SubscriptionPlan.DoesNotExist:
         return redirect('onboarding_select_plan')
 
-    # Get the appropriate Stripe price ID
-    price_id = plan.stripe_price_yearly if billing_cycle == 'yearly' else plan.stripe_price_monthly
+    # Get the appropriate Stripe price ID from settings based on plan tier
+    # Settings keys are like: STRIPE_PRICE_STARTER_MONTHLY, STRIPE_PRICE_TEAM_YEARLY
+    price_key = f'STRIPE_PRICE_{plan.tier.upper()}_{billing_cycle.upper()}'
+    price_id = getattr(settings, price_key, None)
 
     if not price_id or not stripe.api_key:
         # If no Stripe price configured, skip to next step (trial only)
