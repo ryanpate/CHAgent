@@ -1,0 +1,338 @@
+{% extends "core/onboarding/base_public.html" %}
+
+{% block title %}Pricing - Aria{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="text-center mb-12">
+        <h1 class="text-4xl font-bold text-white mb-4">Simple, Transparent Pricing</h1>
+        <p class="text-xl text-gray-400 max-w-2xl mx-auto">
+            Choose the plan that fits your team. All plans include a 14-day free trial.
+        </p>
+    </div>
+
+    <!-- Billing Toggle -->
+    <div class="flex justify-center mb-8">
+        <div class="bg-ch-dark rounded-lg p-1 border border-ch-gray">
+            <button id="monthly-btn" onclick="toggleBilling('monthly')"
+                    class="px-6 py-2 rounded-md text-sm font-medium transition-colors bg-ch-gold text-ch-black">
+                Monthly
+            </button>
+            <button id="yearly-btn" onclick="toggleBilling('yearly')"
+                    class="px-6 py-2 rounded-md text-sm font-medium transition-colors text-gray-400 hover:text-white">
+                Yearly <span class="text-ch-gold text-xs">Save 17%</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Pricing Cards -->
+    <div class="grid md:grid-cols-4 gap-6 mb-16">
+        {% for plan in plans %}
+        <div class="bg-ch-dark rounded-xl border {% if plan.name == 'Team' %}border-ch-gold ring-2 ring-ch-gold{% else %}border-ch-gray{% endif %} p-6 flex flex-col">
+            {% if plan.name == 'Team' %}
+            <span class="inline-block bg-ch-gold text-ch-black text-xs font-bold px-3 py-1 rounded-full mb-4 self-start">MOST POPULAR</span>
+            {% else %}
+            <div class="h-7 mb-4"></div>
+            {% endif %}
+
+            <h3 class="text-2xl font-bold text-white mb-2">{{ plan.name }}</h3>
+            <p class="text-gray-400 text-sm mb-4 h-12">{{ plan.description }}</p>
+
+            <div class="mb-6">
+                <div class="monthly-price">
+                    <span class="text-4xl font-bold text-white">${{ plan.monthly_price|floatformat:0 }}</span>
+                    <span class="text-gray-400">/month</span>
+                </div>
+                <div class="yearly-price hidden">
+                    <span class="text-4xl font-bold text-white">${{ plan.yearly_price|floatformat:0 }}</span>
+                    <span class="text-gray-400">/year</span>
+                    <p class="text-ch-gold text-sm mt-1">
+                        Save ${{ plan.yearly_savings|floatformat:0 }}/year
+                    </p>
+                </div>
+            </div>
+
+            <div class="border-t border-ch-gray pt-6 mb-6 flex-1">
+                <p class="text-white font-medium mb-4">Includes:</p>
+                <ul class="space-y-3 text-sm">
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-ch-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-300">
+                            {% if plan.max_users %}{{ plan.max_users }} team members{% else %}Unlimited team members{% endif %}
+                        </span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-ch-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-300">
+                            {% if plan.max_volunteers %}{{ plan.max_volunteers }} volunteers{% else %}Unlimited volunteers{% endif %}
+                        </span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-ch-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-300">
+                            {% if plan.max_ai_queries %}{{ plan.max_ai_queries }} AI queries/month{% else %}Unlimited AI queries{% endif %}
+                        </span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-ch-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-300">Planning Center integration</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-ch-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-300">Push notifications</span>
+                    </li>
+                    {% if plan.features.analytics %}
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-ch-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-300">Analytics dashboard</span>
+                    </li>
+                    {% endif %}
+                    {% if plan.features.care_insights %}
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-ch-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-300">AI care insights</span>
+                    </li>
+                    {% endif %}
+                    {% if plan.features.api_access %}
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-ch-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-300">API access</span>
+                    </li>
+                    {% endif %}
+                    {% if plan.features.custom_branding %}
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-ch-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-300">Custom branding</span>
+                    </li>
+                    {% endif %}
+                    {% if plan.features.priority_support %}
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-ch-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-gray-300">Priority support</span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+
+            {% if plan.name == 'Enterprise' %}
+            <a href="mailto:sales@aria.church"
+               class="block text-center bg-ch-gray hover:bg-ch-gray/80 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                Contact Sales
+            </a>
+            {% else %}
+            <a href="{% url 'onboarding_signup' %}?plan={{ plan.slug }}"
+               class="block text-center {% if plan.name == 'Team' %}bg-ch-gold hover:bg-ch-gold/90 text-ch-black{% else %}bg-ch-gray hover:bg-ch-gray/80 text-white{% endif %} font-semibold py-3 px-6 rounded-lg transition-colors">
+                Start Free Trial
+            </a>
+            {% endif %}
+        </div>
+        {% empty %}
+        <div class="col-span-4 text-center py-12">
+            <p class="text-gray-400">Pricing information coming soon. Contact us for details.</p>
+            <a href="mailto:sales@aria.church" class="text-ch-gold hover:underline mt-2 inline-block">sales@aria.church</a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Feature Comparison Table -->
+    <div class="bg-ch-dark rounded-xl border border-ch-gray p-8 mb-16">
+        <h2 class="text-2xl font-bold text-white mb-8 text-center">Feature Comparison</h2>
+
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-ch-gray">
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Feature</th>
+                        <th class="text-center py-4 px-4 text-white font-medium">Starter</th>
+                        <th class="text-center py-4 px-4 text-white font-medium">Team</th>
+                        <th class="text-center py-4 px-4 text-white font-medium">Ministry</th>
+                        <th class="text-center py-4 px-4 text-white font-medium">Enterprise</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">Team Members</td>
+                        <td class="py-4 px-4 text-center text-white">5</td>
+                        <td class="py-4 px-4 text-center text-white">15</td>
+                        <td class="py-4 px-4 text-center text-white">Unlimited</td>
+                        <td class="py-4 px-4 text-center text-white">Unlimited</td>
+                    </tr>
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">Volunteers</td>
+                        <td class="py-4 px-4 text-center text-white">50</td>
+                        <td class="py-4 px-4 text-center text-white">200</td>
+                        <td class="py-4 px-4 text-center text-white">Unlimited</td>
+                        <td class="py-4 px-4 text-center text-white">Unlimited</td>
+                    </tr>
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">AI Queries/Month</td>
+                        <td class="py-4 px-4 text-center text-white">500</td>
+                        <td class="py-4 px-4 text-center text-white">2,000</td>
+                        <td class="py-4 px-4 text-center text-white">Unlimited</td>
+                        <td class="py-4 px-4 text-center text-white">Unlimited</td>
+                    </tr>
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">Aria AI Assistant</td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                    </tr>
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">Planning Center Integration</td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                    </tr>
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">Push Notifications</td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                    </tr>
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">Team Communication</td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                    </tr>
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">Analytics Dashboard</td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                    </tr>
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">AI Care Insights</td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                    </tr>
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">API Access</td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                    </tr>
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">Custom Branding</td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                    </tr>
+                    <tr class="border-b border-ch-gray/50">
+                        <td class="py-4 px-4 text-gray-300">Multi-Campus Support</td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                    </tr>
+                    <tr>
+                        <td class="py-4 px-4 text-gray-300">Priority Support</td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></td>
+                        <td class="py-4 px-4 text-center"><svg class="w-5 h-5 text-ch-gold mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- FAQ Section -->
+    <div class="mb-16">
+        <h2 class="text-2xl font-bold text-white mb-8 text-center">Frequently Asked Questions</h2>
+
+        <div class="grid md:grid-cols-2 gap-6">
+            <div class="bg-ch-dark rounded-lg border border-ch-gray p-6">
+                <h3 class="text-lg font-semibold text-white mb-2">Can I change plans later?</h3>
+                <p class="text-gray-400 text-sm">Yes! You can upgrade or downgrade your plan at any time. Changes take effect on your next billing cycle.</p>
+            </div>
+            <div class="bg-ch-dark rounded-lg border border-ch-gray p-6">
+                <h3 class="text-lg font-semibold text-white mb-2">What happens after my trial?</h3>
+                <p class="text-gray-400 text-sm">After your 14-day trial, you'll need to choose a paid plan to continue using Aria. Your data is preserved during this process.</p>
+            </div>
+            <div class="bg-ch-dark rounded-lg border border-ch-gray p-6">
+                <h3 class="text-lg font-semibold text-white mb-2">Do I need a Planning Center account?</h3>
+                <p class="text-gray-400 text-sm">While Aria works best with Planning Center integration, you can use many features without it. PCO integration is optional.</p>
+            </div>
+            <div class="bg-ch-dark rounded-lg border border-ch-gray p-6">
+                <h3 class="text-lg font-semibold text-white mb-2">What payment methods do you accept?</h3>
+                <p class="text-gray-400 text-sm">We accept all major credit cards through Stripe. For Enterprise plans, we can arrange invoicing.</p>
+            </div>
+            <div class="bg-ch-dark rounded-lg border border-ch-gray p-6">
+                <h3 class="text-lg font-semibold text-white mb-2">Is my data secure?</h3>
+                <p class="text-gray-400 text-sm">Absolutely. We use industry-standard encryption, and your data is completely isolated from other organizations.</p>
+            </div>
+            <div class="bg-ch-dark rounded-lg border border-ch-gray p-6">
+                <h3 class="text-lg font-semibold text-white mb-2">Can I cancel anytime?</h3>
+                <p class="text-gray-400 text-sm">Yes, you can cancel your subscription at any time. You'll retain access until the end of your current billing period.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- CTA Section -->
+    <div class="text-center py-12 bg-ch-dark rounded-xl border border-ch-gray">
+        <h2 class="text-2xl font-bold text-white mb-4">Ready to Get Started?</h2>
+        <p class="text-gray-400 mb-6">Join churches using Aria to build stronger volunteer relationships.</p>
+        <a href="{% url 'onboarding_signup' %}"
+           class="inline-block bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-3 px-8 rounded-lg transition-colors">
+            Start Your Free Trial
+        </a>
+        <p class="text-gray-500 text-sm mt-4">14 days free. No credit card required.</p>
+    </div>
+</div>
+
+<script>
+function toggleBilling(type) {
+    const monthlyBtn = document.getElementById('monthly-btn');
+    const yearlyBtn = document.getElementById('yearly-btn');
+    const monthlyPrices = document.querySelectorAll('.monthly-price');
+    const yearlyPrices = document.querySelectorAll('.yearly-price');
+
+    if (type === 'monthly') {
+        monthlyBtn.classList.add('bg-ch-gold', 'text-ch-black');
+        monthlyBtn.classList.remove('text-gray-400', 'hover:text-white');
+        yearlyBtn.classList.remove('bg-ch-gold', 'text-ch-black');
+        yearlyBtn.classList.add('text-gray-400', 'hover:text-white');
+        monthlyPrices.forEach(el => el.classList.remove('hidden'));
+        yearlyPrices.forEach(el => el.classList.add('hidden'));
+    } else {
+        yearlyBtn.classList.add('bg-ch-gold', 'text-ch-black');
+        yearlyBtn.classList.remove('text-gray-400', 'hover:text-white');
+        monthlyBtn.classList.remove('bg-ch-gold', 'text-ch-black');
+        monthlyBtn.classList.add('text-gray-400', 'hover:text-white');
+        monthlyPrices.forEach(el => el.classList.add('hidden'));
+        yearlyPrices.forEach(el => el.classList.remove('hidden'));
+    }
+}
+</script>
+{% endblock %}

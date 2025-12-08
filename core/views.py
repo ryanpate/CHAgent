@@ -70,6 +70,39 @@ def should_start_new_conversation(message: str) -> bool:
     return False
 
 
+def home(request):
+    """
+    Public landing page for unauthenticated users.
+    Redirects to dashboard for authenticated users.
+    """
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+
+    from .models import SubscriptionPlan
+
+    # Get plans for pricing section
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('monthly_price')
+
+    context = {
+        'plans': plans,
+    }
+    return render(request, 'core/landing.html', context)
+
+
+def pricing(request):
+    """
+    Public pricing page showing all subscription plans.
+    """
+    from .models import SubscriptionPlan
+
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('monthly_price')
+
+    context = {
+        'plans': plans,
+    }
+    return render(request, 'core/pricing.html', context)
+
+
 @login_required
 def dashboard(request):
     """Dashboard view with overview statistics and AI chat interface."""

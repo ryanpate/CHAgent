@@ -77,6 +77,36 @@ class SubscriptionPlan(models.Model):
         """Return yearly price in dollars."""
         return self.price_yearly_cents / 100
 
+    # Aliases for template compatibility
+    @property
+    def monthly_price(self):
+        """Alias for price_monthly for template use."""
+        return self.price_monthly
+
+    @property
+    def yearly_price(self):
+        """Alias for price_yearly for template use."""
+        return self.price_yearly
+
+    @property
+    def yearly_savings(self):
+        """Calculate savings when paying yearly vs monthly."""
+        monthly_for_year = self.price_monthly * 12
+        return monthly_for_year - self.price_yearly
+
+    @property
+    def features(self):
+        """Return feature flags as a dictionary for template access."""
+        return {
+            'pco_integration': self.has_pco_integration,
+            'push_notifications': self.has_push_notifications,
+            'analytics': self.has_analytics,
+            'care_insights': self.has_care_insights,
+            'api_access': self.has_api_access,
+            'custom_branding': self.has_custom_branding,
+            'priority_support': self.has_priority_support,
+        }
+
 
 def generate_api_key():
     """Generate a secure API key for organizations."""

@@ -1,0 +1,246 @@
+{% extends "core/onboarding/base_public.html" %}
+
+{% block title %}AI-Powered Worship Arts Team Portal{% endblock %}
+
+{% block extra_head %}
+<style>
+    .gradient-text {
+        background: linear-gradient(135deg, #c9a227 0%, #f0d060 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .feature-card:hover {
+        transform: translateY(-4px);
+        border-color: #c9a227;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="text-center py-16 px-4">
+    <h1 class="text-4xl md:text-6xl font-bold text-white mb-6">
+        Meet <span class="gradient-text">Aria</span>
+    </h1>
+    <p class="text-xl md:text-2xl text-gray-300 mb-4 max-w-3xl mx-auto">
+        Your AI-powered assistant for worship arts teams
+    </p>
+    <p class="text-lg text-gray-400 mb-8 max-w-2xl mx-auto">
+        Connect with Planning Center, track volunteer relationships, manage follow-ups, and get instant answers about your team - all in one place.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="{% url 'onboarding_signup' %}"
+           class="bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-4 px-8 rounded-lg text-lg transition-colors">
+            Start Free Trial
+        </a>
+        <a href="{% url 'pricing' %}"
+           class="bg-ch-gray hover:bg-ch-gray/80 text-white font-semibold py-4 px-8 rounded-lg text-lg transition-colors">
+            View Pricing
+        </a>
+    </div>
+    <p class="text-gray-500 text-sm mt-4">14-day free trial. No credit card required.</p>
+</div>
+
+<!-- Demo/Screenshot Section -->
+<div class="bg-ch-dark rounded-2xl border border-ch-gray p-2 max-w-4xl mx-auto mb-20">
+    <div class="bg-ch-gray rounded-xl p-6">
+        <div class="flex items-start gap-4 mb-4">
+            <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-ch-gold font-bold">You</span>
+            </div>
+            <div class="bg-ch-dark rounded-lg p-4 flex-1">
+                <p class="text-gray-300">Who's on the team this Sunday?</p>
+            </div>
+        </div>
+        <div class="flex items-start gap-4">
+            <div class="w-10 h-10 bg-ch-gold rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-ch-black font-bold text-sm">Aria</span>
+            </div>
+            <div class="bg-ch-gold/10 border border-ch-gold/30 rounded-lg p-4 flex-1">
+                <p class="text-gray-200">Here's who's scheduled for <strong>Sunday, December 15th</strong>:</p>
+                <ul class="mt-2 text-gray-300 text-sm space-y-1">
+                    <li><strong>Worship Leader:</strong> Sarah Johnson</li>
+                    <li><strong>Vocals:</strong> Mike Chen, Emily Davis</li>
+                    <li><strong>Keys:</strong> David Wilson</li>
+                    <li><strong>Drums:</strong> Chris Martinez</li>
+                    <li><strong>Sound:</strong> Alex Thompson</li>
+                </ul>
+                <p class="mt-2 text-gray-400 text-sm">Would you like me to show you the setlist or any volunteer details?</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Features Section -->
+<div class="py-16">
+    <h2 class="text-3xl font-bold text-white text-center mb-4">Everything Your Team Needs</h2>
+    <p class="text-gray-400 text-center mb-12 max-w-2xl mx-auto">
+        Aria combines AI-powered insights with practical tools to help you care for your volunteers better.
+    </p>
+
+    <div class="grid md:grid-cols-3 gap-6">
+        <!-- Feature 1 -->
+        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
+            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-white mb-2">AI Assistant</h3>
+            <p class="text-gray-400">Ask Aria about schedules, volunteers, songs, and more. Get instant answers without searching through spreadsheets.</p>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
+            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-white mb-2">Volunteer Care</h3>
+            <p class="text-gray-400">Log interactions, track personal details, and never forget a prayer request. Build deeper relationships with your team.</p>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
+            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-white mb-2">Follow-up Tracking</h3>
+            <p class="text-gray-400">Create and manage follow-ups automatically. Get reminders for birthdays, prayer requests, and action items.</p>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
+            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-white mb-2">Planning Center Integration</h3>
+            <p class="text-gray-400">Connect directly to Planning Center. Access schedules, songs, chord charts, and volunteer info instantly.</p>
+        </div>
+
+        <!-- Feature 5 -->
+        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
+            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
+                </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-white mb-2">Team Communication</h3>
+            <p class="text-gray-400">Announcements, channels, direct messages, and project management. Keep your team connected and informed.</p>
+        </div>
+
+        <!-- Feature 6 -->
+        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
+            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-white mb-2">Analytics & Insights</h3>
+            <p class="text-gray-400">Track engagement, identify volunteers who need attention, and get proactive care alerts powered by AI.</p>
+        </div>
+    </div>
+</div>
+
+<!-- How It Works Section -->
+<div class="py-16 bg-ch-dark rounded-2xl border border-ch-gray p-8 my-16">
+    <h2 class="text-3xl font-bold text-white text-center mb-12">How It Works</h2>
+
+    <div class="grid md:grid-cols-4 gap-8">
+        <div class="text-center">
+            <div class="w-12 h-12 bg-ch-gold rounded-full flex items-center justify-center mx-auto mb-4">
+                <span class="text-ch-black font-bold text-xl">1</span>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Sign Up</h3>
+            <p class="text-gray-400 text-sm">Create your organization in seconds. Start your 14-day free trial.</p>
+        </div>
+
+        <div class="text-center">
+            <div class="w-12 h-12 bg-ch-gold rounded-full flex items-center justify-center mx-auto mb-4">
+                <span class="text-ch-black font-bold text-xl">2</span>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Connect</h3>
+            <p class="text-gray-400 text-sm">Link your Planning Center account to import your team data.</p>
+        </div>
+
+        <div class="text-center">
+            <div class="w-12 h-12 bg-ch-gold rounded-full flex items-center justify-center mx-auto mb-4">
+                <span class="text-ch-black font-bold text-xl">3</span>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Invite Team</h3>
+            <p class="text-gray-400 text-sm">Add your team leaders and volunteers to collaborate.</p>
+        </div>
+
+        <div class="text-center">
+            <div class="w-12 h-12 bg-ch-gold rounded-full flex items-center justify-center mx-auto mb-4">
+                <span class="text-ch-black font-bold text-xl">4</span>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Start Caring</h3>
+            <p class="text-gray-400 text-sm">Use Aria to track interactions and care for your volunteers.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Pricing Preview -->
+<div class="py-16">
+    <h2 class="text-3xl font-bold text-white text-center mb-4">Simple, Transparent Pricing</h2>
+    <p class="text-gray-400 text-center mb-12">Plans for teams of all sizes. All include a 14-day free trial.</p>
+
+    <div class="grid md:grid-cols-4 gap-6">
+        {% for plan in plans %}
+        <div class="bg-ch-dark rounded-xl border {% if plan.name == 'Team' %}border-ch-gold{% else %}border-ch-gray{% endif %} p-6 text-center
+                    {% if plan.name == 'Team' %}ring-2 ring-ch-gold{% endif %}">
+            {% if plan.name == 'Team' %}
+            <span class="inline-block bg-ch-gold text-ch-black text-xs font-bold px-3 py-1 rounded-full mb-4">POPULAR</span>
+            {% endif %}
+            <h3 class="text-xl font-bold text-white">{{ plan.name }}</h3>
+            <div class="my-4">
+                <span class="text-3xl font-bold text-white">${{ plan.monthly_price|floatformat:0 }}</span>
+                <span class="text-gray-400">/mo</span>
+            </div>
+            <p class="text-gray-400 text-sm mb-4">
+                {% if plan.max_users %}{{ plan.max_users }} users{% else %}Unlimited{% endif %}
+            </p>
+        </div>
+        {% empty %}
+        <div class="col-span-4 text-center text-gray-400">
+            <p>Contact us for pricing information.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="text-center mt-8">
+        <a href="{% url 'pricing' %}" class="text-ch-gold hover:underline">View full pricing details &rarr;</a>
+    </div>
+</div>
+
+<!-- CTA Section -->
+<div class="py-16 text-center">
+    <h2 class="text-3xl font-bold text-white mb-4">Ready to Transform Your Team?</h2>
+    <p class="text-gray-400 mb-8 max-w-xl mx-auto">
+        Join churches using Aria to build stronger relationships with their volunteers.
+    </p>
+    <a href="{% url 'onboarding_signup' %}"
+       class="inline-block bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-4 px-8 rounded-lg text-lg transition-colors">
+        Start Your Free Trial
+    </a>
+    <p class="text-gray-500 text-sm mt-4">No credit card required</p>
+</div>
+
+<!-- Footer Links -->
+<div class="border-t border-ch-gray pt-8 mt-8">
+    <div class="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-500">
+        <div class="flex gap-6">
+            <a href="{% url 'pricing' %}" class="hover:text-gray-300">Pricing</a>
+            <a href="{% url 'login' %}" class="hover:text-gray-300">Sign In</a>
+        </div>
+        <p>Questions? <a href="mailto:support@aria.church" class="text-ch-gold hover:underline">support@aria.church</a></p>
+    </div>
+</div>
+{% endblock %}
