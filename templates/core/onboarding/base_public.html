@@ -29,15 +29,21 @@
     <div class="min-h-screen flex flex-col">
         <!-- Header -->
         <header class="bg-ch-dark border-b border-ch-gray py-4 px-6">
-            <div class="max-w-4xl mx-auto flex items-center justify-between">
+            <div class="max-w-6xl mx-auto flex items-center justify-between">
                 <a href="/" class="text-2xl font-bold text-ch-gold">Aria</a>
-                <span class="text-gray-400 text-sm">Worship Arts Team Portal</span>
+                <div class="flex items-center gap-4">
+                    <span class="text-gray-400 text-sm hidden sm:inline">Worship Arts Team Portal</span>
+                    <a href="{% url 'login' %}"
+                       class="bg-ch-gray hover:bg-ch-gray/80 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors border border-ch-gray hover:border-ch-gold/50">
+                        Sign In
+                    </a>
+                </div>
             </div>
         </header>
 
         <!-- Main Content -->
         <main class="flex-1 py-8 px-4">
-            <div class="max-w-4xl mx-auto">
+            <div class="{% block container_class %}max-w-4xl{% endblock %} mx-auto">
                 {% block content %}{% endblock %}
             </div>
         </main>
