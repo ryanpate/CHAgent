@@ -22,6 +22,7 @@ def organization_context(request):
     - can_manage_billing: Permission flag
     - trial_days_remaining: Days left in trial (if applicable)
     - ai_assistant_name: Custom AI name for this organization
+    - Subscription status flags for warning banners
     """
     context = {
         'organization': None,
@@ -35,6 +36,11 @@ def organization_context(request):
         'can_manage_billing': False,
         'trial_days_remaining': 0,
         'ai_assistant_name': getattr(settings, 'DEFAULT_AI_ASSISTANT_NAME', 'Aria'),
+        # Subscription status flags
+        'is_trial': False,
+        'show_trial_warning': False,
+        'is_past_due': False,
+        'subscription_status': None,
     }
 
     # Only process for authenticated users with organization context
@@ -48,6 +54,11 @@ def organization_context(request):
         context['organization'] = organization
         context['trial_days_remaining'] = organization.trial_days_remaining
         context['ai_assistant_name'] = organization.ai_assistant_name or 'Aria'
+        # Subscription status for warning banners
+        context['is_trial'] = organization.is_trial
+        context['show_trial_warning'] = organization.show_trial_warning
+        context['is_past_due'] = organization.subscription_status == 'past_due'
+        context['subscription_status'] = organization.subscription_status
 
     if membership:
         context['membership'] = membership
