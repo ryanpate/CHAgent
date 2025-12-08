@@ -1730,7 +1730,10 @@ def format_pco_details(details: dict, query_type: str = None) -> str:
     return '\n'.join(parts)
 
 
-SYSTEM_PROMPT = """You are the Cherry Hills Worship Arts Team Assistant named Aria. You help team members:
+def get_system_prompt(assistant_name='Aria', organization_name=None):
+    """Generate the system prompt for the AI assistant."""
+    org_context = f" for {organization_name}" if organization_name else ""
+    return f"""You are {assistant_name}, a Worship Arts Team Assistant{org_context}. You help team members:
 1. Log interactions with volunteers
 2. Answer questions about volunteers based on logged interactions
 3. Provide aggregate insights about the volunteer team
@@ -1790,11 +1793,14 @@ When you detect something needing follow-up, respond like:
 
 ## Context:
 You have access to the following interaction history for context:
-{context}
+{{context}}
 
-Current date: {current_date}
-Team member asking: {user_name}
+Current date: {{current_date}}
+Team member asking: {{user_name}}
 """
+
+# Keep a constant for backward compatibility (uses default values)
+SYSTEM_PROMPT = get_system_prompt()
 
 EXTRACTION_PROMPT = """Extract structured information from this volunteer interaction note.
 Return ONLY valid JSON (no markdown, no explanation) with this structure:
