@@ -65,6 +65,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.TenantMiddleware',  # Multi-tenant organization middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
@@ -83,6 +84,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.organization_context',  # Multi-tenant context
             ],
         },
     },
@@ -236,3 +238,35 @@ LOGGING = {
         },
     },
 }
+
+# =============================================================================
+# Stripe Billing Configuration (for SaaS subscriptions)
+# =============================================================================
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
+STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', '')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
+
+# Stripe Price IDs (set these after creating products in Stripe Dashboard)
+STRIPE_PRICE_IDS = {
+    'starter_monthly': os.environ.get('STRIPE_PRICE_STARTER_MONTHLY', ''),
+    'starter_yearly': os.environ.get('STRIPE_PRICE_STARTER_YEARLY', ''),
+    'team_monthly': os.environ.get('STRIPE_PRICE_TEAM_MONTHLY', ''),
+    'team_yearly': os.environ.get('STRIPE_PRICE_TEAM_YEARLY', ''),
+    'ministry_monthly': os.environ.get('STRIPE_PRICE_MINISTRY_MONTHLY', ''),
+    'ministry_yearly': os.environ.get('STRIPE_PRICE_MINISTRY_YEARLY', ''),
+}
+
+# =============================================================================
+# Multi-Tenant SaaS Configuration
+# =============================================================================
+# Trial period length in days
+TRIAL_PERIOD_DAYS = int(os.environ.get('TRIAL_PERIOD_DAYS', '14'))
+
+# Default AI assistant name for new organizations
+DEFAULT_AI_ASSISTANT_NAME = os.environ.get('DEFAULT_AI_ASSISTANT_NAME', 'Aria')
+
+# App domain for subdomain routing (e.g., "aria.church" or "localhost:8000")
+APP_DOMAIN = os.environ.get('APP_DOMAIN', 'localhost:8000')
+
+# Whether to use subdomain-based tenant routing
+USE_SUBDOMAIN_ROUTING = os.environ.get('USE_SUBDOMAIN_ROUTING', 'false').lower() == 'true'

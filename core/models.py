@@ -1,5 +1,7 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
+import secrets
 
 # Try to import pgvector, fall back to a placeholder if not available
 try:
@@ -11,25 +13,533 @@ except ImportError:
     VectorField = None
 
 
+# =============================================================================
+# Multi-Tenancy Models - Organization & Subscription Management
+# =============================================================================
+
+class SubscriptionPlan(models.Model):
+    """
+    Defines available subscription plans for organizations.
+    """
+    PLAN_TIER_CHOICES = [
+        ('free', 'Free Trial'),
+        ('starter', 'Starter'),
+        ('team', 'Team'),
+        ('ministry', 'Ministry'),
+        ('enterprise', 'Enterprise'),
+    ]
+
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(unique=True)
+    tier = models.CharField(max_length=20, choices=PLAN_TIER_CHOICES, default='starter')
+    description = models.TextField(blank=True)
+
+    # Pricing (in cents to avoid floating point issues)
+    price_monthly_cents = models.IntegerField(default=0, help_text="Monthly price in cents")
+    price_yearly_cents = models.IntegerField(default=0, help_text="Yearly price in cents")
+
+    # Limits
+    max_users = models.IntegerField(default=5, help_text="Maximum team members")
+    max_volunteers = models.IntegerField(default=50, help_text="Maximum volunteers tracked")
+    max_ai_queries_monthly = models.IntegerField(default=500, help_text="Monthly AI query limit")
+
+    # Feature flags
+    has_pco_integration = models.BooleanField(default=True)
+    has_push_notifications = models.BooleanField(default=True)
+    has_analytics = models.BooleanField(default=False)
+    has_care_insights = models.BooleanField(default=False)
+    has_api_access = models.BooleanField(default=False)
+    has_custom_branding = models.BooleanField(default=False)
+    has_priority_support = models.BooleanField(default=False)
+
+    is_active = models.BooleanField(default=True)
+    is_public = models.BooleanField(default=True, help_text="Show on pricing page")
+    sort_order = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'price_monthly_cents']
+        verbose_name = 'Subscription Plan'
+        verbose_name_plural = 'Subscription Plans'
+
+    def __str__(self):
+        return f"{self.name} (${self.price_monthly_cents / 100:.2f}/mo)"
+
+    @property
+    def price_monthly(self):
+        """Return monthly price in dollars."""
+        return self.price_monthly_cents / 100
+
+    @property
+    def price_yearly(self):
+        """Return yearly price in dollars."""
+        return self.price_yearly_cents / 100
+
+
+def generate_api_key():
+    """Generate a secure API key for organizations."""
+    return f"aria_{secrets.token_urlsafe(32)}"
+
+
+class Organization(models.Model):
+    """
+    Represents a church or organization using the platform.
+
+    This is the central tenant model - all data is scoped to an organization.
+    """
+    STATUS_CHOICES = [
+        ('trial', 'Trial'),
+        ('active', 'Active'),
+        ('past_due', 'Past Due'),
+        ('cancelled', 'Cancelled'),
+        ('suspended', 'Suspended'),
+    ]
+
+    # Basic info
+    name = models.CharField(max_length=200, help_text="Organization/Church name")
+    slug = models.SlugField(
+        max_length=100,
+        unique=True,
+        help_text="URL-friendly identifier (e.g., 'cherry-hills')"
+    )
+    logo = models.URLField(blank=True, help_text="URL to organization logo")
+
+    # Contact info
+    email = models.EmailField(help_text="Primary contact email")
+    phone = models.CharField(max_length=20, blank=True)
+    website = models.URLField(blank=True)
+    address = models.TextField(blank=True)
+    timezone = models.CharField(
+        max_length=50,
+        default='America/Denver',
+        help_text="Organization timezone for scheduling"
+    )
+
+    # Subscription
+    subscription_plan = models.ForeignKey(
+        SubscriptionPlan,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='organizations'
+    )
+    subscription_status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='trial'
+    )
+    trial_ends_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the trial period ends"
+    )
+    subscription_started_at = models.DateTimeField(null=True, blank=True)
+    subscription_ends_at = models.DateTimeField(null=True, blank=True)
+
+    # Billing (Stripe integration)
+    stripe_customer_id = models.CharField(max_length=100, blank=True)
+    stripe_subscription_id = models.CharField(max_length=100, blank=True)
+
+    # Planning Center Integration (per-org credentials)
+    planning_center_app_id = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Planning Center App ID for this organization"
+    )
+    planning_center_secret = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Planning Center Secret (encrypted at rest)"
+    )
+    planning_center_connected_at = models.DateTimeField(null=True, blank=True)
+
+    # API Access
+    api_key = models.CharField(
+        max_length=100,
+        unique=True,
+        default=generate_api_key,
+        help_text="API key for external integrations"
+    )
+    api_enabled = models.BooleanField(default=False)
+
+    # Usage tracking
+    ai_queries_this_month = models.IntegerField(default=0)
+    ai_queries_reset_at = models.DateTimeField(null=True, blank=True)
+
+    # Customization
+    ai_assistant_name = models.CharField(
+        max_length=50,
+        default='Aria',
+        help_text="Custom name for the AI assistant"
+    )
+    primary_color = models.CharField(
+        max_length=7,
+        default='#6366f1',
+        help_text="Primary brand color (hex)"
+    )
+
+    # Status
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Organization'
+        verbose_name_plural = 'Organizations'
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        # Generate slug if not provided
+        if not self.slug:
+            from django.utils.text import slugify
+            base_slug = slugify(self.name)
+            slug = base_slug
+            counter = 1
+            while Organization.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    @property
+    def is_trial(self):
+        """Check if organization is in trial period."""
+        if self.subscription_status != 'trial':
+            return False
+        if self.trial_ends_at and timezone.now() > self.trial_ends_at:
+            return False
+        return True
+
+    @property
+    def trial_days_remaining(self):
+        """Get days remaining in trial."""
+        if not self.is_trial or not self.trial_ends_at:
+            return 0
+        delta = self.trial_ends_at - timezone.now()
+        return max(0, delta.days)
+
+    @property
+    def is_subscription_active(self):
+        """Check if organization has an active subscription."""
+        return self.subscription_status in ['trial', 'active']
+
+    @property
+    def can_use_feature(self):
+        """Check if org can use paid features based on subscription."""
+        return self.is_subscription_active and self.is_active
+
+    def has_feature(self, feature_name):
+        """Check if organization's plan includes a specific feature."""
+        if not self.subscription_plan:
+            return False
+        return getattr(self.subscription_plan, f'has_{feature_name}', False)
+
+    def check_limit(self, limit_name, current_count):
+        """Check if organization is within a specific limit."""
+        if not self.subscription_plan:
+            return False
+        max_value = getattr(self.subscription_plan, f'max_{limit_name}', 0)
+        if max_value == -1:  # Unlimited
+            return True
+        return current_count < max_value
+
+    def increment_ai_usage(self):
+        """Increment AI query counter for the month."""
+        now = timezone.now()
+        # Reset counter if it's a new month
+        if self.ai_queries_reset_at is None or self.ai_queries_reset_at.month != now.month:
+            self.ai_queries_this_month = 0
+            self.ai_queries_reset_at = now
+        self.ai_queries_this_month += 1
+        self.save(update_fields=['ai_queries_this_month', 'ai_queries_reset_at'])
+
+    def has_pco_credentials(self):
+        """Check if Planning Center credentials are configured."""
+        return bool(self.planning_center_app_id and self.planning_center_secret)
+
+    def get_user_count(self):
+        """Get number of users in this organization."""
+        return self.memberships.filter(is_active=True).count()
+
+    def get_volunteer_count(self):
+        """Get number of volunteers in this organization."""
+        return self.volunteers.count()
+
+
+class OrganizationMembership(models.Model):
+    """
+    Links users to organizations with role-based permissions.
+
+    Users can belong to multiple organizations with different roles.
+    """
+    ROLE_CHOICES = [
+        ('owner', 'Owner'),        # Full control, billing, can delete org
+        ('admin', 'Admin'),        # Manage users, settings, full data access
+        ('leader', 'Team Leader'), # Manage volunteers, view analytics
+        ('member', 'Member'),      # Basic access to chat and interactions
+        ('viewer', 'Viewer'),      # Read-only access
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='organization_memberships'
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='memberships'
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default='member'
+    )
+
+    # Permissions (can override role defaults)
+    can_manage_users = models.BooleanField(default=False)
+    can_manage_settings = models.BooleanField(default=False)
+    can_view_analytics = models.BooleanField(default=False)
+    can_manage_billing = models.BooleanField(default=False)
+
+    # Team assignment (optional)
+    team = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Team within the organization (e.g., 'vocals', 'band')"
+    )
+
+    is_active = models.BooleanField(default=True)
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sent_invitations'
+    )
+    invited_at = models.DateTimeField(auto_now_add=True)
+    joined_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ['user', 'organization']
+        verbose_name = 'Organization Membership'
+        verbose_name_plural = 'Organization Memberships'
+
+    def __str__(self):
+        return f"{self.user} @ {self.organization} ({self.role})"
+
+    def save(self, *args, **kwargs):
+        # Set default permissions based on role
+        if not self.pk:  # Only on creation
+            self._set_role_defaults()
+        super().save(*args, **kwargs)
+
+    def _set_role_defaults(self):
+        """Set default permissions based on role."""
+        role_permissions = {
+            'owner': {
+                'can_manage_users': True,
+                'can_manage_settings': True,
+                'can_view_analytics': True,
+                'can_manage_billing': True,
+            },
+            'admin': {
+                'can_manage_users': True,
+                'can_manage_settings': True,
+                'can_view_analytics': True,
+                'can_manage_billing': False,
+            },
+            'leader': {
+                'can_manage_users': False,
+                'can_manage_settings': False,
+                'can_view_analytics': True,
+                'can_manage_billing': False,
+            },
+            'member': {
+                'can_manage_users': False,
+                'can_manage_settings': False,
+                'can_view_analytics': False,
+                'can_manage_billing': False,
+            },
+            'viewer': {
+                'can_manage_users': False,
+                'can_manage_settings': False,
+                'can_view_analytics': False,
+                'can_manage_billing': False,
+            },
+        }
+        perms = role_permissions.get(self.role, {})
+        for key, value in perms.items():
+            setattr(self, key, value)
+
+    def has_permission(self, permission):
+        """Check if this membership has a specific permission."""
+        return getattr(self, permission, False)
+
+    @property
+    def is_owner(self):
+        return self.role == 'owner'
+
+    @property
+    def is_admin_or_above(self):
+        return self.role in ['owner', 'admin']
+
+    @property
+    def is_leader_or_above(self):
+        return self.role in ['owner', 'admin', 'leader']
+
+
+class OrganizationInvitation(models.Model):
+    """
+    Pending invitations to join an organization.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('declined', 'Declined'),
+        ('expired', 'Expired'),
+    ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='invitations'
+    )
+    email = models.EmailField()
+    role = models.CharField(
+        max_length=20,
+        choices=OrganizationMembership.ROLE_CHOICES,
+        default='member'
+    )
+    team = models.CharField(max_length=100, blank=True)
+
+    token = models.CharField(
+        max_length=100,
+        unique=True,
+        default=lambda: secrets.token_urlsafe(32)
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_invitations'
+    )
+    message = models.TextField(blank=True, help_text="Optional personal message")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Organization Invitation'
+        verbose_name_plural = 'Organization Invitations'
+
+    def __str__(self):
+        return f"Invitation for {self.email} to {self.organization}"
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            from datetime import timedelta
+            self.expires_at = timezone.now() + timedelta(days=7)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_valid(self):
+        """Check if invitation is still valid."""
+        return (
+            self.status == 'pending' and
+            timezone.now() < self.expires_at
+        )
+
+    def accept(self, user):
+        """Accept this invitation and create membership."""
+        if not self.is_valid:
+            raise ValueError("Invitation is no longer valid")
+
+        membership, created = OrganizationMembership.objects.get_or_create(
+            user=user,
+            organization=self.organization,
+            defaults={
+                'role': self.role,
+                'team': self.team,
+                'invited_by': self.invited_by,
+                'joined_at': timezone.now(),
+            }
+        )
+
+        self.status = 'accepted'
+        self.accepted_at = timezone.now()
+        self.save()
+
+        return membership
+
+
+# =============================================================================
+# Tenant-Scoped Base Model
+# =============================================================================
+
+class TenantModel(models.Model):
+    """
+    Abstract base model that adds organization scoping to models.
+
+    Inherit from this for all models that should be scoped to an organization.
+    """
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='%(class)ss'
+    )
+
+    class Meta:
+        abstract = True
+
+
+# =============================================================================
+# Volunteer Management Models
+# =============================================================================
+
 class Volunteer(models.Model):
     """
     Volunteer profiles - auto-created/linked when AI identifies
     a volunteer in an interaction. Minimal structure, AI-driven.
     """
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='volunteers',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
     name = models.CharField(max_length=200)
     normalized_name = models.CharField(max_length=200, db_index=True)  # lowercase for matching
     team = models.CharField(max_length=100, blank=True)  # vocals, band, tech, etc.
     planning_center_id = models.CharField(
         max_length=100,
         blank=True,
-        null=True,
-        unique=True
+        null=True
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['name']
+        # PCO ID is unique within an organization, not globally
+        unique_together = [['organization', 'planning_center_id']]
+        indexes = [
+            models.Index(fields=['organization', 'normalized_name']),
+        ]
 
     def __str__(self):
         return self.name
@@ -46,6 +556,13 @@ class Interaction(models.Model):
     Append-only interaction log. Each entry is a team member's note
     about an encounter with one or more volunteers.
     """
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='interactions',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -106,6 +623,13 @@ class ChatMessage(models.Model):
         ('assistant', 'Assistant'),
     ]
 
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='chat_messages',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -133,6 +657,13 @@ class ConversationContext(models.Model):
     - Maintaining a running summary for long conversations
     - Better context-aware RAG retrieval
     """
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='conversation_contexts',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -354,6 +885,14 @@ class FollowUp(models.Model):
         ('cancelled', 'Cancelled'),
     ]
 
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='followups',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
+
     # Who created this follow-up
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -512,6 +1051,14 @@ class ResponseFeedback(models.Model):
         ('other', 'Other issue'),
     ]
 
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='response_feedbacks',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
+
     # The chat message this feedback is for
     chat_message = models.OneToOneField(
         ChatMessage,
@@ -626,6 +1173,14 @@ class LearnedCorrection(models.Model):
         ('preference', 'Terminology Preference'),
         ('context', 'Contextual Correction'),
     ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='learned_corrections',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
 
     # The incorrect value
     incorrect_value = models.CharField(
@@ -780,6 +1335,14 @@ class ExtractedKnowledge(models.Model):
         ('medium', 'Medium - Inferred'),
         ('low', 'Low - Uncertain'),
     ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='extracted_knowledge',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
 
     # The volunteer this knowledge is about
     volunteer = models.ForeignKey(
@@ -951,6 +1514,14 @@ class QueryPattern(models.Model):
     When a query leads to a helpful response (positive feedback),
     the pattern is stored to help with similar future queries.
     """
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='query_patterns',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
+
     # The original query text
     query_text = models.TextField(
         help_text="The original query from the user"
@@ -1076,6 +1647,14 @@ class ReportCache(models.Model):
         ('service_participation', 'Service Participation'),
         ('dashboard_summary', 'Dashboard Summary'),
     ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='report_caches',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
 
     report_type = models.CharField(
         max_length=50,
@@ -1235,6 +1814,14 @@ class VolunteerInsight(models.Model):
         ('dismissed', 'Dismissed'),
     ]
 
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='volunteer_insights',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
+
     volunteer = models.ForeignKey(
         Volunteer,
         on_delete=models.CASCADE,
@@ -1363,6 +1950,14 @@ class Announcement(models.Model):
         ('urgent', 'Urgent'),
     ]
 
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='announcements',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
+
     title = models.CharField(max_length=200)
     content = models.TextField(help_text="Announcement content (supports markdown)")
 
@@ -1458,8 +2053,16 @@ class Channel(models.Model):
         ('general', 'General'),
     ]
 
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='channels',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
+
     name = models.CharField(max_length=100)
-    slug = models.SlugField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100)
     description = models.TextField(blank=True)
 
     channel_type = models.CharField(
@@ -1502,6 +2105,8 @@ class Channel(models.Model):
         ordering = ['name']
         verbose_name = 'Channel'
         verbose_name_plural = 'Channels'
+        # Slug is unique within an organization
+        unique_together = [['organization', 'slug']]
 
     def __str__(self):
         return f"#{self.name}"
@@ -1630,6 +2235,14 @@ class Project(models.Model):
         ('high', 'High'),
         ('urgent', 'Urgent'),
     ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='projects',
+        null=True,  # Temporary: allows migration of existing data
+        blank=True
+    )
 
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
