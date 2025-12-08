@@ -37,6 +37,11 @@ class TenantMiddleware(MiddlewareMixin):
         '/invitation/',
         '/pricing/',
         '/api/public/',
+        # Onboarding flow
+        '/signup/',
+        '/onboarding/',
+        '/invite/',
+        '/webhooks/',
     ]
 
     def process_request(self, request):

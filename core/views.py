@@ -2955,3 +2955,658 @@ def push_remove_device(request, subscription_id):
         return HttpResponse('')  # Remove the row
 
     return JsonResponse({'success': deleted > 0})
+
+
+# ============================================================================
+# Organization Onboarding Views
+# ============================================================================
+
+def onboarding_signup(request):
+    """
+    Public signup page for creating a new organization.
+
+    This is the entry point for the onboarding flow. Users create an account
+    and organization simultaneously.
+    """
+    from django.contrib.auth import login
+    from accounts.models import User
+    from .models import Organization, OrganizationMembership, SubscriptionPlan
+    from datetime import timedelta
+
+    # Redirect logged-in users to dashboard
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        # Get form data
+        org_name = request.POST.get('organization_name', '').strip()
+        email = request.POST.get('email', '').strip().lower()
+        password = request.POST.get('password', '')
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+
+        errors = []
+
+        # Validation
+        if not org_name:
+            errors.append('Organization name is required.')
+        if not email:
+            errors.append('Email is required.')
+        if not password or len(password) < 8:
+            errors.append('Password must be at least 8 characters.')
+        if User.objects.filter(email=email).exists():
+            errors.append('An account with this email already exists.')
+
+        if errors:
+            return render(request, 'core/onboarding/signup.html', {
+                'errors': errors,
+                'org_name': org_name,
+                'email': email,
+                'first_name': first_name,
+                'last_name': last_name,
+            })
+
+        # Create user
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+        )
+
+        # Get default plan (Starter) or use first available
+        default_plan = SubscriptionPlan.objects.filter(
+            is_active=True
+        ).order_by('monthly_price').first()
+
+        # Calculate trial end date
+        trial_days = getattr(settings, 'TRIAL_PERIOD_DAYS', 14)
+        trial_ends_at = timezone.now() + timedelta(days=trial_days)
+
+        # Create organization
+        org = Organization.objects.create(
+            name=org_name,
+            email=email,
+            subscription_plan=default_plan,
+            subscription_status='trial',
+            trial_ends_at=trial_ends_at,
+        )
+
+        # Create owner membership
+        OrganizationMembership.objects.create(
+            user=user,
+            organization=org,
+            role='owner',
+            can_manage_users=True,
+            can_manage_settings=True,
+            can_view_analytics=True,
+            can_manage_billing=True,
+        )
+
+        # Set user's default organization
+        user.default_organization = org
+        user.save()
+
+        # Log user in
+        login(request, user)
+
+        # Store org in session for onboarding flow
+        request.session['onboarding_org_id'] = org.id
+
+        return redirect('onboarding_select_plan')
+
+    return render(request, 'core/onboarding/signup.html')
+
+
+@login_required
+def onboarding_select_plan(request):
+    """
+    Plan selection page during onboarding.
+
+    Shows available subscription plans with features and pricing.
+    """
+    from .models import SubscriptionPlan, Organization
+
+    # Get organization from session or user's default
+    org_id = request.session.get('onboarding_org_id')
+    if org_id:
+        org = Organization.objects.filter(id=org_id).first()
+    else:
+        org = request.user.default_organization
+
+    if not org:
+        return redirect('onboarding_signup')
+
+    # Get all active plans
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('monthly_price')
+
+    if request.method == 'POST':
+        plan_id = request.POST.get('plan_id')
+        billing_cycle = request.POST.get('billing_cycle', 'monthly')
+
+        try:
+            plan = SubscriptionPlan.objects.get(id=plan_id, is_active=True)
+            # Store selection in session
+            request.session['selected_plan_id'] = plan.id
+            request.session['billing_cycle'] = billing_cycle
+
+            # Update organization's plan
+            org.subscription_plan = plan
+            org.save()
+
+            return redirect('onboarding_checkout')
+        except SubscriptionPlan.DoesNotExist:
+            pass
+
+    context = {
+        'plans': plans,
+        'organization': org,
+        'current_plan': org.subscription_plan,
+    }
+    return render(request, 'core/onboarding/select_plan.html', context)
+
+
+@login_required
+def onboarding_checkout(request):
+    """
+    Create Stripe checkout session for subscription.
+    """
+    import stripe
+    from .models import SubscriptionPlan, Organization
+
+    stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
+
+    # Get organization
+    org_id = request.session.get('onboarding_org_id')
+    if org_id:
+        org = Organization.objects.filter(id=org_id).first()
+    else:
+        org = request.user.default_organization
+
+    if not org:
+        return redirect('onboarding_signup')
+
+    # Get selected plan from session
+    plan_id = request.session.get('selected_plan_id')
+    billing_cycle = request.session.get('billing_cycle', 'monthly')
+
+    if not plan_id:
+        return redirect('onboarding_select_plan')
+
+    try:
+        plan = SubscriptionPlan.objects.get(id=plan_id, is_active=True)
+    except SubscriptionPlan.DoesNotExist:
+        return redirect('onboarding_select_plan')
+
+    # Get the appropriate Stripe price ID
+    price_id = plan.stripe_price_yearly if billing_cycle == 'yearly' else plan.stripe_price_monthly
+
+    if not price_id or not stripe.api_key:
+        # If no Stripe price configured, skip to next step (trial only)
+        return redirect('onboarding_connect_pco')
+
+    # Create or get Stripe customer
+    if not org.stripe_customer_id:
+        try:
+            customer = stripe.Customer.create(
+                email=org.email,
+                name=org.name,
+                metadata={
+                    'organization_id': str(org.id),
+                    'organization_slug': org.slug,
+                }
+            )
+            org.stripe_customer_id = customer.id
+            org.save()
+        except stripe.error.StripeError as e:
+            return render(request, 'core/onboarding/checkout_error.html', {
+                'error': str(e),
+                'organization': org,
+            })
+
+    # Build success/cancel URLs
+    success_url = request.build_absolute_uri('/onboarding/checkout/success/')
+    cancel_url = request.build_absolute_uri('/onboarding/checkout/cancel/')
+
+    # Create checkout session
+    try:
+        checkout_session = stripe.checkout.Session.create(
+            customer=org.stripe_customer_id,
+            payment_method_types=['card'],
+            line_items=[{
+                'price': price_id,
+                'quantity': 1,
+            }],
+            mode='subscription',
+            success_url=success_url + '?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url=cancel_url,
+            subscription_data={
+                'trial_period_days': getattr(settings, 'TRIAL_PERIOD_DAYS', 14),
+                'metadata': {
+                    'organization_id': str(org.id),
+                },
+            },
+            metadata={
+                'organization_id': str(org.id),
+                'plan_id': str(plan.id),
+            },
+        )
+        return redirect(checkout_session.url)
+    except stripe.error.StripeError as e:
+        return render(request, 'core/onboarding/checkout_error.html', {
+            'error': str(e),
+            'organization': org,
+        })
+
+
+@login_required
+def onboarding_checkout_success(request):
+    """
+    Handle successful Stripe checkout.
+    """
+    import stripe
+    from .models import Organization
+
+    stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
+
+    session_id = request.GET.get('session_id')
+
+    # Get organization
+    org_id = request.session.get('onboarding_org_id')
+    if org_id:
+        org = Organization.objects.filter(id=org_id).first()
+    else:
+        org = request.user.default_organization
+
+    if session_id and org and stripe.api_key:
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+            subscription_id = session.subscription
+
+            if subscription_id:
+                org.stripe_subscription_id = subscription_id
+                org.subscription_status = 'active'
+                org.subscription_started_at = timezone.now()
+                org.save()
+        except stripe.error.StripeError:
+            pass
+
+    return redirect('onboarding_connect_pco')
+
+
+@login_required
+def onboarding_checkout_cancel(request):
+    """
+    Handle cancelled Stripe checkout.
+    """
+    return redirect('onboarding_select_plan')
+
+
+@login_required
+def onboarding_connect_pco(request):
+    """
+    Planning Center OAuth connection page.
+
+    Users can connect their Planning Center account or skip this step.
+    """
+    from .models import Organization
+
+    # Get organization
+    org_id = request.session.get('onboarding_org_id')
+    if org_id:
+        org = Organization.objects.filter(id=org_id).first()
+    else:
+        org = request.user.default_organization
+
+    if not org:
+        return redirect('onboarding_signup')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'skip':
+            return redirect('onboarding_invite_team')
+
+        if action == 'connect':
+            # For now, store manual credentials (full OAuth can be added later)
+            pco_app_id = request.POST.get('pco_app_id', '').strip()
+            pco_secret = request.POST.get('pco_secret', '').strip()
+
+            if pco_app_id and pco_secret:
+                org.planning_center_app_id = pco_app_id
+                org.planning_center_secret = pco_secret
+                org.planning_center_connected_at = timezone.now()
+                org.save()
+                return redirect('onboarding_invite_team')
+
+    context = {
+        'organization': org,
+        'is_connected': bool(org.planning_center_app_id),
+    }
+    return render(request, 'core/onboarding/connect_pco.html', context)
+
+
+@login_required
+def onboarding_invite_team(request):
+    """
+    Team member invitation page.
+
+    Users can invite team members by email or skip to complete onboarding.
+    """
+    from .models import Organization, OrganizationInvitation, OrganizationMembership
+    from datetime import timedelta
+    import secrets
+
+    # Get organization
+    org_id = request.session.get('onboarding_org_id')
+    if org_id:
+        org = Organization.objects.filter(id=org_id).first()
+    else:
+        org = request.user.default_organization
+
+    if not org:
+        return redirect('onboarding_signup')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'skip' or action == 'complete':
+            # Clear onboarding session data
+            request.session.pop('onboarding_org_id', None)
+            request.session.pop('selected_plan_id', None)
+            request.session.pop('billing_cycle', None)
+            return redirect('onboarding_complete')
+
+        if action == 'invite':
+            emails = request.POST.get('emails', '').strip()
+            role = request.POST.get('role', 'member')
+
+            if emails:
+                # Parse comma-separated or newline-separated emails
+                email_list = [e.strip().lower() for e in emails.replace('\n', ',').split(',') if e.strip()]
+
+                for email in email_list:
+                    # Skip if already a member
+                    if OrganizationMembership.objects.filter(
+                        organization=org,
+                        user__email=email
+                    ).exists():
+                        continue
+
+                    # Skip if already invited
+                    if OrganizationInvitation.objects.filter(
+                        organization=org,
+                        email=email,
+                        status='pending'
+                    ).exists():
+                        continue
+
+                    # Create invitation
+                    OrganizationInvitation.objects.create(
+                        organization=org,
+                        email=email,
+                        role=role,
+                        invited_by=request.user,
+                        token=secrets.token_urlsafe(32),
+                        expires_at=timezone.now() + timedelta(days=7),
+                    )
+
+                # TODO: Send invitation emails when email integration is set up
+
+    # Get existing invitations
+    pending_invitations = OrganizationInvitation.objects.filter(
+        organization=org,
+        status='pending'
+    ).order_by('-created_at')
+
+    context = {
+        'organization': org,
+        'pending_invitations': pending_invitations,
+        'role_choices': OrganizationMembership.ROLE_CHOICES[1:],  # Exclude 'owner'
+    }
+    return render(request, 'core/onboarding/invite_team.html', context)
+
+
+@login_required
+def onboarding_complete(request):
+    """
+    Onboarding completion page.
+
+    Shows a summary and guides user to their dashboard.
+    """
+    org = request.user.default_organization
+
+    context = {
+        'organization': org,
+    }
+    return render(request, 'core/onboarding/complete.html', context)
+
+
+def accept_invitation(request, token):
+    """
+    Accept a team invitation via token link.
+
+    If user is logged in, adds them to the organization.
+    If not, prompts them to create an account or log in.
+    """
+    from django.contrib.auth import login
+    from accounts.models import User
+    from .models import OrganizationInvitation, OrganizationMembership
+
+    try:
+        invitation = OrganizationInvitation.objects.get(
+            token=token,
+            status='pending'
+        )
+    except OrganizationInvitation.DoesNotExist:
+        return render(request, 'core/onboarding/invitation_invalid.html')
+
+    # Check if expired
+    if invitation.expires_at and timezone.now() > invitation.expires_at:
+        invitation.status = 'expired'
+        invitation.save()
+        return render(request, 'core/onboarding/invitation_expired.html', {
+            'organization': invitation.organization,
+        })
+
+    org = invitation.organization
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'create_account':
+            # Create new user account
+            email = invitation.email
+            password = request.POST.get('password', '')
+            first_name = request.POST.get('first_name', '').strip()
+            last_name = request.POST.get('last_name', '').strip()
+
+            if len(password) < 8:
+                return render(request, 'core/onboarding/accept_invitation.html', {
+                    'invitation': invitation,
+                    'organization': org,
+                    'error': 'Password must be at least 8 characters.',
+                })
+
+            # Create user
+            user = User.objects.create_user(
+                username=email,
+                email=email,
+                password=password,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            user.default_organization = org
+            user.save()
+
+            # Create membership
+            OrganizationMembership.objects.create(
+                user=user,
+                organization=org,
+                role=invitation.role,
+                can_manage_users=invitation.role in ['admin', 'owner'],
+                can_manage_settings=invitation.role in ['admin', 'owner'],
+                can_view_analytics=invitation.role in ['admin', 'owner', 'leader'],
+                can_manage_billing=invitation.role == 'owner',
+            )
+
+            # Mark invitation as accepted
+            invitation.status = 'accepted'
+            invitation.accepted_at = timezone.now()
+            invitation.save()
+
+            # Log user in
+            login(request, user)
+
+            return redirect('dashboard')
+
+        elif action == 'accept' and request.user.is_authenticated:
+            # Existing user accepting invitation
+            user = request.user
+
+            # Check if already a member
+            if OrganizationMembership.objects.filter(user=user, organization=org).exists():
+                return redirect('dashboard')
+
+            # Create membership
+            OrganizationMembership.objects.create(
+                user=user,
+                organization=org,
+                role=invitation.role,
+                can_manage_users=invitation.role in ['admin', 'owner'],
+                can_manage_settings=invitation.role in ['admin', 'owner'],
+                can_view_analytics=invitation.role in ['admin', 'owner', 'leader'],
+                can_manage_billing=invitation.role == 'owner',
+            )
+
+            # Update default organization if user doesn't have one
+            if not user.default_organization:
+                user.default_organization = org
+                user.save()
+
+            # Mark invitation as accepted
+            invitation.status = 'accepted'
+            invitation.accepted_at = timezone.now()
+            invitation.save()
+
+            return redirect('dashboard')
+
+    # Check if user is logged in and email matches
+    if request.user.is_authenticated:
+        if request.user.email.lower() == invitation.email.lower():
+            # Show accept button
+            return render(request, 'core/onboarding/accept_invitation.html', {
+                'invitation': invitation,
+                'organization': org,
+                'show_accept': True,
+            })
+        else:
+            # Different user logged in - show info
+            return render(request, 'core/onboarding/accept_invitation.html', {
+                'invitation': invitation,
+                'organization': org,
+                'wrong_user': True,
+            })
+    else:
+        # Check if user exists
+        existing_user = User.objects.filter(email=invitation.email).exists()
+
+        return render(request, 'core/onboarding/accept_invitation.html', {
+            'invitation': invitation,
+            'organization': org,
+            'existing_user': existing_user,
+        })
+
+
+@csrf_exempt
+def stripe_webhook(request):
+    """
+    Handle Stripe webhook events.
+
+    Processes subscription updates, payment failures, etc.
+    """
+    import stripe
+    from .models import Organization
+
+    stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
+    webhook_secret = getattr(settings, 'STRIPE_WEBHOOK_SECRET', '')
+
+    if not stripe.api_key:
+        return HttpResponse(status=200)
+
+    payload = request.body
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
+
+    try:
+        if webhook_secret:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, webhook_secret
+            )
+        else:
+            # For testing without webhook signature verification
+            import json
+            event = json.loads(payload)
+    except ValueError:
+        return HttpResponse(status=400)
+    except stripe.error.SignatureVerificationError:
+        return HttpResponse(status=400)
+
+    event_type = event.get('type', '')
+    data = event.get('data', {}).get('object', {})
+
+    # Handle different event types
+    if event_type == 'customer.subscription.created':
+        subscription_id = data.get('id')
+        customer_id = data.get('customer')
+        status = data.get('status')
+
+        org = Organization.objects.filter(stripe_customer_id=customer_id).first()
+        if org:
+            org.stripe_subscription_id = subscription_id
+            if status == 'active' or status == 'trialing':
+                org.subscription_status = 'active' if status == 'active' else 'trial'
+            org.save()
+
+    elif event_type == 'customer.subscription.updated':
+        subscription_id = data.get('id')
+        status = data.get('status')
+
+        org = Organization.objects.filter(stripe_subscription_id=subscription_id).first()
+        if org:
+            status_map = {
+                'active': 'active',
+                'trialing': 'trial',
+                'past_due': 'past_due',
+                'canceled': 'cancelled',
+                'unpaid': 'past_due',
+            }
+            org.subscription_status = status_map.get(status, org.subscription_status)
+            org.save()
+
+    elif event_type == 'customer.subscription.deleted':
+        subscription_id = data.get('id')
+
+        org = Organization.objects.filter(stripe_subscription_id=subscription_id).first()
+        if org:
+            org.subscription_status = 'cancelled'
+            org.subscription_ends_at = timezone.now()
+            org.save()
+
+    elif event_type == 'invoice.payment_failed':
+        customer_id = data.get('customer')
+
+        org = Organization.objects.filter(stripe_customer_id=customer_id).first()
+        if org:
+            org.subscription_status = 'past_due'
+            org.save()
+
+    elif event_type == 'invoice.paid':
+        customer_id = data.get('customer')
+
+        org = Organization.objects.filter(stripe_customer_id=customer_id).first()
+        if org and org.subscription_status == 'past_due':
+            org.subscription_status = 'active'
+            org.save()
+
+    return HttpResponse(status=200)
