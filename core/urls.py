@@ -2,7 +2,11 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('', views.dashboard, name='dashboard'),
+    # Public pages
+    path('', views.home, name='home'),
+    path('pricing/', views.pricing, name='pricing'),
+    # Authenticated app
+    path('dashboard/', views.dashboard, name='dashboard'),
     path('chat/', views.chat, name='chat'),
     path('chat/send/', views.chat_send, name='chat_send'),
     path('chat/new/', views.chat_new_session, name='chat_new_session'),
