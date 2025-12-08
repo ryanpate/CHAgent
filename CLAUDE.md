@@ -2,7 +2,9 @@
 
 ## Project Overview
 
-A private web application for the Cherry Hills Church Worship Arts team featuring **Aria**, an AI assistant powered by Claude that helps team members manage volunteer relationships, access Planning Center data, and track follow-up items.
+A **multi-tenant SaaS platform** for worship arts teams featuring **Aria**, an AI assistant powered by Claude that helps team members manage volunteer relationships, access Planning Center data, and track follow-up items.
+
+Originally built for Cherry Hills Church, the platform is now designed to be offered as a paid service to other churches and worship arts teams.
 
 ### Core Purpose
 - **AI Assistant (Aria)**: Ask questions about volunteers, schedules, songs, and team information
@@ -10,6 +12,165 @@ A private web application for the Cherry Hills Church Worship Arts team featurin
 - **Volunteer Care**: Log interactions and track personal details to better care for volunteers
 - **Follow-up Management**: Track action items, prayer requests, and reminders
 - **Learning System**: Aria learns from feedback to improve responses over time
+- **Multi-Tenant Architecture**: Each church/organization gets isolated data and settings
+
+---
+
+## Multi-Tenant SaaS Architecture
+
+The platform supports multiple churches/organizations with complete data isolation.
+
+### Subscription Plans
+
+| Plan | Price | Users | Volunteers | Key Features |
+|------|-------|-------|------------|--------------|
+| **Starter** | $29/mo | 5 | 50 | PCO Integration, Push Notifications |
+| **Team** | $79/mo | 15 | 200 | + Analytics, Care Insights |
+| **Ministry** | $149/mo | Unlimited | Unlimited | + API Access, Custom Branding |
+| **Enterprise** | Contact | Unlimited | Unlimited | + Multi-campus, Priority Support |
+
+### Organization Model
+
+```python
+# core/models.py
+class Organization(models.Model):
+    """Central tenant model - all data is scoped to an organization."""
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True)  # URL identifier
+
+    # Subscription
+    subscription_plan = models.ForeignKey(SubscriptionPlan)
+    subscription_status = models.CharField()  # trial, active, past_due, cancelled
+    trial_ends_at = models.DateTimeField()
+
+    # Per-org Planning Center credentials
+    planning_center_app_id = models.CharField()
+    planning_center_secret = models.CharField()
+
+    # Stripe billing
+    stripe_customer_id = models.CharField()
+    stripe_subscription_id = models.CharField()
+
+    # Customization
+    ai_assistant_name = models.CharField(default='Aria')
+    primary_color = models.CharField(default='#6366f1')
+
+    # Usage tracking
+    ai_queries_this_month = models.IntegerField()
+```
+
+### Organization Membership
+
+```python
+class OrganizationMembership(models.Model):
+    """Links users to organizations with role-based permissions."""
+    ROLE_CHOICES = [
+        ('owner', 'Owner'),        # Full control, billing
+        ('admin', 'Admin'),        # Manage users, settings
+        ('leader', 'Team Leader'), # Manage volunteers, analytics
+        ('member', 'Member'),      # Basic access
+        ('viewer', 'Viewer'),      # Read-only
+    ]
+
+    user = models.ForeignKey(User)
+    organization = models.ForeignKey(Organization)
+    role = models.CharField(choices=ROLE_CHOICES)
+
+    # Granular permissions
+    can_manage_users = models.BooleanField()
+    can_manage_settings = models.BooleanField()
+    can_view_analytics = models.BooleanField()
+    can_manage_billing = models.BooleanField()
+```
+
+### Tenant Middleware
+
+The `TenantMiddleware` (`core/middleware.py`) automatically injects organization context:
+
+```python
+# In any view, access via request:
+request.organization  # Current Organization object
+request.membership    # User's OrganizationMembership
+
+# Use decorators for permission checks:
+@require_organization
+@require_role('admin', 'owner')
+def manage_settings(request):
+    ...
+
+@require_permission('can_manage_users')
+def invite_member(request):
+    ...
+```
+
+### Data Isolation
+
+All tenant-scoped models have an `organization` foreign key:
+- Volunteer, Interaction, ChatMessage, FollowUp
+- Announcement, Channel, Project, Task
+- ResponseFeedback, ExtractedKnowledge, etc.
+
+**Important**: All queries must filter by organization:
+```python
+# Correct - scoped to organization
+volunteers = Volunteer.objects.filter(organization=request.organization)
+
+# Wrong - would return all organizations' data
+volunteers = Volunteer.objects.all()
+```
+
+### Key Files for Multi-Tenancy
+
+| File | Purpose |
+|------|---------|
+| `core/models.py` | Organization, SubscriptionPlan, OrganizationMembership |
+| `core/middleware.py` | TenantMiddleware, decorators, mixins |
+| `core/context_processors.py` | Template context for organization |
+| `accounts/models.py` | User with organization helpers |
+
+---
+
+## Environment Variables
+
+```bash
+# Django
+SECRET_KEY=your-secret-key
+DEBUG=False
+ALLOWED_HOSTS=your-app.railway.app
+
+# Database (Railway provides automatically)
+DATABASE_URL=postgres://...
+
+# AI APIs
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...  # For embeddings
+
+# Planning Center (now per-organization, legacy support)
+PLANNING_CENTER_APP_ID=your-app-id
+PLANNING_CENTER_SECRET=your-secret
+
+# Stripe Billing
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_STARTER_MONTHLY=price_...
+STRIPE_PRICE_STARTER_YEARLY=price_...
+STRIPE_PRICE_TEAM_MONTHLY=price_...
+STRIPE_PRICE_TEAM_YEARLY=price_...
+STRIPE_PRICE_MINISTRY_MONTHLY=price_...
+STRIPE_PRICE_MINISTRY_YEARLY=price_...
+
+# Multi-Tenant Settings
+TRIAL_PERIOD_DAYS=14
+DEFAULT_AI_ASSISTANT_NAME=Aria
+APP_DOMAIN=aria.church
+USE_SUBDOMAIN_ROUTING=true
+
+# Web Push Notifications (VAPID keys)
+VAPID_PUBLIC_KEY=your-public-key
+VAPID_PRIVATE_KEY=your-private-key
+VAPID_CLAIMS_EMAIL=mailto:your-email@example.com
+```
 
 ---
 
@@ -421,10 +582,13 @@ CHAgent/
 ├── core/
 │   ├── agent.py              # AI agent logic, query detection, RAG
 │   ├── planning_center.py    # PCO API integration
-│   ├── models.py             # Database models
+│   ├── models.py             # Database models (incl. Organization, SubscriptionPlan)
 │   ├── views.py              # View handlers
 │   ├── urls.py               # URL routing
 │   ├── embeddings.py         # Vector search
+│   ├── middleware.py         # TenantMiddleware, permission decorators
+│   ├── context_processors.py # Organization template context
+│   ├── notifications.py      # Push notification service
 │   └── volunteer_matching.py # Name matching logic
 ├── templates/
 │   ├── base.html             # Layout with sidebar
@@ -435,10 +599,10 @@ CHAgent/
 │       ├── followup_*.html
 │       └── feedback_*.html
 ├── config/
-│   ├── settings.py
+│   ├── settings.py           # Incl. Stripe & multi-tenant config
 │   └── urls.py
 └── accounts/
-    └── models.py             # Custom User model
+    └── models.py             # Custom User with org helpers
 ```
 
 ---
@@ -869,21 +1033,61 @@ The following features have been implemented:
 - [x] **Proactive Care System**: AI-powered volunteer care alerts
 - [x] **Follow-up Management**: Track and manage volunteer follow-ups
 - [x] **@Mentions**: Tag team members in channels and task comments
+- [x] **Multi-Tenant Foundation**: Organization model, subscriptions, memberships
+
+---
+
+## SaaS Development Roadmap
+
+### Phase 1: Multi-Tenant Infrastructure (✅ Complete)
+- [x] Organization & SubscriptionPlan models
+- [x] OrganizationMembership with role-based permissions
+- [x] TenantMiddleware for request context injection
+- [x] Data migration for existing Cherry Hills data
+
+### Phase 2: Tenant-Scoped Queries (In Progress)
+- [ ] Update all views with `.filter(organization=request.organization)`
+- [ ] Update Planning Center API for per-org credentials
+- [ ] Add organization-scoped caching
+
+### Phase 3: Organization Onboarding
+- [ ] Public signup page with organization creation
+- [ ] Planning Center OAuth flow (per-organization)
+- [ ] Stripe checkout integration
+- [ ] Team member invitation flow
+
+### Phase 4: Public Marketing
+- [ ] Landing page explaining Aria's capabilities
+- [ ] Pricing page with plan comparison
+- [ ] Demo/trial signup flow
+- [ ] Customer testimonials
+
+### Phase 5: Organization Management
+- [ ] Organization settings UI
+- [ ] Team member management (invite, roles, permissions)
+- [ ] Billing dashboard (Stripe portal integration)
+- [ ] Usage analytics per organization
+
+### Phase 6: Platform Administration
+- [ ] Super-admin dashboard for all organizations
+- [ ] Usage metrics and revenue reporting
+- [ ] Customer support tools
+- [ ] Audit logging
 
 ---
 
 ## Future Enhancements
 
-1. **Planning Center OAuth**: Full two-way sync with OAuth authentication
-2. **Email Notifications**: Email digest for prayer requests and follow-ups
-3. **PDF Reports**: Monthly PDF reports of team interactions
-4. **Voice Input**: Speech-to-text for quick interaction logging
-5. **Team Permissions**: Role-based access control (admin, leader, member)
-6. **Calendar Integration**: Sync tasks and due dates with Google/Outlook calendars
-7. **Recurring Tasks**: Support for recurring task templates
-8. **File Attachments**: Attach files to tasks and messages
-9. **Search**: Global search across interactions, messages, and tasks
-10. **Mobile App**: Native mobile app with React Native (PWA already available)
+1. **Email Notifications**: Email digest for prayer requests and follow-ups
+2. **PDF Reports**: Monthly PDF reports of team interactions
+3. **Voice Input**: Speech-to-text for quick interaction logging
+4. **Calendar Integration**: Sync tasks and due dates with Google/Outlook calendars
+5. **File Attachments**: Attach files to tasks and messages
+6. **Global Search**: Search across interactions, messages, and tasks
+7. **Mobile App**: Native mobile app with React Native (PWA already available)
+8. **API Access**: RESTful API for integrations (Enterprise plan)
+9. **Custom Domains**: Organizations can use their own domain
+10. **White-labeling**: Full custom branding for Enterprise customers
 ### Song/Person confusion
 - Add "the song" to clearly indicate song queries
 - Use full names for person queries
