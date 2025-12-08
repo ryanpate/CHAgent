@@ -80,8 +80,8 @@ def home(request):
 
     from .models import SubscriptionPlan
 
-    # Get plans for pricing section
-    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('monthly_price')
+    # Get plans for pricing section (order by actual DB field, not property)
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly_cents')
 
     context = {
         'plans': plans,
@@ -95,7 +95,7 @@ def pricing(request):
     """
     from .models import SubscriptionPlan
 
-    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('monthly_price')
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly_cents')
 
     context = {
         'plans': plans,
