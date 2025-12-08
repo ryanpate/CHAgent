@@ -395,7 +395,10 @@
                     </svg>
                     Notifications
                 </a>
-                <a href="{% url 'logout' %}" class="text-gray-400 hover:text-white transition">Logout</a>
+                <form action="{% url 'logout' %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="text-gray-400 hover:text-white transition">Logout</button>
+                </form>
             </div>
         </div>
     </aside>
@@ -471,7 +474,10 @@
                     </svg>
                     Notifications
                 </a>
-                <a href="{% url 'logout' %}" class="text-gray-400 hover:text-white transition">Logout</a>
+                <form action="{% url 'logout' %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="text-gray-400 hover:text-white transition">Logout</button>
+                </form>
             </div>
         </div>
     </aside>
