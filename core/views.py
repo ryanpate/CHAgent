@@ -3286,7 +3286,7 @@ def onboarding_signup(request):
         # Get default plan (Starter) or use first available
         default_plan = SubscriptionPlan.objects.filter(
             is_active=True
-        ).order_by('monthly_price').first()
+        ).order_by('price_monthly_cents').first()
 
         # Calculate trial end date
         trial_days = getattr(settings, 'TRIAL_PERIOD_DAYS', 14)
@@ -3347,7 +3347,7 @@ def onboarding_select_plan(request):
         return redirect('onboarding_signup')
 
     # Get all active plans
-    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('monthly_price')
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly_cents')
 
     if request.method == 'POST':
         plan_id = request.POST.get('plan_id')
