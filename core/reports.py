@@ -60,16 +60,24 @@ class ReportGenerator:
     or serialized to JSON for API responses.
     """
 
-    def __init__(self, date_from: Optional[datetime] = None, date_to: Optional[datetime] = None):
+    def __init__(self, date_from: Optional[datetime] = None, date_to: Optional[datetime] = None, organization=None):
         """
         Initialize the report generator with optional date range.
 
         Args:
             date_from: Start date for reports (default: 90 days ago)
             date_to: End date for reports (default: now)
+            organization: Organization to scope reports to (optional)
         """
         self.date_to = date_to or timezone.now()
         self.date_from = date_from or (self.date_to - timedelta(days=90))
+        self.organization = organization
+
+    def _filter_by_org(self, queryset, org_field='organization'):
+        """Filter queryset by organization if set."""
+        if self.organization:
+            return queryset.filter(**{org_field: self.organization})
+        return queryset
 
     # =========================================================================
     # VOLUNTEER ENGAGEMENT REPORTS
@@ -89,14 +97,15 @@ class ReportGenerator:
             - least_engaged: Volunteers needing attention
             - new_volunteers: Recently added
         """
-        all_volunteers = Volunteer.objects.all()
+        all_volunteers = self._filter_by_org(Volunteer.objects.all())
         total = all_volunteers.count()
 
         # Volunteers with interactions in date range
-        active_volunteer_ids = Interaction.objects.filter(
+        interactions_qs = self._filter_by_org(Interaction.objects.filter(
             created_at__gte=self.date_from,
             created_at__lte=self.date_to
-        ).values_list('volunteers__id', flat=True).distinct()
+        ))
+        active_volunteer_ids = interactions_qs.values_list('volunteers__id', flat=True).distinct()
 
         active_count = len(set(v for v in active_volunteer_ids if v is not None))
         inactive_count = total - active_count
@@ -117,7 +126,7 @@ class ReportGenerator:
             }
 
         # Top engaged volunteers (most interactions)
-        top_engaged = Volunteer.objects.annotate(
+        top_engaged = self._filter_by_org(Volunteer.objects.annotate(
             interaction_count=Count(
                 'interactions',
                 filter=Q(
@@ -125,10 +134,10 @@ class ReportGenerator:
                     interactions__created_at__lte=self.date_to
                 )
             )
-        ).filter(interaction_count__gt=0).order_by('-interaction_count')[:10]
+        )).filter(interaction_count__gt=0).order_by('-interaction_count')[:10]
 
         # Least engaged (have interactions but none recently)
-        least_engaged = Volunteer.objects.annotate(
+        least_engaged = self._filter_by_org(Volunteer.objects.annotate(
             total_interactions=Count('interactions'),
             recent_interactions=Count(
                 'interactions',
@@ -137,7 +146,7 @@ class ReportGenerator:
                     interactions__created_at__lte=self.date_to
                 )
             )
-        ).filter(total_interactions__gt=0, recent_interactions=0).order_by('-total_interactions')[:10]
+        )).filter(total_interactions__gt=0, recent_interactions=0).order_by('-total_interactions')[:10]
 
         # New volunteers (created in date range)
         new_volunteers = all_volunteers.filter(
@@ -904,9 +913,16 @@ class ProactiveCareGenerator:
     attention, follow-up, or special care from the team.
     """
 
-    def __init__(self):
+    def __init__(self, organization=None):
         self.today = timezone.now().date()
         self.now = timezone.now()
+        self.organization = organization
+
+    def _filter_by_org(self, queryset, org_field='organization'):
+        """Filter queryset by organization if set."""
+        if self.organization:
+            return queryset.filter(**{org_field: self.organization})
+        return queryset
 
     def generate_all_insights(self) -> dict:
         """
