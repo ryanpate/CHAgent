@@ -88,6 +88,11 @@ urlpatterns = [
     path('notifications/test/', views.push_test, name='push_test'),
     path('notifications/clicked/', views.notification_clicked, name='notification_clicked'),
     path('notifications/device/<int:subscription_id>/remove/', views.push_remove_device, name='push_remove_device'),
+    # Subscription & Billing
+    path('billing/', views.billing_portal, name='billing_portal'),
+    path('subscribe/', views.subscribe, name='subscribe'),
+    path('subscribe/required/', views.subscription_required, name='subscription_required'),
+    path('subscribe/success/', views.subscription_success, name='subscription_success'),
     # Organization Onboarding
     path('signup/', views.onboarding_signup, name='onboarding_signup'),
     path('onboarding/select-plan/', views.onboarding_select_plan, name='onboarding_select_plan'),

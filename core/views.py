@@ -2991,6 +2991,241 @@ def push_remove_device(request, subscription_id):
 
 
 # ============================================================================
+# Subscription & Billing Views
+# ============================================================================
+
+@login_required
+def subscription_required(request):
+    """
+    Page shown when an organization's subscription has expired.
+
+    Users are redirected here when:
+    - Trial period has ended
+    - Subscription was cancelled
+    - Account was suspended
+    """
+    from .models import Organization, OrganizationMembership, SubscriptionPlan
+
+    # Get user's organization
+    membership = OrganizationMembership.objects.filter(
+        user=request.user,
+        is_active=True
+    ).select_related('organization', 'organization__subscription_plan').first()
+
+    if not membership:
+        return redirect('onboarding_signup')
+
+    org = membership.organization
+
+    # If subscription is actually active, redirect to dashboard
+    if org.is_subscription_active:
+        return redirect('dashboard')
+
+    # Get available plans for upgrade
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly_cents')
+
+    # Determine the message based on status
+    if org.is_trial_expired:
+        message = "Your 14-day free trial has ended."
+        subtitle = "Subscribe now to continue using Aria for your team."
+    elif org.subscription_status == 'cancelled':
+        message = "Your subscription has been cancelled."
+        subtitle = "Reactivate your subscription to continue using Aria."
+    elif org.subscription_status == 'suspended':
+        message = "Your account has been suspended."
+        subtitle = "Please contact support to resolve this issue."
+    else:
+        message = "Subscription required."
+        subtitle = "Please subscribe to continue using Aria."
+
+    context = {
+        'organization': org,
+        'membership': membership,
+        'plans': plans,
+        'message': message,
+        'subtitle': subtitle,
+        'can_resubscribe': org.subscription_status != 'suspended',
+    }
+
+    return render(request, 'core/subscription_required.html', context)
+
+
+@login_required
+def billing_portal(request):
+    """
+    Redirect to Stripe Customer Portal for subscription management.
+
+    Allows users to:
+    - Update payment method
+    - View invoices
+    - Cancel subscription
+    - Change plan
+    """
+    from .models import OrganizationMembership
+
+    # Get user's organization
+    membership = OrganizationMembership.objects.filter(
+        user=request.user,
+        is_active=True
+    ).select_related('organization').first()
+
+    if not membership:
+        return redirect('dashboard')
+
+    org = membership.organization
+
+    # Check if user has billing permission
+    if not membership.can_manage_billing and membership.role != 'owner':
+        messages.error(request, "You don't have permission to manage billing.")
+        return redirect('dashboard')
+
+    # Check for Stripe customer ID
+    if not org.stripe_customer_id:
+        messages.error(request, "No billing information found. Please contact support.")
+        return redirect('dashboard')
+
+    # Create Stripe billing portal session
+    stripe_secret_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+    if not stripe_secret_key:
+        messages.error(request, "Billing system is not configured.")
+        return redirect('dashboard')
+
+    try:
+        import stripe
+        stripe.api_key = stripe_secret_key
+
+        session = stripe.billing_portal.Session.create(
+            customer=org.stripe_customer_id,
+            return_url=request.build_absolute_uri(reverse('dashboard')),
+        )
+
+        return redirect(session.url)
+
+    except Exception as e:
+        logger.error(f"Failed to create billing portal session: {e}")
+        messages.error(request, "Unable to access billing portal. Please try again.")
+        return redirect('dashboard')
+
+
+@login_required
+def subscribe(request):
+    """
+    Handle subscription for expired trial or reactivation.
+
+    Creates a new Stripe checkout session for the selected plan.
+    """
+    from .models import OrganizationMembership, SubscriptionPlan
+
+    # Get user's organization
+    membership = OrganizationMembership.objects.filter(
+        user=request.user,
+        is_active=True
+    ).select_related('organization').first()
+
+    if not membership:
+        return redirect('onboarding_signup')
+
+    org = membership.organization
+
+    # Check if user has billing permission
+    if not membership.can_manage_billing and membership.role != 'owner':
+        messages.error(request, "You don't have permission to manage billing.")
+        return redirect('subscription_required')
+
+    if request.method == 'POST':
+        plan_id = request.POST.get('plan_id')
+        billing_period = request.POST.get('billing_period', 'monthly')
+
+        try:
+            plan = SubscriptionPlan.objects.get(id=plan_id, is_active=True)
+        except SubscriptionPlan.DoesNotExist:
+            messages.error(request, "Invalid plan selected.")
+            return redirect('subscription_required')
+
+        # Get Stripe price ID
+        if billing_period == 'yearly':
+            price_key = f'STRIPE_PRICE_{plan.tier.upper()}_YEARLY'
+        else:
+            price_key = f'STRIPE_PRICE_{plan.tier.upper()}_MONTHLY'
+
+        stripe_price_id = getattr(settings, price_key, None)
+
+        if not stripe_price_id:
+            messages.error(request, "This plan is not available for purchase yet.")
+            return redirect('subscription_required')
+
+        # Create Stripe checkout session
+        stripe_secret_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+        if not stripe_secret_key:
+            messages.error(request, "Billing system is not configured.")
+            return redirect('subscription_required')
+
+        try:
+            import stripe
+            stripe.api_key = stripe_secret_key
+
+            # Create or get Stripe customer
+            if not org.stripe_customer_id:
+                customer = stripe.Customer.create(
+                    email=org.email,
+                    name=org.name,
+                    metadata={'organization_id': str(org.id)},
+                )
+                org.stripe_customer_id = customer.id
+                org.save(update_fields=['stripe_customer_id'])
+
+            # Create checkout session
+            session = stripe.checkout.Session.create(
+                customer=org.stripe_customer_id,
+                mode='subscription',
+                line_items=[{
+                    'price': stripe_price_id,
+                    'quantity': 1,
+                }],
+                success_url=request.build_absolute_uri(
+                    reverse('subscription_success')
+                ) + '?session_id={CHECKOUT_SESSION_ID}',
+                cancel_url=request.build_absolute_uri(
+                    reverse('subscription_required')
+                ),
+                metadata={
+                    'organization_id': str(org.id),
+                    'plan_id': str(plan.id),
+                },
+            )
+
+            return redirect(session.url)
+
+        except Exception as e:
+            logger.error(f"Failed to create checkout session: {e}")
+            messages.error(request, "Unable to process payment. Please try again.")
+            return redirect('subscription_required')
+
+    # GET request - show plan selection
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly_cents')
+    return render(request, 'core/subscribe.html', {
+        'organization': org,
+        'plans': plans,
+    })
+
+
+@login_required
+def subscription_success(request):
+    """
+    Handle successful subscription checkout.
+
+    The webhook will update the subscription status, but we show a success page.
+    """
+    session_id = request.GET.get('session_id')
+
+    # The webhook handles the actual subscription activation
+    # This page just shows a success message
+
+    messages.success(request, "Welcome! Your subscription is now active.")
+    return redirect('dashboard')
+
+
+# ============================================================================
 # Organization Onboarding Views
 # ============================================================================
 

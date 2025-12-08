@@ -1,0 +1,175 @@
+{% extends "core/onboarding/base_public.html" %}
+
+{% block title %}Subscription Required - Aria{% endblock %}
+
+{% block container_class %}max-w-4xl{% endblock %}
+
+{% block content %}
+<div class="text-center py-8">
+    <!-- Icon -->
+    <div class="w-20 h-20 bg-ch-gold/20 rounded-full flex items-center justify-center mx-auto mb-6">
+        <svg class="w-10 h-10 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+    </div>
+
+    <!-- Message -->
+    <h1 class="text-3xl font-bold text-white mb-2">{{ message }}</h1>
+    <p class="text-xl text-gray-400 mb-8">{{ subtitle }}</p>
+
+    {% if can_resubscribe %}
+    <!-- Plan Selection -->
+    <div class="bg-ch-dark rounded-xl border border-ch-gray p-8 mb-8">
+        <h2 class="text-xl font-semibold text-white mb-6">Choose a Plan to Continue</h2>
+
+        <form method="post" action="{% url 'subscribe' %}" id="subscribe-form">
+            {% csrf_token %}
+
+            <!-- Billing Toggle -->
+            <div class="flex justify-center mb-6">
+                <div class="bg-ch-gray rounded-lg p-1 border border-ch-gray">
+                    <button type="button" id="monthly-btn" onclick="toggleBilling('monthly')"
+                            class="px-4 py-2 rounded-md text-sm font-medium transition-colors bg-ch-gold text-ch-black">
+                        Monthly
+                    </button>
+                    <button type="button" id="yearly-btn" onclick="toggleBilling('yearly')"
+                            class="px-4 py-2 rounded-md text-sm font-medium transition-colors text-gray-400 hover:text-white">
+                        Yearly <span class="text-ch-gold text-xs">Save 17%</span>
+                    </button>
+                </div>
+            </div>
+            <input type="hidden" name="billing_period" id="billing_period" value="monthly">
+
+            <!-- Plans Grid -->
+            <div class="grid md:grid-cols-3 gap-4 mb-6">
+                {% for plan in plans %}
+                {% if plan.tier != 'enterprise' and plan.tier != 'free' %}
+                <label class="plan-option cursor-pointer">
+                    <input type="radio" name="plan_id" value="{{ plan.id }}" class="hidden peer"
+                           {% if plan.tier == 'team' %}checked{% endif %}>
+                    <div class="bg-ch-gray rounded-lg border-2 border-transparent p-4 transition-all
+                                peer-checked:border-ch-gold peer-checked:bg-ch-gold/10
+                                hover:border-ch-gold/50">
+                        <h3 class="text-lg font-semibold text-white mb-1">{{ plan.name }}</h3>
+                        <div class="mb-2">
+                            <span class="monthly-price">
+                                <span class="text-2xl font-bold text-white">${{ plan.monthly_price|floatformat:0 }}</span>
+                                <span class="text-gray-400 text-sm">/month</span>
+                            </span>
+                            <span class="yearly-price hidden">
+                                <span class="text-2xl font-bold text-white">${{ plan.yearly_price|floatformat:0 }}</span>
+                                <span class="text-gray-400 text-sm">/year</span>
+                            </span>
+                        </div>
+                        <p class="text-gray-400 text-sm">
+                            {% if plan.max_users %}{{ plan.max_users }} users{% else %}Unlimited users{% endif %} |
+                            {% if plan.max_volunteers %}{{ plan.max_volunteers }} volunteers{% else %}Unlimited{% endif %}
+                        </p>
+                    </div>
+                </label>
+                {% endif %}
+                {% endfor %}
+            </div>
+
+            <button type="submit"
+                    class="bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-3 px-8 rounded-lg text-lg transition-colors">
+                Subscribe Now
+            </button>
+        </form>
+    </div>
+
+    <!-- What you'll get back -->
+    <div class="bg-ch-dark rounded-xl border border-ch-gray p-6 mb-8">
+        <h3 class="text-lg font-semibold text-white mb-4">What's Included</h3>
+        <div class="grid md:grid-cols-3 gap-4 text-sm">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span class="text-gray-300">Aria AI Assistant</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span class="text-gray-300">Planning Center Integration</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span class="text-gray-300">Volunteer Care Tracking</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span class="text-gray-300">Team Communication</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span class="text-gray-300">Push Notifications</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span class="text-gray-300">All Your Data Preserved</span>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Suspended Account -->
+    <div class="bg-red-900/20 border border-red-500/30 rounded-xl p-6 mb-8">
+        <p class="text-red-400">
+            Your account has been suspended. Please contact support at
+            <a href="mailto:support@aria.church" class="text-ch-gold hover:underline">support@aria.church</a>
+            to resolve this issue.
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Data Assurance -->
+    <p class="text-gray-500 text-sm">
+        Don't worry - all your data is safe and will be available once you subscribe.
+    </p>
+
+    <!-- Links -->
+    <div class="mt-8 flex justify-center gap-6 text-sm">
+        <a href="{% url 'pricing' %}" class="text-gray-400 hover:text-white">Compare Plans</a>
+        <a href="mailto:support@aria.church" class="text-gray-400 hover:text-white">Contact Support</a>
+        <a href="{% url 'logout' %}" class="text-gray-400 hover:text-white">Sign Out</a>
+    </div>
+</div>
+
+<script>
+function toggleBilling(type) {
+    const monthlyBtn = document.getElementById('monthly-btn');
+    const yearlyBtn = document.getElementById('yearly-btn');
+    const billingInput = document.getElementById('billing_period');
+    const monthlyPrices = document.querySelectorAll('.monthly-price');
+    const yearlyPrices = document.querySelectorAll('.yearly-price');
+
+    billingInput.value = type;
+
+    if (type === 'monthly') {
+        monthlyBtn.classList.add('bg-ch-gold', 'text-ch-black');
+        monthlyBtn.classList.remove('text-gray-400', 'hover:text-white');
+        yearlyBtn.classList.remove('bg-ch-gold', 'text-ch-black');
+        yearlyBtn.classList.add('text-gray-400', 'hover:text-white');
+        monthlyPrices.forEach(el => el.classList.remove('hidden'));
+        yearlyPrices.forEach(el => el.classList.add('hidden'));
+    } else {
+        yearlyBtn.classList.add('bg-ch-gold', 'text-ch-black');
+        yearlyBtn.classList.remove('text-gray-400', 'hover:text-white');
+        monthlyBtn.classList.remove('bg-ch-gold', 'text-ch-black');
+        monthlyBtn.classList.add('text-gray-400', 'hover:text-white');
+        monthlyPrices.forEach(el => el.classList.add('hidden'));
+        yearlyPrices.forEach(el => el.classList.remove('hidden'));
+    }
+}
+</script>
+{% endblock %}

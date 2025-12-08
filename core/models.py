@@ -246,6 +246,15 @@ class Organization(models.Model):
         return True
 
     @property
+    def is_trial_expired(self):
+        """Check if trial period has ended without converting to paid."""
+        if self.subscription_status != 'trial':
+            return False
+        if self.trial_ends_at and timezone.now() > self.trial_ends_at:
+            return True
+        return False
+
+    @property
     def trial_days_remaining(self):
         """Get days remaining in trial."""
         if not self.is_trial or not self.trial_ends_at:
@@ -254,9 +263,27 @@ class Organization(models.Model):
         return max(0, delta.days)
 
     @property
+    def show_trial_warning(self):
+        """Check if we should show trial expiring warning (3 days or less)."""
+        return self.is_trial and self.trial_days_remaining <= 3
+
+    @property
+    def needs_subscription(self):
+        """Check if org needs to subscribe to continue using the service."""
+        # Trial expired
+        if self.is_trial_expired:
+            return True
+        # Subscription cancelled or suspended
+        if self.subscription_status in ['cancelled', 'suspended']:
+            return True
+        return False
+
+    @property
     def is_subscription_active(self):
         """Check if organization has an active subscription."""
-        return self.subscription_status in ['trial', 'active']
+        if self.subscription_status == 'trial':
+            return self.is_trial  # Only active if trial hasn't expired
+        return self.subscription_status == 'active'
 
     @property
     def can_use_feature(self):

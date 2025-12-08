@@ -42,6 +42,9 @@ class TenantMiddleware(MiddlewareMixin):
         '/onboarding/',
         '/invite/',
         '/webhooks/',
+        # Subscription/billing pages (must be accessible when expired)
+        '/billing/',
+        '/subscribe/',
     ]
 
     def process_request(self, request):
@@ -80,6 +83,11 @@ class TenantMiddleware(MiddlewareMixin):
                     "without membership"
                 )
                 return self._handle_no_membership(request)
+
+            # Check if subscription is valid
+            subscription_redirect = self._check_subscription_status(request, organization)
+            if subscription_redirect:
+                return subscription_redirect
         else:
             # No organization context - check if user has any orgs
             memberships = OrganizationMembership.objects.filter(
@@ -175,6 +183,29 @@ class TenantMiddleware(MiddlewareMixin):
                 return Organization.objects.get(slug=slug, is_active=True)
             except Organization.DoesNotExist:
                 pass
+
+        return None
+
+    def _check_subscription_status(self, request, organization):
+        """
+        Check if the organization's subscription allows access.
+
+        Returns a redirect response if subscription is invalid, None otherwise.
+        """
+        # Check if organization needs to subscribe
+        if organization.needs_subscription:
+            logger.info(
+                f"Organization {organization.slug} subscription expired, "
+                f"redirecting user {request.user} to billing"
+            )
+            return redirect('subscription_required')
+
+        # Check for past_due status - allow access but they'll see a warning
+        if organization.subscription_status == 'past_due':
+            logger.warning(
+                f"Organization {organization.slug} has past due subscription"
+            )
+            # Don't redirect, but the template will show a warning banner
 
         return None
 

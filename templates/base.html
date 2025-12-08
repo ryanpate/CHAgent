@@ -285,6 +285,27 @@
 </head>
 <body class="bg-ch-black text-white min-h-screen" x-data="{ sidebarOpen: false }">
     {% if user.is_authenticated %}
+    <!-- Subscription Warning Banners -->
+    {% if show_trial_warning %}
+    <div class="bg-amber-600 text-white px-4 py-2 text-center text-sm">
+        <span class="font-medium">Trial ending soon!</span>
+        Your free trial expires in {{ trial_days_remaining }} day{{ trial_days_remaining|pluralize }}.
+        {% if can_manage_billing or is_owner %}
+        <a href="{% url 'subscribe' %}" class="underline font-semibold ml-2">Subscribe now</a>
+        {% else %}
+        Contact your account owner to subscribe.
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if is_past_due %}
+    <div class="bg-red-600 text-white px-4 py-2 text-center text-sm">
+        <span class="font-medium">Payment past due!</span>
+        Please update your payment method to avoid service interruption.
+        {% if can_manage_billing or is_owner %}
+        <a href="{% url 'billing_portal' %}" class="underline font-semibold ml-2">Update payment</a>
+        {% endif %}
+    </div>
+    {% endif %}
     <!-- Mobile Header -->
     <header class="md:hidden fixed top-0 left-0 right-0 z-40 bg-ch-dark border-b border-gray-800 px-4 py-3 flex items-center justify-between safe-top">
         <button @click="sidebarOpen = true" class="mobile-menu-btn p-2 rounded-lg hover:bg-ch-gray transition">
