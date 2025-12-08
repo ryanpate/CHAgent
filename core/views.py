@@ -1,5 +1,7 @@
 """
 Views for the Cherry Hills Worship Arts Portal.
+
+All views are tenant-scoped - data is filtered by the current organization.
 """
 import json
 import uuid
@@ -15,6 +17,7 @@ from django.db.models import Count, Q
 from django.utils import timezone
 
 from .models import Interaction, Volunteer, ChatMessage, ConversationContext, FollowUp, ResponseFeedback
+from .middleware import require_organization
 from .agent import (
     query_agent,
     process_interaction,
@@ -25,6 +28,11 @@ from .agent import (
 from .volunteer_matching import VolunteerMatcher, MatchType
 
 import re
+
+
+def get_org(request):
+    """Helper to get organization from request, with fallback for migration period."""
+    return getattr(request, 'organization', None)
 
 
 def should_start_new_conversation(message: str) -> bool:
@@ -65,22 +73,34 @@ def should_start_new_conversation(message: str) -> bool:
 @login_required
 def dashboard(request):
     """Dashboard view with overview statistics and AI chat interface."""
+    org = get_org(request)
+
     # Get or create session ID from cookie for chat
     session_id = request.COOKIES.get('chat_session_id')
     if not session_id:
         session_id = str(uuid.uuid4())
 
-    # Get chat messages for this session
+    # Get chat messages for this session (scoped to user and organization)
     chat_messages = ChatMessage.objects.filter(
         user=request.user,
         session_id=session_id
-    ).order_by('created_at')
+    )
+    if org:
+        chat_messages = chat_messages.filter(organization=org)
+    chat_messages = chat_messages.order_by('created_at')
+
+    # Build base querysets scoped to organization
+    volunteer_qs = Volunteer.objects.all()
+    interaction_qs = Interaction.objects.all()
+    if org:
+        volunteer_qs = volunteer_qs.filter(organization=org)
+        interaction_qs = interaction_qs.filter(organization=org)
 
     context = {
-        'total_volunteers': Volunteer.objects.count(),
-        'total_interactions': Interaction.objects.count(),
-        'recent_interactions': Interaction.objects.select_related('user').prefetch_related('volunteers')[:5],
-        'top_volunteers': Volunteer.objects.annotate(
+        'total_volunteers': volunteer_qs.count(),
+        'total_interactions': interaction_qs.count(),
+        'recent_interactions': interaction_qs.select_related('user').prefetch_related('volunteers')[:5],
+        'top_volunteers': volunteer_qs.annotate(
             interaction_count=Count('interactions')
         ).order_by('-interaction_count')[:5],
         'chat_messages': chat_messages,
@@ -359,15 +379,20 @@ def feedback_dashboard(request):
 
     Shows all feedback with filtering options for issue types and resolution status.
     """
+    org = get_org(request)
+
     # Get filter parameters
     filter_type = request.GET.get('type', 'all')  # all, positive, negative
     filter_resolved = request.GET.get('resolved', 'all')  # all, yes, no
     filter_issue = request.GET.get('issue', '')  # specific issue type
 
-    # Base queryset
+    # Base queryset (scoped to organization)
     feedbacks = ResponseFeedback.objects.select_related(
         'chat_message', 'user', 'resolved_by'
-    ).order_by('-created_at')
+    )
+    if org:
+        feedbacks = feedbacks.filter(organization=org)
+    feedbacks = feedbacks.order_by('-created_at')
 
     # Apply filters
     if filter_type == 'positive':
@@ -383,11 +408,15 @@ def feedback_dashboard(request):
     if filter_issue:
         feedbacks = feedbacks.filter(issue_type=filter_issue)
 
-    # Get counts for stats
-    total_count = ResponseFeedback.objects.count()
-    positive_count = ResponseFeedback.objects.filter(feedback_type='positive').count()
-    negative_count = ResponseFeedback.objects.filter(feedback_type='negative').count()
-    unresolved_count = ResponseFeedback.objects.filter(
+    # Get counts for stats (scoped to organization)
+    base_feedback_qs = ResponseFeedback.objects.all()
+    if org:
+        base_feedback_qs = base_feedback_qs.filter(organization=org)
+
+    total_count = base_feedback_qs.count()
+    positive_count = base_feedback_qs.filter(feedback_type='positive').count()
+    negative_count = base_feedback_qs.filter(feedback_type='negative').count()
+    unresolved_count = base_feedback_qs.filter(
         feedback_type='negative', resolved=False
     ).count()
 
@@ -429,7 +458,13 @@ def feedback_resolve(request, pk):
     """Mark a feedback item as resolved."""
     from django.utils import timezone
 
-    feedback = get_object_or_404(ResponseFeedback, pk=pk)
+    org = get_org(request)
+
+    queryset = ResponseFeedback.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    feedback = get_object_or_404(queryset, pk=pk)
     feedback.resolved = True
     feedback.resolved_by = request.user
     feedback.resolved_at = timezone.now()
@@ -449,7 +484,11 @@ def feedback_resolve(request, pk):
 @login_required
 def interaction_list(request):
     """List all interactions with pagination."""
-    interactions = Interaction.objects.select_related('user').prefetch_related('volunteers').all()
+    org = get_org(request)
+
+    interactions = Interaction.objects.select_related('user').prefetch_related('volunteers')
+    if org:
+        interactions = interactions.filter(organization=org)
 
     # Simple search
     search_query = request.GET.get('q', '')
@@ -466,10 +505,13 @@ def interaction_list(request):
 @login_required
 def interaction_detail(request, pk):
     """View a single interaction."""
-    interaction = get_object_or_404(
-        Interaction.objects.select_related('user').prefetch_related('volunteers'),
-        pk=pk
-    )
+    org = get_org(request)
+
+    queryset = Interaction.objects.select_related('user').prefetch_related('volunteers')
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    interaction = get_object_or_404(queryset, pk=pk)
     context = {
         'interaction': interaction,
     }
@@ -492,7 +534,13 @@ def interaction_create(request):
 @login_required
 def volunteer_list(request):
     """List all volunteers."""
-    volunteers = Volunteer.objects.annotate(
+    org = get_org(request)
+
+    volunteers = Volunteer.objects.all()
+    if org:
+        volunteers = volunteers.filter(organization=org)
+
+    volunteers = volunteers.annotate(
         interaction_count=Count('interactions')
     ).order_by('name')
 
@@ -506,8 +554,11 @@ def volunteer_list(request):
     if team_filter:
         volunteers = volunteers.filter(team=team_filter)
 
-    # Get unique teams for filter dropdown
-    teams = Volunteer.objects.exclude(team='').values_list('team', flat=True).distinct()
+    # Get unique teams for filter dropdown (scoped to org)
+    teams_qs = Volunteer.objects.exclude(team='')
+    if org:
+        teams_qs = teams_qs.filter(organization=org)
+    teams = teams_qs.values_list('team', flat=True).distinct()
 
     context = {
         'volunteers': volunteers,
@@ -521,7 +572,13 @@ def volunteer_list(request):
 @login_required
 def volunteer_detail(request, pk):
     """View a single volunteer's profile and interactions."""
-    volunteer = get_object_or_404(Volunteer, pk=pk)
+    org = get_org(request)
+
+    queryset = Volunteer.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    volunteer = get_object_or_404(queryset, pk=pk)
     interactions = volunteer.interactions.select_related('user').order_by('-created_at')
 
     # Aggregate extracted data from all interactions
@@ -644,13 +701,17 @@ def followup_list(request):
     from django.utils import timezone
     from datetime import timedelta
 
+    org = get_org(request)
+
     # Get filter parameters
     status_filter = request.GET.get('status', 'pending')
     priority_filter = request.GET.get('priority', '')
     date_filter = request.GET.get('date', '')
 
-    # Base queryset
+    # Base queryset (scoped to organization)
     followups = FollowUp.objects.select_related('volunteer', 'created_by', 'assigned_to')
+    if org:
+        followups = followups.filter(organization=org)
 
     # Apply status filter
     if status_filter and status_filter != 'all':
@@ -672,16 +733,25 @@ def followup_list(request):
     elif date_filter == 'no_date':
         followups = followups.filter(follow_up_date__isnull=True)
 
-    # Get counts for sidebar/stats
-    overdue_count = FollowUp.objects.filter(
+    # Get counts for sidebar/stats (scoped to organization)
+    base_qs = FollowUp.objects.all()
+    if org:
+        base_qs = base_qs.filter(organization=org)
+
+    overdue_count = base_qs.filter(
         follow_up_date__lt=today,
         status='pending'
     ).count()
-    today_count = FollowUp.objects.filter(
+    today_count = base_qs.filter(
         follow_up_date=today,
         status='pending'
     ).count()
-    pending_count = FollowUp.objects.filter(status='pending').count()
+    pending_count = base_qs.filter(status='pending').count()
+
+    # Volunteers dropdown (scoped to organization)
+    volunteers_qs = Volunteer.objects.all()
+    if org:
+        volunteers_qs = volunteers_qs.filter(organization=org)
 
     context = {
         'followups': followups[:50],
@@ -691,7 +761,7 @@ def followup_list(request):
         'overdue_count': overdue_count,
         'today_count': today_count,
         'pending_count': pending_count,
-        'volunteers': Volunteer.objects.all()[:100],  # For the create form dropdown
+        'volunteers': volunteers_qs[:100],  # For the create form dropdown
     }
     return render(request, 'core/followup_list.html', context)
 
@@ -699,7 +769,13 @@ def followup_list(request):
 @login_required
 def followup_detail(request, pk):
     """View details of a single follow-up."""
-    followup = get_object_or_404(FollowUp, pk=pk)
+    org = get_org(request)
+
+    queryset = FollowUp.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    followup = get_object_or_404(queryset, pk=pk)
     context = {
         'followup': followup,
     }
@@ -712,6 +788,8 @@ def followup_create(request):
     """Create a new follow-up."""
     from django.utils import timezone
     from datetime import datetime
+
+    org = get_org(request)
 
     title = request.POST.get('title', '').strip()
     description = request.POST.get('description', '').strip()
@@ -733,15 +811,19 @@ def followup_create(request):
         except ValueError:
             pass
 
-    # Get volunteer if specified
+    # Get volunteer if specified (scoped to organization)
     volunteer = None
     if volunteer_id:
         try:
-            volunteer = Volunteer.objects.get(pk=int(volunteer_id))
+            queryset = Volunteer.objects.all()
+            if org:
+                queryset = queryset.filter(organization=org)
+            volunteer = queryset.get(pk=int(volunteer_id))
         except (ValueError, Volunteer.DoesNotExist):
             pass
 
     followup = FollowUp.objects.create(
+        organization=org,
         created_by=request.user,
         title=title,
         description=description,
@@ -762,7 +844,13 @@ def followup_create(request):
 @require_POST
 def followup_complete(request, pk):
     """Mark a follow-up as completed."""
-    followup = get_object_or_404(FollowUp, pk=pk)
+    org = get_org(request)
+
+    queryset = FollowUp.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    followup = get_object_or_404(queryset, pk=pk)
     notes = request.POST.get('notes', '')
     followup.mark_completed(notes)
 
@@ -778,7 +866,13 @@ def followup_update(request, pk):
     """Update a follow-up's details."""
     from datetime import datetime
 
-    followup = get_object_or_404(FollowUp, pk=pk)
+    org = get_org(request)
+
+    queryset = FollowUp.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    followup = get_object_or_404(queryset, pk=pk)
 
     # Update fields if provided
     if 'title' in request.POST:
@@ -802,7 +896,10 @@ def followup_update(request, pk):
         vol_id = request.POST['volunteer_id']
         if vol_id:
             try:
-                followup.volunteer = Volunteer.objects.get(pk=int(vol_id))
+                vol_qs = Volunteer.objects.all()
+                if org:
+                    vol_qs = vol_qs.filter(organization=org)
+                followup.volunteer = vol_qs.get(pk=int(vol_id))
             except (ValueError, Volunteer.DoesNotExist):
                 pass
         else:
@@ -820,7 +917,13 @@ def followup_update(request, pk):
 @require_POST
 def followup_delete(request, pk):
     """Delete a follow-up."""
-    followup = get_object_or_404(FollowUp, pk=pk)
+    org = get_org(request)
+
+    queryset = FollowUp.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    followup = get_object_or_404(queryset, pk=pk)
     followup.delete()
 
     if request.headers.get('HX-Request'):
@@ -841,19 +944,21 @@ def analytics_dashboard(request):
     from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
 
+    org = get_org(request)
+
     # Parse date range from request
     days = int(request.GET.get('days', 30))
     date_to = timezone.now()
     date_from = date_to - timedelta(days=days)
 
-    # Check cache first
-    cache_params = {'days': days}
+    # Include org in cache params for multi-tenant isolation
+    cache_params = {'days': days, 'org_id': org.id if org else None}
     cached = ReportCache.get_cached_report('dashboard_summary', cache_params)
 
     if cached:
         summary = cached
     else:
-        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        generator = ReportGenerator(date_from=date_from, date_to=date_to, organization=org)
         summary = serialize_for_json(generator.dashboard_summary())
         # Cache for 15 minutes
         ReportCache.set_cached_report('dashboard_summary', summary, cache_params, ttl_minutes=15)
@@ -863,7 +968,7 @@ def analytics_dashboard(request):
     if care_cached:
         care_report = care_cached
     else:
-        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        generator = ReportGenerator(date_from=date_from, date_to=date_to, organization=org)
         care_report = serialize_for_json(generator.team_care_report())
         ReportCache.set_cached_report('team_care', care_report, cache_params, ttl_minutes=15)
 
@@ -885,17 +990,19 @@ def analytics_volunteer_engagement(request):
     from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
 
+    org = get_org(request)
+
     days = int(request.GET.get('days', 90))
     date_to = timezone.now()
     date_from = date_to - timedelta(days=days)
 
-    cache_params = {'days': days}
+    cache_params = {'days': days, 'org_id': org.id if org else None}
     cached = ReportCache.get_cached_report('volunteer_engagement', cache_params)
 
     if cached:
         report = cached
     else:
-        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        generator = ReportGenerator(date_from=date_from, date_to=date_to, organization=org)
         report = serialize_for_json(generator.volunteer_engagement_report())
         ReportCache.set_cached_report('volunteer_engagement', report, cache_params, ttl_minutes=30)
 
@@ -914,17 +1021,19 @@ def analytics_team_care(request):
     from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
 
+    org = get_org(request)
+
     days = int(request.GET.get('days', 30))
     date_to = timezone.now()
     date_from = date_to - timedelta(days=days)
 
-    cache_params = {'days': days}
+    cache_params = {'days': days, 'org_id': org.id if org else None}
     cached = ReportCache.get_cached_report('team_care', cache_params)
 
     if cached:
         report = cached
     else:
-        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        generator = ReportGenerator(date_from=date_from, date_to=date_to, organization=org)
         report = serialize_for_json(generator.team_care_report())
         ReportCache.set_cached_report('team_care', report, cache_params, ttl_minutes=15)
 
@@ -943,18 +1052,20 @@ def analytics_interaction_trends(request):
     from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
 
+    org = get_org(request)
+
     days = int(request.GET.get('days', 90))
     group_by = request.GET.get('group_by', 'week')
     date_to = timezone.now()
     date_from = date_to - timedelta(days=days)
 
-    cache_params = {'days': days, 'group_by': group_by}
+    cache_params = {'days': days, 'group_by': group_by, 'org_id': org.id if org else None}
     cached = ReportCache.get_cached_report('interaction_trends', cache_params)
 
     if cached:
         report = cached
     else:
-        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        generator = ReportGenerator(date_from=date_from, date_to=date_to, organization=org)
         report = serialize_for_json(generator.interaction_trends_report(group_by=group_by))
         ReportCache.set_cached_report('interaction_trends', report, cache_params, ttl_minutes=30)
 
@@ -974,17 +1085,19 @@ def analytics_prayer_requests(request):
     from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
 
+    org = get_org(request)
+
     days = int(request.GET.get('days', 90))
     date_to = timezone.now()
     date_from = date_to - timedelta(days=days)
 
-    cache_params = {'days': days}
+    cache_params = {'days': days, 'org_id': org.id if org else None}
     cached = ReportCache.get_cached_report('prayer_summary', cache_params)
 
     if cached:
         report = cached
     else:
-        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        generator = ReportGenerator(date_from=date_from, date_to=date_to, organization=org)
         report = serialize_for_json(generator.prayer_request_summary())
         ReportCache.set_cached_report('prayer_summary', report, cache_params, ttl_minutes=30)
 
@@ -1003,17 +1116,19 @@ def analytics_ai_performance(request):
     from .reports import ReportGenerator, serialize_for_json
     from .models import ReportCache
 
+    org = get_org(request)
+
     days = int(request.GET.get('days', 30))
     date_to = timezone.now()
     date_from = date_to - timedelta(days=days)
 
-    cache_params = {'days': days}
+    cache_params = {'days': days, 'org_id': org.id if org else None}
     cached = ReportCache.get_cached_report('ai_performance', cache_params)
 
     if cached:
         report = cached
     else:
-        generator = ReportGenerator(date_from=date_from, date_to=date_to)
+        generator = ReportGenerator(date_from=date_from, date_to=date_to, organization=org)
         report = serialize_for_json(generator.ai_performance_report())
         ReportCache.set_cached_report('ai_performance', report, cache_params, ttl_minutes=15)
 
@@ -1031,11 +1146,13 @@ def analytics_export(request, report_type):
     """
     from .reports import ReportGenerator, serialize_for_json
 
+    org = get_org(request)
+
     days = int(request.GET.get('days', 90))
     date_to = timezone.now()
     date_from = date_to - timedelta(days=days)
 
-    generator = ReportGenerator(date_from=date_from, date_to=date_to)
+    generator = ReportGenerator(date_from=date_from, date_to=date_to, organization=org)
 
     report_methods = {
         'volunteer_engagement': generator.volunteer_engagement_report,
@@ -1093,14 +1210,16 @@ def care_dashboard(request):
     from .reports import ProactiveCareGenerator, serialize_for_json
     from .models import VolunteerInsight
 
+    org = get_org(request)
+
     # Generate new insights if requested
     if request.GET.get('refresh') == '1':
-        generator = ProactiveCareGenerator()
+        generator = ProactiveCareGenerator(organization=org)
         generator.generate_all_insights()
         return redirect('care_dashboard')
 
-    # Get dashboard data
-    generator = ProactiveCareGenerator()
+    # Get dashboard data (scoped to organization)
+    generator = ProactiveCareGenerator(organization=org)
     dashboard = serialize_for_json(generator.get_proactive_care_dashboard())
 
     # Get filter parameters
@@ -1150,7 +1269,13 @@ def care_dismiss_insight(request, pk):
     """
     from .models import VolunteerInsight
 
-    insight = get_object_or_404(VolunteerInsight, pk=pk)
+    org = get_org(request)
+
+    queryset = VolunteerInsight.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    insight = get_object_or_404(queryset, pk=pk)
     action = request.POST.get('action', 'dismiss')
     notes = request.POST.get('notes', '')
 
@@ -1181,10 +1306,17 @@ def care_create_followup(request, pk):
     """
     from .models import VolunteerInsight
 
-    insight = get_object_or_404(VolunteerInsight, pk=pk)
+    org = get_org(request)
+
+    queryset = VolunteerInsight.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    insight = get_object_or_404(queryset, pk=pk)
 
     # Create a follow-up based on the insight
     followup = FollowUp.objects.create(
+        organization=org,
         created_by=request.user,
         volunteer=insight.volunteer,
         title=insight.title,
@@ -1217,7 +1349,9 @@ def care_refresh_insights(request):
     """
     from .reports import ProactiveCareGenerator
 
-    generator = ProactiveCareGenerator()
+    org = get_org(request)
+
+    generator = ProactiveCareGenerator(organization=org)
     results = generator.generate_all_insights()
 
     if request.headers.get('HX-Request'):
@@ -1239,12 +1373,17 @@ def comms_hub(request):
     """
     from .models import Announcement, Channel, DirectMessage, AnnouncementRead, Project
 
-    # Get user's projects
+    org = get_org(request)
+
+    # Get user's projects (scoped to organization)
     projects = Project.objects.filter(
         models.Q(owner=request.user) | models.Q(members=request.user)
-    ).exclude(status='archived').distinct().order_by('-updated_at')[:5]
+    ).exclude(status='archived').distinct()
+    if org:
+        projects = projects.filter(organization=org)
+    projects = projects.order_by('-updated_at')[:5]
 
-    # Get active announcements
+    # Get active announcements (scoped to organization)
     now = timezone.now()
     announcements = Announcement.objects.filter(
         is_active=True
@@ -1252,7 +1391,10 @@ def comms_hub(request):
         models.Q(publish_at__isnull=True) | models.Q(publish_at__lte=now)
     ).filter(
         models.Q(expires_at__isnull=True) | models.Q(expires_at__gte=now)
-    ).select_related('author')[:10]
+    )
+    if org:
+        announcements = announcements.filter(organization=org)
+    announcements = announcements.select_related('author')[:10]
 
     # Mark read status for each announcement
     read_ids = set(
@@ -1264,23 +1406,32 @@ def comms_hub(request):
     for ann in announcements:
         ann.is_read = ann.id in read_ids
 
-    # Get channels user can access
+    # Get channels user can access (scoped to organization)
     channels = Channel.objects.filter(
         is_archived=False
     ).filter(
         models.Q(is_private=False) | models.Q(members=request.user)
-    ).distinct()
+    )
+    if org:
+        channels = channels.filter(organization=org)
+    channels = channels.distinct()
 
-    # Get unread DM count
-    unread_dm_count = DirectMessage.objects.filter(
+    # Get unread DM count (scoped to organization)
+    dm_qs = DirectMessage.objects.filter(
         recipient=request.user,
         is_read=False
-    ).count()
+    )
+    if org:
+        dm_qs = dm_qs.filter(organization=org)
+    unread_dm_count = dm_qs.count()
 
-    # Get recent DM conversations
+    # Get recent DM conversations (scoped to organization)
     recent_dms = DirectMessage.objects.filter(
         models.Q(sender=request.user) | models.Q(recipient=request.user)
-    ).select_related('sender', 'recipient').order_by('-created_at')[:20]
+    )
+    if org:
+        recent_dms = recent_dms.filter(organization=org)
+    recent_dms = recent_dms.select_related('sender', 'recipient').order_by('-created_at')[:20]
 
     # Group by conversation partner
     conversations = {}
@@ -1308,6 +1459,8 @@ def announcements_list(request):
     """List all announcements."""
     from .models import Announcement, AnnouncementRead
 
+    org = get_org(request)
+
     now = timezone.now()
     announcements = Announcement.objects.filter(
         is_active=True
@@ -1315,7 +1468,10 @@ def announcements_list(request):
         models.Q(publish_at__isnull=True) | models.Q(publish_at__lte=now)
     ).filter(
         models.Q(expires_at__isnull=True) | models.Q(expires_at__gte=now)
-    ).select_related('author')
+    )
+    if org:
+        announcements = announcements.filter(organization=org)
+    announcements = announcements.select_related('author')
 
     # Mark read status
     read_ids = set(
@@ -1338,7 +1494,13 @@ def announcement_detail(request, pk):
     """View a single announcement and mark as read."""
     from .models import Announcement, AnnouncementRead
 
-    announcement = get_object_or_404(Announcement, pk=pk)
+    org = get_org(request)
+
+    queryset = Announcement.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    announcement = get_object_or_404(queryset, pk=pk)
 
     # Mark as read
     AnnouncementRead.objects.get_or_create(
@@ -1359,6 +1521,8 @@ def announcement_create(request):
     from django.contrib import messages
     from .models import Announcement
 
+    org = get_org(request)
+
     if request.method == 'POST':
         title = request.POST.get('title', '').strip()
         content = request.POST.get('content', '').strip()
@@ -1367,6 +1531,7 @@ def announcement_create(request):
 
         if title and content:
             announcement = Announcement.objects.create(
+                organization=org,
                 title=title,
                 content=content,
                 priority=priority,
@@ -1399,11 +1564,16 @@ def channel_list(request):
     """List all accessible channels."""
     from .models import Channel
 
+    org = get_org(request)
+
     channels = Channel.objects.filter(
         is_archived=False
     ).filter(
         models.Q(is_private=False) | models.Q(members=request.user)
-    ).distinct().annotate(
+    )
+    if org:
+        channels = channels.filter(organization=org)
+    channels = channels.distinct().annotate(
         message_count=models.Count('messages')
     )
 
@@ -1418,7 +1588,13 @@ def channel_detail(request, slug):
     """View a channel and its messages."""
     from .models import Channel, ChannelMessage
 
-    channel = get_object_or_404(Channel, slug=slug)
+    org = get_org(request)
+
+    queryset = Channel.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    channel = get_object_or_404(queryset, slug=slug)
 
     # Check access
     if not channel.can_access(request.user):
@@ -1440,7 +1616,13 @@ def channel_send_message(request, slug):
     """Send a message to a channel."""
     from .models import Channel, ChannelMessage
 
-    channel = get_object_or_404(Channel, slug=slug)
+    org = get_org(request)
+
+    queryset = Channel.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    channel = get_object_or_404(queryset, slug=slug)
 
     if not channel.can_access(request.user):
         return HttpResponse('Access denied', status=403)
@@ -1485,6 +1667,8 @@ def channel_create(request):
     from .models import Channel
     from django.utils.text import slugify
 
+    org = get_org(request)
+
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
         description = request.POST.get('description', '').strip()
@@ -1493,14 +1677,21 @@ def channel_create(request):
 
         if name:
             slug = slugify(name)
-            # Ensure unique slug
+            # Ensure unique slug (scoped to organization if applicable)
             base_slug = slug
             counter = 1
-            while Channel.objects.filter(slug=slug).exists():
+            slug_qs = Channel.objects.filter(slug=slug)
+            if org:
+                slug_qs = slug_qs.filter(organization=org)
+            while slug_qs.exists():
                 slug = f"{base_slug}-{counter}"
                 counter += 1
+                slug_qs = Channel.objects.filter(slug=slug)
+                if org:
+                    slug_qs = slug_qs.filter(organization=org)
 
             channel = Channel.objects.create(
+                organization=org,
                 name=name,
                 slug=slug,
                 description=description,
@@ -1521,21 +1712,29 @@ def dm_list(request):
     """List direct message conversations."""
     from .models import DirectMessage
 
-    # Get all DMs for user
+    org = get_org(request)
+
+    # Get all DMs for user (scoped to organization)
     dms = DirectMessage.objects.filter(
         models.Q(sender=request.user) | models.Q(recipient=request.user)
-    ).select_related('sender', 'recipient').order_by('-created_at')
+    )
+    if org:
+        dms = dms.filter(organization=org)
+    dms = dms.select_related('sender', 'recipient').order_by('-created_at')
 
     # Group by conversation partner
     conversations = {}
     for dm in dms:
         partner = dm.recipient if dm.sender == request.user else dm.sender
         if partner and partner.id not in conversations:
-            unread_count = DirectMessage.objects.filter(
+            unread_qs = DirectMessage.objects.filter(
                 sender=partner,
                 recipient=request.user,
                 is_read=False
-            ).count()
+            )
+            if org:
+                unread_qs = unread_qs.filter(organization=org)
+            unread_count = unread_qs.count()
             conversations[partner.id] = {
                 'partner': partner,
                 'last_message': dm,
@@ -1554,20 +1753,28 @@ def dm_conversation(request, user_id):
     from .models import DirectMessage
     from accounts.models import User
 
+    org = get_org(request)
+
     partner = get_object_or_404(User, pk=user_id)
 
-    # Get messages in this conversation
+    # Get messages in this conversation (scoped to organization)
     messages = DirectMessage.objects.filter(
         models.Q(sender=request.user, recipient=partner) |
         models.Q(sender=partner, recipient=request.user)
-    ).select_related('sender', 'recipient').order_by('created_at')[:100]
+    )
+    if org:
+        messages = messages.filter(organization=org)
+    messages = messages.select_related('sender', 'recipient').order_by('created_at')[:100]
 
-    # Mark unread messages as read
-    DirectMessage.objects.filter(
+    # Mark unread messages as read (scoped to organization)
+    unread_qs = DirectMessage.objects.filter(
         sender=partner,
         recipient=request.user,
         is_read=False
-    ).update(is_read=True, read_at=timezone.now())
+    )
+    if org:
+        unread_qs = unread_qs.filter(organization=org)
+    unread_qs.update(is_read=True, read_at=timezone.now())
 
     context = {
         'partner': partner,
@@ -1583,11 +1790,14 @@ def dm_send(request, user_id):
     from .models import DirectMessage
     from accounts.models import User
 
+    org = get_org(request)
+
     recipient = get_object_or_404(User, pk=user_id)
     content = request.POST.get('content', '').strip()
 
     if content:
         message = DirectMessage.objects.create(
+            organization=org,
             sender=request.user,
             recipient=recipient,
             content=content
@@ -1632,14 +1842,19 @@ def project_list(request):
     """List all projects the user has access to."""
     from .models import Project
 
+    org = get_org(request)
+
     # Get filter parameters
     status_filter = request.GET.get('status', '')
     my_projects = request.GET.get('mine', '') == '1'
 
-    # Base queryset - projects user owns or is a member of
+    # Base queryset - projects user owns or is a member of (scoped to organization)
     projects = Project.objects.filter(
         models.Q(owner=request.user) | models.Q(members=request.user)
-    ).distinct().select_related('owner').prefetch_related('members', 'tasks')
+    ).distinct()
+    if org:
+        projects = projects.filter(organization=org)
+    projects = projects.select_related('owner').prefetch_related('members', 'tasks')
 
     if status_filter:
         projects = projects.filter(status=status_filter)
@@ -1668,7 +1883,13 @@ def project_detail(request, pk):
     from .models import Project, Task
     from accounts.models import User
 
-    project = get_object_or_404(Project, pk=pk)
+    org = get_org(request)
+
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    project = get_object_or_404(queryset, pk=pk)
 
     # Check access
     if project.owner != request.user and request.user not in project.members.all():
@@ -1684,7 +1905,7 @@ def project_detail(request, pk):
         'completed': tasks.filter(status='completed'),
     }
 
-    # Get available users for assignment
+    # Get available users for assignment (members of org if applicable)
     available_users = User.objects.filter(is_active=True).order_by('display_name', 'username')
 
     context = {
@@ -1704,6 +1925,8 @@ def project_create(request):
     from .models import Project, Channel
     from accounts.models import User
     from django.utils.text import slugify
+
+    org = get_org(request)
 
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
@@ -1725,6 +1948,7 @@ def project_create(request):
 
             # Create project
             project = Project.objects.create(
+                organization=org,
                 name=name,
                 description=description,
                 priority=priority,
@@ -1747,11 +1971,18 @@ def project_create(request):
                 slug = slugify(name)
                 base_slug = slug
                 counter = 1
-                while Channel.objects.filter(slug=slug).exists():
+                slug_qs = Channel.objects.filter(slug=slug)
+                if org:
+                    slug_qs = slug_qs.filter(organization=org)
+                while slug_qs.exists():
                     slug = f"{base_slug}-{counter}"
                     counter += 1
+                    slug_qs = Channel.objects.filter(slug=slug)
+                    if org:
+                        slug_qs = slug_qs.filter(organization=org)
 
                 channel = Channel.objects.create(
+                    organization=org,
                     name=f"proj-{name[:50]}",
                     slug=slug,
                     description=f"Discussion channel for {name}",
@@ -1784,7 +2015,13 @@ def project_add_member(request, pk):
     from .models import Project
     from accounts.models import User
 
-    project = get_object_or_404(Project, pk=pk)
+    org = get_org(request)
+
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    project = get_object_or_404(queryset, pk=pk)
 
     # Only owner can add members
     if project.owner != request.user:
@@ -1814,7 +2051,13 @@ def project_update_status(request, pk):
     """Update project status."""
     from .models import Project
 
-    project = get_object_or_404(Project, pk=pk)
+    org = get_org(request)
+
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    project = get_object_or_404(queryset, pk=pk)
 
     if project.owner != request.user:
         return HttpResponse('Access denied', status=403)
@@ -2020,6 +2263,8 @@ def my_tasks(request):
     from .models import Task, Project
     from datetime import timedelta
 
+    org = get_org(request)
+
     today = timezone.now().date()
 
     # Get filter from query params
@@ -2027,12 +2272,15 @@ def my_tasks(request):
     sort_by = request.GET.get('sort', 'due_date')
     project_id = request.GET.get('project')
 
-    # Base queryset - tasks assigned to current user
+    # Base queryset - tasks assigned to current user (scoped to organization)
     tasks = Task.objects.filter(
         assignees=request.user
     ).exclude(
         status__in=['completed', 'cancelled']
-    ).select_related('project', 'created_by').prefetch_related('assignees')
+    )
+    if org:
+        tasks = tasks.filter(project__organization=org)
+    tasks = tasks.select_related('project', 'created_by').prefetch_related('assignees')
 
     # Apply filters
     if filter_type == 'today':
@@ -2069,38 +2317,43 @@ def my_tasks(request):
     elif sort_by == 'status':
         tasks = tasks.order_by('status', 'due_date')
 
-    # Get counts for filter badges
-    all_count = Task.objects.filter(
-        assignees=request.user
-    ).exclude(status__in=['completed', 'cancelled']).count()
+    # Get counts for filter badges (scoped to organization)
+    base_task_qs = Task.objects.filter(assignees=request.user)
+    if org:
+        base_task_qs = base_task_qs.filter(project__organization=org)
 
-    overdue_count = Task.objects.filter(
-        assignees=request.user,
+    all_count = base_task_qs.exclude(status__in=['completed', 'cancelled']).count()
+
+    overdue_count = base_task_qs.filter(
         due_date__lt=today
     ).exclude(status__in=['completed', 'cancelled']).count()
 
-    today_count = Task.objects.filter(
-        assignees=request.user,
+    today_count = base_task_qs.filter(
         due_date=today
     ).exclude(status__in=['completed', 'cancelled']).count()
 
     week_end = today + timedelta(days=7)
-    week_count = Task.objects.filter(
-        assignees=request.user,
+    week_count = base_task_qs.filter(
         due_date__gte=today,
         due_date__lte=week_end
     ).exclude(status__in=['completed', 'cancelled']).count()
 
-    # Get user's projects for filter dropdown
+    # Get user's projects for filter dropdown (scoped to organization)
     projects = Project.objects.filter(
         models.Q(owner=request.user) | models.Q(members=request.user)
-    ).distinct().order_by('name')
+    ).distinct()
+    if org:
+        projects = projects.filter(organization=org)
+    projects = projects.order_by('name')
 
-    # Recently completed tasks
+    # Recently completed tasks (scoped to organization)
     completed_tasks = Task.objects.filter(
         assignees=request.user,
         status='completed'
-    ).order_by('-completed_at')[:5]
+    )
+    if org:
+        completed_tasks = completed_tasks.filter(project__organization=org)
+    completed_tasks = completed_tasks.order_by('-completed_at')[:5]
 
     context = {
         'tasks': tasks,
