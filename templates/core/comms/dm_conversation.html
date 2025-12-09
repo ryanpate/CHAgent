@@ -25,7 +25,7 @@
     <!-- Messages -->
     <div id="messages-container" class="bg-ch-dark rounded-lg p-4 mb-4 h-[500px] overflow-y-auto space-y-4">
         {% for message in messages %}
-        <div class="flex gap-3 {% if message.sender == request.user %}flex-row-reverse{% endif %}" id="dm-{{ message.id }}">
+        <div class="flex gap-3 group {% if message.sender == request.user %}flex-row-reverse{% endif %}" id="dm-{{ message.id }}">
             <div class="w-10 h-10 bg-{% if message.sender == request.user %}ch-gold{% else %}gray-600{% endif %}/20 rounded-full flex items-center justify-center text-sm font-medium {% if message.sender == request.user %}text-ch-gold{% else %}text-gray-400{% endif %} flex-shrink-0">
                 {{ message.sender.display_name|default:message.sender.username|slice:":1"|upper }}
             </div>
@@ -33,9 +33,18 @@
                 <div class="{% if message.sender == request.user %}bg-ch-gold/20 text-white{% else %}bg-ch-gray{% endif %} rounded-lg px-4 py-2">
                     <p class="break-words">{{ message.content }}</p>
                 </div>
-                <p class="text-xs text-gray-500 mt-1 {% if message.sender == request.user %}text-right{% endif %}">
-                    {{ message.created_at|date:"g:i A" }}
-                </p>
+                <div class="flex items-center gap-2 mt-1 {% if message.sender == request.user %}justify-end{% endif %}">
+                    <span class="text-xs text-gray-500">{{ message.created_at|date:"g:i A" }}</span>
+                    {% if message.sender == request.user %}
+                    <button hx-post="{% url 'dm_delete' message.id %}"
+                            hx-target="#dm-{{ message.id }}"
+                            hx-swap="outerHTML"
+                            hx-confirm="Delete this message?"
+                            class="text-xs text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Delete
+                    </button>
+                    {% endif %}
+                </div>
             </div>
         </div>
         {% empty %}

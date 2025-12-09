@@ -1686,9 +1686,90 @@ def channel_send_message(request, slug):
         if request.headers.get('HX-Request'):
             return render(request, 'core/partials/channel_message.html', {
                 'message': message,
+                'request': request,
             })
 
     return redirect('channel_detail', slug=slug)
+
+
+@login_required
+@require_POST
+def channel_message_delete(request, message_id):
+    """Delete a channel message. Only the author or admins can delete."""
+    from .models import ChannelMessage
+
+    org = get_org(request)
+    queryset = ChannelMessage.objects.all()
+    if org:
+        queryset = queryset.filter(channel__organization=org)
+
+    message = get_object_or_404(queryset, id=message_id)
+    channel = message.channel
+
+    # Check permissions: author or admin
+    is_author = message.author == request.user
+    is_admin = getattr(request, 'membership', None) and request.membership.is_admin_or_above
+
+    if not is_author and not is_admin:
+        return HttpResponse('Permission denied', status=403)
+
+    message.delete()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('')  # Empty response removes the element
+
+    return redirect('channel_detail', slug=channel.slug)
+
+
+@login_required
+@require_POST
+def announcement_delete(request, pk):
+    """Delete an announcement. Only the author or admins can delete."""
+    from .models import Announcement
+
+    org = get_org(request)
+    queryset = Announcement.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    announcement = get_object_or_404(queryset, pk=pk)
+
+    # Check permissions: author or admin
+    is_author = announcement.author == request.user
+    is_admin = getattr(request, 'membership', None) and request.membership.is_admin_or_above
+
+    if not is_author and not is_admin:
+        return HttpResponse('Permission denied', status=403)
+
+    announcement.delete()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('')
+
+    return redirect('announcements_list')
+
+
+@login_required
+@require_POST
+def dm_delete(request, message_id):
+    """Delete a direct message. Only the sender can delete."""
+    from .models import DirectMessage
+
+    message = get_object_or_404(DirectMessage, id=message_id)
+
+    # Only the sender can delete their own message
+    if message.sender != request.user:
+        return HttpResponse('Permission denied', status=403)
+
+    # Store partner info for redirect
+    partner = message.recipient if message.sender == request.user else message.sender
+
+    message.delete()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('')
+
+    return redirect('dm_conversation', user_id=partner.id)
 
 
 @login_required

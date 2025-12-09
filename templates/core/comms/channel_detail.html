@@ -31,7 +31,7 @@
     <!-- Messages -->
     <div id="messages-container" class="bg-ch-dark rounded-lg p-4 mb-4 h-[500px] overflow-y-auto space-y-4">
         {% for message in messages %}
-        <div class="flex gap-3" id="message-{{ message.id }}">
+        <div class="flex gap-3 group" id="message-{{ message.id }}">
             <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center text-sm font-medium text-ch-gold flex-shrink-0">
                 {{ message.author.display_name|default:message.author.username|slice:":1"|upper }}
             </div>
@@ -41,6 +41,15 @@
                     <span class="text-xs text-gray-500">{{ message.created_at|date:"M j, g:i A" }}</span>
                     {% if message.is_edited %}
                     <span class="text-xs text-gray-600">(edited)</span>
+                    {% endif %}
+                    {% if message.author == request.user or membership.is_admin_or_above %}
+                    <button hx-post="{% url 'channel_message_delete' message.id %}"
+                            hx-target="#message-{{ message.id }}"
+                            hx-swap="outerHTML"
+                            hx-confirm="Delete this message?"
+                            class="text-xs text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Delete
+                    </button>
                     {% endif %}
                 </div>
                 <p class="text-gray-300 break-words">{{ message.content }}</p>
