@@ -1450,21 +1450,18 @@ def comms_hub(request):
         channels = channels.filter(organization=org)
     channels = channels.distinct()
 
-    # Get unread DM count (scoped to organization)
+    # Get unread DM count
+    # Note: DirectMessage doesn't have organization field - it's user-to-user
     dm_qs = DirectMessage.objects.filter(
         recipient=request.user,
         is_read=False
     )
-    if org:
-        dm_qs = dm_qs.filter(organization=org)
     unread_dm_count = dm_qs.count()
 
-    # Get recent DM conversations (scoped to organization)
+    # Get recent DM conversations
     recent_dms = DirectMessage.objects.filter(
         models.Q(sender=request.user) | models.Q(recipient=request.user)
     )
-    if org:
-        recent_dms = recent_dms.filter(organization=org)
     recent_dms = recent_dms.select_related('sender', 'recipient').order_by('-created_at')[:20]
 
     # Group by conversation partner
