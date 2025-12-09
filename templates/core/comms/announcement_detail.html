@@ -27,10 +27,22 @@
 
         <h1 class="text-3xl font-bold mb-4">{{ announcement.title }}</h1>
 
-        <div class="flex items-center gap-4 text-sm text-gray-400 mb-6 pb-6 border-b border-gray-700">
-            <span>By {{ announcement.author.display_name|default:announcement.author.username }}</span>
-            <span>&bull;</span>
-            <span>{{ announcement.created_at|date:"F j, Y \a\t g:i A" }}</span>
+        <div class="flex items-center justify-between gap-4 text-sm text-gray-400 mb-6 pb-6 border-b border-gray-700">
+            <div class="flex items-center gap-4">
+                <span>By {{ announcement.author.display_name|default:announcement.author.username }}</span>
+                <span>&bull;</span>
+                <span>{{ announcement.created_at|date:"F j, Y \a\t g:i A" }}</span>
+            </div>
+            {% if announcement.author == request.user or membership.is_admin_or_above %}
+            <form hx-post="{% url 'announcement_delete' announcement.pk %}"
+                  hx-confirm="Delete this announcement? This cannot be undone."
+                  class="inline">
+                {% csrf_token %}
+                <button type="submit" class="text-red-400 hover:text-red-300 text-sm">
+                    Delete
+                </button>
+            </form>
+            {% endif %}
         </div>
 
         <div class="prose prose-invert max-w-none markdown-content">
