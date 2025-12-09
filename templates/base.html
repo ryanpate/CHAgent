@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
-    <title>{% block title %}Aria WA Assistant{% endblock %} | Cherry Hills</title>
+    <title>{% block title %}Aria{% endblock %}{% if organization %} | {{ organization.name }}{% endif %}</title>
 
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#c9a227">
@@ -342,8 +342,8 @@
            style="display: none;">
         <div class="flex items-center justify-between mb-8">
             <div>
-                <h1 class="text-xl font-bold text-ch-gold tracking-wide">Cherry Hills</h1>
-                <p class="text-sm text-gray-400">Worship Arts Assistant</p>
+                <h1 class="text-xl font-bold text-ch-gold tracking-wide">{% if organization %}{{ organization.name }}{% else %}Aria{% endif %}</h1>
+                <p class="text-sm text-gray-400">Worship Arts Portal</p>
             </div>
             <button @click="sidebarOpen = false" class="p-2 rounded-lg hover:bg-ch-gray transition">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -427,8 +427,8 @@
     <!-- Desktop Sidebar Navigation -->
     <aside class="desktop-sidebar hidden md:flex fixed left-0 top-0 h-full w-64 bg-ch-dark border-r border-gray-800 p-6 flex-col">
         <div class="mb-8">
-            <h1 class="text-xl font-bold text-ch-gold tracking-wide">Cherry Hills</h1>
-            <p class="text-sm text-gray-400">Worship Arts Assistant</p>
+            <h1 class="text-xl font-bold text-ch-gold tracking-wide">{% if organization %}{{ organization.name }}{% else %}Aria{% endif %}</h1>
+            <p class="text-sm text-gray-400">Worship Arts Portal</p>
         </div>
         <nav class="space-y-2 flex-1">
             <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">

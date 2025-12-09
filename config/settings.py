@@ -204,7 +204,7 @@ PLANNING_CENTER_SECRET = os.environ.get('PLANNING_CENTER_SECRET', '')
 # Generate VAPID keys with: npx web-push generate-vapid-keys
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
-VAPID_CLAIMS_EMAIL = os.environ.get('VAPID_CLAIMS_EMAIL', 'mailto:admin@cherryhills.org')
+VAPID_CLAIMS_EMAIL = os.environ.get('VAPID_CLAIMS_EMAIL', 'mailto:support@aria.church')
 
 # Security settings (for production)
 if not DEBUG:
