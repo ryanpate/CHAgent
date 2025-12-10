@@ -3959,3 +3959,335 @@ def stripe_webhook(request):
             org.save()
 
     return HttpResponse(status=200)
+
+
+# =============================================================================
+# Organization Settings Views
+# =============================================================================
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def org_settings(request):
+    """Organization general settings page."""
+    from .models import Organization
+    from .middleware import require_permission
+
+    org = get_org(request)
+    if not org:
+        return redirect('dashboard')
+
+    membership = getattr(request, 'membership', None)
+    if not membership or not membership.can_manage_settings:
+        from django.contrib import messages
+        messages.error(request, "You don't have permission to manage settings.")
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        # Update organization settings
+        org.name = request.POST.get('name', org.name)
+        org.email = request.POST.get('email', org.email)
+        org.phone = request.POST.get('phone', '')
+        org.website = request.POST.get('website', '')
+        org.timezone = request.POST.get('timezone', org.timezone)
+        org.ai_assistant_name = request.POST.get('ai_assistant_name', 'Aria')
+
+        org.save()
+
+        from django.contrib import messages
+        messages.success(request, "Settings updated successfully.")
+        return redirect('org_settings')
+
+    # Common timezones
+    timezones = [
+        'America/New_York',
+        'America/Chicago',
+        'America/Denver',
+        'America/Los_Angeles',
+        'America/Phoenix',
+        'Pacific/Honolulu',
+        'America/Anchorage',
+    ]
+
+    return render(request, 'core/settings/general.html', {
+        'organization': org,
+        'membership': membership,
+        'timezones': timezones,
+    })
+
+
+@login_required
+def org_settings_members(request):
+    """Organization team members management page."""
+    from .models import OrganizationMembership, OrganizationInvitation
+
+    org = get_org(request)
+    if not org:
+        return redirect('dashboard')
+
+    membership = getattr(request, 'membership', None)
+    if not membership or not membership.can_manage_users:
+        from django.contrib import messages
+        messages.error(request, "You don't have permission to manage team members.")
+        return redirect('dashboard')
+
+    # Get all members
+    members = OrganizationMembership.objects.filter(
+        organization=org,
+        is_active=True
+    ).select_related('user').order_by('role', 'user__email')
+
+    # Get pending invitations
+    pending_invitations = OrganizationInvitation.objects.filter(
+        organization=org,
+        status='pending'
+    ).order_by('-created_at')
+
+    # Role choices for the form
+    role_choices = OrganizationMembership.ROLE_CHOICES
+
+    # Check plan limits
+    plan = org.subscription_plan
+    max_users = plan.max_users if plan else 5
+    current_users = members.count()
+    can_invite = max_users == -1 or current_users < max_users
+
+    return render(request, 'core/settings/members.html', {
+        'organization': org,
+        'membership': membership,
+        'members': members,
+        'pending_invitations': pending_invitations,
+        'role_choices': role_choices,
+        'can_invite': can_invite,
+        'max_users': max_users,
+        'current_users': current_users,
+    })
+
+
+@login_required
+@require_POST
+def org_invite_member(request):
+    """Send an invitation to join the organization."""
+    from .models import OrganizationInvitation, OrganizationMembership
+    from django.contrib import messages
+
+    org = get_org(request)
+    if not org:
+        return redirect('dashboard')
+
+    membership = getattr(request, 'membership', None)
+    if not membership or not membership.can_manage_users:
+        messages.error(request, "You don't have permission to invite members.")
+        return redirect('org_settings_members')
+
+    email = request.POST.get('email', '').strip().lower()
+    role = request.POST.get('role', 'member')
+    team = request.POST.get('team', '')
+
+    if not email:
+        messages.error(request, "Email is required.")
+        return redirect('org_settings_members')
+
+    # Check if already a member
+    from accounts.models import User
+    existing_user = User.objects.filter(email=email).first()
+    if existing_user:
+        if OrganizationMembership.objects.filter(user=existing_user, organization=org).exists():
+            messages.error(request, f"{email} is already a member of this organization.")
+            return redirect('org_settings_members')
+
+    # Check if already invited
+    if OrganizationInvitation.objects.filter(organization=org, email=email, status='pending').exists():
+        messages.error(request, f"An invitation has already been sent to {email}.")
+        return redirect('org_settings_members')
+
+    # Check plan limits
+    plan = org.subscription_plan
+    max_users = plan.max_users if plan else 5
+    current_users = OrganizationMembership.objects.filter(organization=org, is_active=True).count()
+    if max_users != -1 and current_users >= max_users:
+        messages.error(request, f"You've reached your plan limit of {max_users} users. Upgrade to add more.")
+        return redirect('org_settings_members')
+
+    # Owners can only be set by other owners
+    if role == 'owner' and membership.role != 'owner':
+        messages.error(request, "Only owners can invite new owners.")
+        return redirect('org_settings_members')
+
+    # Create invitation
+    invitation = OrganizationInvitation.objects.create(
+        organization=org,
+        email=email,
+        role=role,
+        team=team,
+        invited_by=request.user,
+    )
+
+    # TODO: Send invitation email
+    # For now, just show the invite link
+    invite_url = request.build_absolute_uri(f'/invite/{invitation.token}/')
+
+    messages.success(
+        request,
+        f"Invitation sent to {email}. Share this link: {invite_url}"
+    )
+    return redirect('org_settings_members')
+
+
+@login_required
+@require_POST
+def org_update_member_role(request, member_id):
+    """Update a member's role."""
+    from .models import OrganizationMembership
+    from django.contrib import messages
+
+    org = get_org(request)
+    if not org:
+        return redirect('dashboard')
+
+    membership = getattr(request, 'membership', None)
+    if not membership or not membership.can_manage_users:
+        messages.error(request, "You don't have permission to manage members.")
+        return redirect('org_settings_members')
+
+    target_membership = get_object_or_404(
+        OrganizationMembership,
+        id=member_id,
+        organization=org
+    )
+
+    # Can't change your own role
+    if target_membership.user == request.user:
+        messages.error(request, "You cannot change your own role.")
+        return redirect('org_settings_members')
+
+    # Can't modify owners unless you're an owner
+    if target_membership.role == 'owner' and membership.role != 'owner':
+        messages.error(request, "Only owners can modify other owners.")
+        return redirect('org_settings_members')
+
+    new_role = request.POST.get('role')
+    if new_role not in dict(OrganizationMembership.ROLE_CHOICES):
+        messages.error(request, "Invalid role.")
+        return redirect('org_settings_members')
+
+    # Can't make someone owner unless you're owner
+    if new_role == 'owner' and membership.role != 'owner':
+        messages.error(request, "Only owners can grant owner role.")
+        return redirect('org_settings_members')
+
+    target_membership.role = new_role
+    target_membership._set_role_defaults()
+    target_membership.save()
+
+    messages.success(request, f"Role updated for {target_membership.user.email}.")
+    return redirect('org_settings_members')
+
+
+@login_required
+@require_POST
+def org_remove_member(request, member_id):
+    """Remove a member from the organization."""
+    from .models import OrganizationMembership
+    from django.contrib import messages
+
+    org = get_org(request)
+    if not org:
+        return redirect('dashboard')
+
+    membership = getattr(request, 'membership', None)
+    if not membership or not membership.can_manage_users:
+        messages.error(request, "You don't have permission to manage members.")
+        return redirect('org_settings_members')
+
+    target_membership = get_object_or_404(
+        OrganizationMembership,
+        id=member_id,
+        organization=org
+    )
+
+    # Can't remove yourself
+    if target_membership.user == request.user:
+        messages.error(request, "You cannot remove yourself. Transfer ownership first.")
+        return redirect('org_settings_members')
+
+    # Can't remove owners unless you're owner
+    if target_membership.role == 'owner' and membership.role != 'owner':
+        messages.error(request, "Only owners can remove other owners.")
+        return redirect('org_settings_members')
+
+    # Ensure at least one owner remains
+    if target_membership.role == 'owner':
+        owner_count = OrganizationMembership.objects.filter(
+            organization=org,
+            role='owner',
+            is_active=True
+        ).count()
+        if owner_count <= 1:
+            messages.error(request, "Cannot remove the last owner. Transfer ownership first.")
+            return redirect('org_settings_members')
+
+    user_email = target_membership.user.email
+    target_membership.is_active = False
+    target_membership.save()
+
+    messages.success(request, f"{user_email} has been removed from the organization.")
+    return redirect('org_settings_members')
+
+
+@login_required
+@require_POST
+def org_cancel_invitation(request, invitation_id):
+    """Cancel a pending invitation."""
+    from .models import OrganizationInvitation
+    from django.contrib import messages
+
+    org = get_org(request)
+    if not org:
+        return redirect('dashboard')
+
+    membership = getattr(request, 'membership', None)
+    if not membership or not membership.can_manage_users:
+        messages.error(request, "You don't have permission to manage invitations.")
+        return redirect('org_settings_members')
+
+    invitation = get_object_or_404(
+        OrganizationInvitation,
+        id=invitation_id,
+        organization=org,
+        status='pending'
+    )
+
+    invitation.status = 'expired'
+    invitation.save()
+
+    messages.success(request, f"Invitation to {invitation.email} has been cancelled.")
+    return redirect('org_settings_members')
+
+
+@login_required
+def org_settings_billing(request):
+    """Organization billing and subscription page."""
+    from .models import SubscriptionPlan
+
+    org = get_org(request)
+    if not org:
+        return redirect('dashboard')
+
+    membership = getattr(request, 'membership', None)
+    if not membership or not membership.can_manage_billing:
+        from django.contrib import messages
+        messages.error(request, "You don't have permission to manage billing.")
+        return redirect('dashboard')
+
+    # Get all available plans for comparison
+    plans = SubscriptionPlan.objects.filter(
+        is_active=True,
+        is_public=True
+    ).order_by('price_monthly_cents')
+
+    return render(request, 'core/settings/billing.html', {
+        'organization': org,
+        'membership': membership,
+        'plans': plans,
+        'current_plan': org.subscription_plan,
+    })

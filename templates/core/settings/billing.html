@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+
+{% block title %}Billing{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-ch-gold">Billing & Subscription</h1>
+        <p class="text-gray-400 mt-1">Manage your subscription and billing information</p>
+    </div>
+
+    <!-- Settings Navigation -->
+    <div class="flex gap-4 mb-6 border-b border-gray-700 pb-4">
+        <a href="{% url 'org_settings' %}" class="px-4 py-2 text-gray-400 hover:text-white rounded hover:bg-ch-gray transition">
+            General
+        </a>
+        {% if membership.can_manage_users %}
+        <a href="{% url 'org_settings_members' %}" class="px-4 py-2 text-gray-400 hover:text-white rounded hover:bg-ch-gray transition">
+            Team Members
+        </a>
+        {% endif %}
+        <a href="{% url 'org_settings_billing' %}" class="px-4 py-2 bg-ch-gold text-black rounded font-medium">
+            Billing
+        </a>
+    </div>
+
+    <!-- Current Plan -->
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4">Current Plan</h2>
+
+        <div class="flex items-start justify-between">
+            <div>
+                <div class="flex items-center gap-3 mb-2">
+                    <span class="text-2xl font-bold">
+                        {% if current_plan %}{{ current_plan.name }}{% else %}Free Trial{% endif %}
+                    </span>
+                    <span class="px-2 py-1 rounded text-xs font-medium
+                        {% if organization.subscription_status == 'active' %}bg-green-500/20 text-green-400
+                        {% elif organization.subscription_status == 'trial' %}bg-blue-500/20 text-blue-400
+                        {% elif organization.subscription_status == 'past_due' %}bg-yellow-500/20 text-yellow-400
+                        {% else %}bg-red-500/20 text-red-400{% endif %}">
+                        {{ organization.subscription_status|title }}
+                    </span>
+                </div>
+
+                {% if organization.is_trial %}
+                <p class="text-gray-400 text-sm">
+                    Trial ends {{ organization.trial_ends_at|date:"F j, Y" }}
+                    ({{ organization.trial_days_remaining }} day{{ organization.trial_days_remaining|pluralize }} remaining)
+                </p>
+                {% elif current_plan %}
+                <p class="text-gray-400 text-sm">
+                    ${{ current_plan.monthly_price }}/month
+                    &bull;
+                    Up to {{ current_plan.max_users }} team members
+                    &bull;
+                    {{ current_plan.max_volunteers }} volunteers
+                </p>
+                {% endif %}
+            </div>
+
+            {% if organization.stripe_customer_id %}
+            <a href="{% url 'billing_portal' %}"
+               class="px-4 py-2 bg-ch-gray text-white rounded hover:bg-gray-600 transition">
+                Manage Billing
+            </a>
+            {% endif %}
+        </div>
+
+        {% if organization.subscription_status == 'past_due' %}
+        <div class="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <div class="flex items-center gap-2 text-yellow-400">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+                <span class="font-medium">Payment Past Due</span>
+            </div>
+            <p class="text-sm text-gray-400 mt-1">
+                Please update your payment method to avoid service interruption.
+            </p>
+            <a href="{% url 'billing_portal' %}" class="inline-block mt-2 text-sm text-ch-gold hover:underline">
+                Update Payment Method
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Plan Features -->
+    {% if current_plan %}
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4">Plan Features</h2>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+            <div class="flex items-center gap-2 text-sm">
+                {% if current_plan.has_pco_integration %}
+                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                {% else %}
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                {% endif %}
+                <span class="{% if not current_plan.has_pco_integration %}text-gray-500{% endif %}">Planning Center Integration</span>
+            </div>
+
+            <div class="flex items-center gap-2 text-sm">
+                {% if current_plan.has_push_notifications %}
+                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                {% else %}
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                {% endif %}
+                <span class="{% if not current_plan.has_push_notifications %}text-gray-500{% endif %}">Push Notifications</span>
+            </div>
+
+            <div class="flex items-center gap-2 text-sm">
+                {% if current_plan.has_analytics %}
+                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                {% else %}
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                {% endif %}
+                <span class="{% if not current_plan.has_analytics %}text-gray-500{% endif %}">Analytics Dashboard</span>
+            </div>
+
+            <div class="flex items-center gap-2 text-sm">
+                {% if current_plan.has_care_insights %}
+                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                {% else %}
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                {% endif %}
+                <span class="{% if not current_plan.has_care_insights %}text-gray-500{% endif %}">Care Insights</span>
+            </div>
+
+            <div class="flex items-center gap-2 text-sm">
+                {% if current_plan.has_api_access %}
+                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                {% else %}
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                {% endif %}
+                <span class="{% if not current_plan.has_api_access %}text-gray-500{% endif %}">API Access</span>
+            </div>
+
+            <div class="flex items-center gap-2 text-sm">
+                {% if current_plan.has_priority_support %}
+                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                {% else %}
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                {% endif %}
+                <span class="{% if not current_plan.has_priority_support %}text-gray-500{% endif %}">Priority Support</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Usage Stats -->
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4">Usage This Month</h2>
+
+        <div class="grid gap-4 sm:grid-cols-3">
+            <div>
+                <div class="text-2xl font-bold">{{ organization.ai_queries_this_month }}</div>
+                <div class="text-sm text-gray-400">AI Queries</div>
+                {% if current_plan %}
+                <div class="text-xs text-gray-500 mt-1">
+                    of {{ current_plan.max_ai_queries_monthly }} monthly limit
+                </div>
+                {% endif %}
+            </div>
+
+            <div>
+                <div class="text-2xl font-bold">{{ organization.get_user_count }}</div>
+                <div class="text-sm text-gray-400">Team Members</div>
+                {% if current_plan %}
+                <div class="text-xs text-gray-500 mt-1">
+                    of {% if current_plan.max_users == -1 %}unlimited{% else %}{{ current_plan.max_users }}{% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div>
+                <div class="text-2xl font-bold">{{ organization.get_volunteer_count }}</div>
+                <div class="text-sm text-gray-400">Volunteers</div>
+                {% if current_plan %}
+                <div class="text-xs text-gray-500 mt-1">
+                    of {% if current_plan.max_volunteers == -1 %}unlimited{% else %}{{ current_plan.max_volunteers }}{% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Available Plans -->
+    <div class="bg-ch-dark rounded-lg p-6">
+        <h2 class="text-lg font-semibold mb-4">
+            {% if organization.is_trial %}Choose a Plan{% else %}Change Plan{% endif %}
+        </h2>
+
+        <div class="grid gap-4 md:grid-cols-3">
+            {% for plan in plans %}
+            <div class="border rounded-lg p-4 {% if current_plan.id == plan.id %}border-ch-gold bg-ch-gold/5{% else %}border-gray-700{% endif %}">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-semibold">{{ plan.name }}</h3>
+                    {% if current_plan.id == plan.id %}
+                    <span class="text-xs text-ch-gold">Current</span>
+                    {% endif %}
+                </div>
+                <div class="text-2xl font-bold mb-1">
+                    ${{ plan.monthly_price }}<span class="text-sm font-normal text-gray-400">/mo</span>
+                </div>
+                <div class="text-sm text-gray-400 mb-4">
+                    {{ plan.max_users }} users &bull; {{ plan.max_volunteers }} volunteers
+                </div>
+
+                {% if current_plan.id != plan.id %}
+                <a href="{% url 'subscribe' %}?plan={{ plan.slug }}"
+                   class="block w-full text-center px-4 py-2 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition text-sm">
+                    {% if organization.is_trial %}Start with {{ plan.name }}{% else %}Switch to {{ plan.name }}{% endif %}
+                </a>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <p class="text-sm text-gray-500 mt-4 text-center">
+            Need more? <a href="mailto:support@aria.church" class="text-ch-gold hover:underline">Contact us</a> for Enterprise pricing.
+        </p>
+    </div>
+</div>
+{% endblock %}

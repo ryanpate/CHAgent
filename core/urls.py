@@ -107,4 +107,12 @@ urlpatterns = [
     path('onboarding/complete/', views.onboarding_complete, name='onboarding_complete'),
     path('invite/<str:token>/', views.accept_invitation, name='accept_invitation'),
     path('webhooks/stripe/', views.stripe_webhook, name='stripe_webhook'),
+    # Organization Settings
+    path('settings/', views.org_settings, name='org_settings'),
+    path('settings/members/', views.org_settings_members, name='org_settings_members'),
+    path('settings/members/invite/', views.org_invite_member, name='org_invite_member'),
+    path('settings/members/<int:member_id>/role/', views.org_update_member_role, name='org_update_member_role'),
+    path('settings/members/<int:member_id>/remove/', views.org_remove_member, name='org_remove_member'),
+    path('settings/invitations/<int:invitation_id>/cancel/', views.org_cancel_invitation, name='org_cancel_invitation'),
+    path('settings/billing/', views.org_settings_billing, name='org_settings_billing'),
 ]

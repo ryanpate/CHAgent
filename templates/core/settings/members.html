@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+
+{% block title %}Team Members{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-ch-gold">Team Members</h1>
+        <p class="text-gray-400 mt-1">Manage your team members and invitations</p>
+    </div>
+
+    <!-- Settings Navigation -->
+    <div class="flex gap-4 mb-6 border-b border-gray-700 pb-4">
+        <a href="{% url 'org_settings' %}" class="px-4 py-2 text-gray-400 hover:text-white rounded hover:bg-ch-gray transition">
+            General
+        </a>
+        <a href="{% url 'org_settings_members' %}" class="px-4 py-2 bg-ch-gold text-black rounded font-medium">
+            Team Members
+        </a>
+        {% if membership.can_manage_billing %}
+        <a href="{% url 'org_settings_billing' %}" class="px-4 py-2 text-gray-400 hover:text-white rounded hover:bg-ch-gray transition">
+            Billing
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Usage Info -->
+    <div class="bg-ch-dark rounded-lg p-4 mb-6">
+        <div class="flex items-center justify-between">
+            <div class="text-sm">
+                <span class="text-gray-400">Team Members:</span>
+                <span class="ml-2 font-semibold">{{ current_users }} / {% if max_users == -1 %}Unlimited{% else %}{{ max_users }}{% endif %}</span>
+            </div>
+            {% if not can_invite and max_users != -1 %}
+            <a href="{% url 'org_settings_billing' %}" class="text-sm text-ch-gold hover:underline">
+                Upgrade to add more members
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Invite Form -->
+    {% if can_invite %}
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4">Invite Team Member</h2>
+
+        <form method="post" action="{% url 'org_invite_member' %}" class="flex flex-wrap gap-4">
+            {% csrf_token %}
+
+            <div class="flex-1 min-w-[200px]">
+                <input type="email" name="email" required
+                       placeholder="Email address"
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">
+            </div>
+
+            <div class="w-40">
+                <select name="role" class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">
+                    {% for value, label in role_choices %}
+                    {% if value != 'owner' or membership.is_owner %}
+                    <option value="{{ value }}" {% if value == 'member' %}selected{% endif %}>{{ label }}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <button type="submit"
+                        class="px-6 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                    Send Invite
+                </button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- Current Members -->
+    <div class="bg-ch-dark rounded-lg overflow-hidden mb-6">
+        <div class="px-6 py-4 border-b border-gray-700">
+            <h2 class="text-lg font-semibold">Current Members</h2>
+        </div>
+
+        <div class="divide-y divide-gray-700">
+            {% for member in members %}
+            <div class="px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center text-ch-gold font-medium">
+                        {{ member.user.display_name|default:member.user.email|slice:":1"|upper }}
+                    </div>
+                    <div>
+                        <div class="font-medium">
+                            {{ member.user.display_name|default:member.user.email }}
+                            {% if member.user == request.user %}
+                            <span class="text-xs text-gray-500">(you)</span>
+                            {% endif %}
+                        </div>
+                        <div class="text-sm text-gray-400">{{ member.user.email }}</div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <!-- Role Badge -->
+                    <span class="px-2 py-1 rounded text-xs font-medium
+                        {% if member.role == 'owner' %}bg-purple-500/20 text-purple-400
+                        {% elif member.role == 'admin' %}bg-blue-500/20 text-blue-400
+                        {% elif member.role == 'leader' %}bg-green-500/20 text-green-400
+                        {% else %}bg-gray-500/20 text-gray-400{% endif %}">
+                        {{ member.get_role_display }}
+                    </span>
+
+                    {% if member.user != request.user %}
+                    <!-- Role Change Form -->
+                    {% if membership.is_owner or member.role != 'owner' %}
+                    <form method="post" action="{% url 'org_update_member_role' member.id %}" class="flex items-center gap-2">
+                        {% csrf_token %}
+                        <select name="role" class="bg-ch-gray border border-gray-700 rounded px-2 py-1 text-sm focus:outline-none focus:border-ch-gold">
+                            {% for value, label in role_choices %}
+                            {% if value != 'owner' or membership.is_owner %}
+                            <option value="{{ value }}" {% if member.role == value %}selected{% endif %}>{{ label }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="text-sm text-ch-gold hover:underline">
+                            Update
+                        </button>
+                    </form>
+
+                    <!-- Remove Button -->
+                    <form method="post" action="{% url 'org_remove_member' member.id %}"
+                          onsubmit="return confirm('Remove {{ member.user.email }} from the organization?');">
+                        {% csrf_token %}
+                        <button type="submit" class="text-sm text-red-400 hover:text-red-300">
+                            Remove
+                        </button>
+                    </form>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% empty %}
+            <div class="px-6 py-8 text-center text-gray-400">
+                No team members yet.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Pending Invitations -->
+    {% if pending_invitations %}
+    <div class="bg-ch-dark rounded-lg overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-700">
+            <h2 class="text-lg font-semibold">Pending Invitations</h2>
+        </div>
+
+        <div class="divide-y divide-gray-700">
+            {% for invitation in pending_invitations %}
+            <div class="px-6 py-4 flex items-center justify-between">
+                <div>
+                    <div class="font-medium">{{ invitation.email }}</div>
+                    <div class="text-sm text-gray-400">
+                        Invited {{ invitation.created_at|timesince }} ago
+                        {% if invitation.invited_by %}
+                        by {{ invitation.invited_by.display_name|default:invitation.invited_by.email }}
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <span class="px-2 py-1 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400">
+                        Pending - {{ invitation.get_role_display }}
+                    </span>
+
+                    <form method="post" action="{% url 'org_cancel_invitation' invitation.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="text-sm text-red-400 hover:text-red-300">
+                            Cancel
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Role Descriptions -->
+    <div class="bg-ch-dark rounded-lg p-6 mt-6">
+        <h3 class="text-sm font-semibold text-gray-400 mb-3">Role Permissions</h3>
+        <div class="grid gap-3 text-sm">
+            <div class="flex items-start gap-3">
+                <span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-500/20 text-purple-400 mt-0.5">Owner</span>
+                <span class="text-gray-400">Full access including billing, settings, and can delete the organization.</span>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-500/20 text-blue-400 mt-0.5">Admin</span>
+                <span class="text-gray-400">Manage team members and settings. Full data access.</span>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="px-2 py-0.5 rounded text-xs font-medium bg-green-500/20 text-green-400 mt-0.5">Leader</span>
+                <span class="text-gray-400">Manage volunteers and view analytics.</span>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-500/20 text-gray-400 mt-0.5">Member</span>
+                <span class="text-gray-400">Basic access to chat and interactions.</span>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-500/20 text-gray-400 mt-0.5">Viewer</span>
+                <span class="text-gray-400">Read-only access.</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
