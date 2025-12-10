@@ -59,6 +59,17 @@ def is_aggregate_question(message: str) -> Tuple[bool, str]:
         r'in\s+total',
         r'aggregate',
         r'collectively',
+        # Additional patterns for team-wide questions
+        r'our\s+volunteers?',
+        r'on\s+the\s+team',
+        r'who\s+(has|have)\s+birthdays?',
+        r'upcoming\s+birthdays?',
+        r'what\s+hobbies?\s+(do|does)',
+        r'who\s+likes?\s+',
+        r'which\s+volunteers?\s+(are|is|have|has)',
+        r'usually\s+available',
+        r'availability\s+patterns?',
+        r'dietary\s+restrictions?',
     ]
 
     is_aggregate = False
@@ -71,7 +82,8 @@ def is_aggregate_question(message: str) -> Tuple[bool, str]:
     category = 'general'
     category_patterns = {
         'food': r'food|eat|favorite\s+(food|meal|restaurant)|diet',
-        'hobbies': r'hobb(y|ies)|interest|activities|free\s+time',
+        # Hobbies patterns - include "who likes [activity]" style queries
+        'hobbies': r'hobb(y|ies)|interest|activities|free\s+time|who\s+likes?\s+\w+',
         'prayer': r'prayer|pray|request',
         'family': r'family|kid|children|spouse|married|wife|husband',
         'birthday': r'birthday|birth\s+date|born',
@@ -120,19 +132,24 @@ def is_analytics_query(message: str) -> Tuple[bool, str]:
         ],
         'care': [
             r'(?:volunteers?|people)\s+(?:need|needing)\s+(?:attention|check\s*-?\s*in|follow\s*-?\s*up)',
-            r'who\s+(?:needs?|should\s+(?:I|we))\s+(?:check\s+(?:in\s+)?(?:on|with)|follow\s+up|reach\s+out)',
+            r'who\s+(?:needs?|should\s+(?:I|we))\s+(?:check\s+(?:in\s+)?(?:on|with)|follow\s+up|reach\s+out|a\s+check)',
+            r'who\s+needs\s+a\s+check-?\s*in',
             r'care\s+(?:report|needs?|list)',
             r'overdue\s+follow\s*-?\s*ups?',
             r'(?:upcoming|pending)\s+(?:birthdays?|anniversaries?)',
-            r'volunteers?\s+(?:to|we\s+should)\s+(?:check\s+(?:in\s+)?(?:on|with)|reach\s+out)',
+            r'volunteers?\s+(?:to|we\s+should|i\s+should)\s+(?:check\s+(?:in\s+)?(?:on|with)|reach\s+out)',
+            r'volunteers?\s+i\s+should\s+reach\s+out',
+            # Additional patterns for care
+            r'(?:show|list)\s+(?:me\s+)?volunteers?\s+i\s+should\s+reach\s+out',
         ],
         'proactive': [
             r'proactive\s+care',
             r'care\s+(?:dashboard|insights?|alerts?)',
             r'who\s+(?:needs?|requires?)\s+(?:my|our|special)\s+attention',
-            r'volunteers?\s+(?:I|we)\s+(?:should|need\s+to)\s+(?:be\s+)?(?:aware\s+of|watching|monitoring)',
+            r'volunteers?\s+(?:i|we)\s+(?:should|need\s+to)\s+(?:be\s+)?(?:aware\s+of|watching|monitoring)',
             r'(?:urgent|high\s+priority)\s+(?:care|volunteer)\s+(?:needs?|items?|alerts?)',
-            r'what\s+(?:should|do)\s+(?:I|we)\s+(?:focus|work)\s+on\s+(?:today|this\s+week)',
+            r'what\s+(?:should|do)\s+(?:i|we)\s+(?:focus|work)\s+on\s+(?:today|this\s+week)',
+            r'what\s+should\s+i\s+focus\s+on',
             r'care\s+priorities?',
         ],
         'trends': [
@@ -349,7 +366,7 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
 
     # Patterns that indicate PCO data queries
     pco_query_patterns = {
-        'contact': r'contact\s+(info|information|details?)|how\s+(can\s+i|do\s+i|to)\s+(reach|contact|get\s+(in\s+)?touch)',
+        'contact': r'contact\s+(info|information|details?)|how\s+(can\s+i|do\s+i|to)\s+(reach|contact|get\s+(in\s+)?touch)|best\s+way\s+to\s+contact',
         'email': r'email(\s+address)?|e-mail',
         'phone': r'phone(\s+number)?|call|cell(\s+number)?|mobile(\s+number)?|telephone',
         'address': r'address|where\s+(does|do)\s+.+\s+live|location|mailing',
@@ -385,12 +402,16 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
             r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s",
             # "what is [name] contact info" - without apostrophe (name before contact)
             r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*?)\s+contact",
-            # "[name]'s contact/email/phone/schedule" - with apostrophe
-            r"([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s\s+(?:contact|email|phone|address|birthday|schedule|upcoming)",
+            # "what's [name]'s contact/email/phone" - contraction with possessive (must match at word start)
+            r"what's\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s\s+(?:contact|email|phone|address|birthday|schedule|upcoming)",
+            # "[name]'s contact/email/phone/schedule" - with apostrophe (must be at word start, not after "what's")
+            r"(?:^|[.!?\s])([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s\s+(?:contact|email|phone|address|birthday|schedule|upcoming)",
             # "[name]s contact info" - possessive without apostrophe (e.g., "strucks contact")
             r"([a-zA-Z]+(?:\s+[a-zA-Z]+)*s)\s+contact\s+(?:info|information|details?)",
             # "contact info for [name]"
             r"contact\s+(?:info|information|details?)\s+(?:for|of|about)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
+            # "best way to contact [name]"
+            r"best\s+way\s+to\s+contact\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
             # "for/of/about [name]" - generic
             r"(?:for|of|about)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
             # "reach/call/email [name]"
@@ -458,15 +479,17 @@ def is_blockout_query(message: str) -> Tuple[bool, str, Optional[str], Optional[
     message_lower = message.lower().strip()
 
     # Patterns that indicate blockout/availability queries
+    # IMPORTANT: Order matters - more specific patterns should be checked first
     blockout_patterns = {
-        # "When is [person] blocked out?" or "What are [person]'s blockouts?"
-        'person_blockouts': r'when\s+(?:is|are)\s+.+\s+blocked?\s*out|block\s*out(?:s|ed)?\s+(?:for|of)\s+|what\s+(?:are|is)\s+.+[\'s]*\s+block\s*out|.+[\'s]*\s+block\s*out(?:s|ed)?|(?:show|list|get)\s+(?:me\s+)?.+[\'s]*\s+block\s*out',
-        # "Who is blocked out on [date]?" or "Who has blockouts on [date]?"
-        'date_blockouts': r'who\s+(?:is|are|has|have)\s+blocked?\s*out\s+(?:on|for|this|next)|who\s+can\'?t\s+(?:make\s+it|serve|be\s+there)\s+(?:on|for|this|next)|blocked?\s*out\s+(?:on|this|next)',
+        # "Team availability for [date]" or "Who's available on [date]?" - check FIRST (before availability_check)
+        'team_availability': r'team\s+availability|who\'?s?\s+(?:is\s+)?available\s+(?:on|for|this|next)|availability\s+(?:on|for)\s+(?:the\s+)?(?:team|this|next)',
+        # "Who is blocked out on [date]?" or "Who has blockouts on [date]?" - check BEFORE person_blockouts
+        # Matches "who has blockouts for [date]" pattern specifically
+        'date_blockouts': r'who\s+(?:is|are|has|have)\s+blocked?\s*out(?:s)?\s+(?:on|for|this|next)|who\s+(?:has|have)\s+block\s*out(?:s)?\s+(?:on|for)|who\s+can\'?t\s+(?:make\s+it|serve|be\s+there)\s+(?:on|for|this|next)|blocked?\s*out\s+(?:on|this|next)',
         # "Is [person] available on [date]?" or "Can [person] serve on [date]?"
         'availability_check': r'(?:is|are)\s+.+\s+(?:available|free|able\s+to\s+serve)\s+(?:on|for|this|next)|can\s+.+\s+(?:serve|make\s+it|be\s+there)\s+(?:on|for|this|next)|.+\s+availability\s+(?:on|for)',
-        # "Team availability for [date]" or "Who's available on [date]?"
-        'team_availability': r'team\s+availability|who\'?s?\s+(?:is\s+)?available\s+(?:on|for|this|next)|availability\s+(?:on|for)\s+(?:the\s+)?(?:team|this|next)',
+        # "When is [person] blocked out?" or "What are [person]'s blockouts?" - check LAST
+        'person_blockouts': r'when\s+(?:is|are)\s+.+\s+blocked?\s*out|block\s*out(?:s|ed)?\s+(?:for|of)\s+|what\s+(?:are|is)\s+.+[\'s]*\s+block\s*out|.+[\'s]*\s+block\s*out(?:s|ed)?|(?:show|list|get)\s+(?:me\s+)?.+[\'s]*\s+block\s*out',
     }
 
     is_blockout = False
@@ -563,6 +586,10 @@ def _has_song_history_indicators(message_lower: str) -> bool:
     history_patterns = [
         r'last\s+time\s+.+\s+(was\s+)?(played|used|scheduled|performed)',
         r'when\s+(was|did|is)\s+.+\s+(played|used|scheduled|performed)',
+        # "when did we last play X" or "when did we play X last"
+        r'when\s+did\s+we\s+(?:last\s+)?play\b',
+        # "when was the last time we did X" or "when was the last time we played X"
+        r'when\s+was\s+the\s+last\s+time\s+we\s+(did|played|used)',
         r'how\s+(often|many\s+times|frequently)',
         r'song\s+(usage|history)',
         r'have\s+we\s+(ever\s+)?(played|used|done)',
@@ -594,16 +621,21 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
         # Also match simple past tense "who served" without auxiliary verb
         # Added "schedule" (without 'd') to handle common typo, and "scheduled to serve" pattern
         # Also handles "servers" typo for "serves"
-        'team_schedule': r'(who\s+(is|are|was|were)\s+(on|serving|scheduled?|playing|singing)|who\s+is\s+scheduled?\s+to\s+serve|who\s+serve[sd]?|who\s+servers?|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled?\s+(to\s+serve\s+)?on|scheduled\s+volunteer|serving\s+(on|this|next|last)|band\s+for|vocals?\s+for|tech\s+for|who\s+(do|did)\s+we\s+have)',
+        # Also handles contractions like "who's playing" and "what's the team"
+        'team_schedule': r'(who\s+(is|are|was|were)\s+(on|serving|scheduled?|playing|singing)|who\'?s\s+(playing|scheduled|singing|serving)|what\'?s\s+the\s+team|who\s+is\s+scheduled?\s+to\s+serve|who\s+serve[sd]?|who\s+servers?|who\s+played\s+(?:on|last|this)|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled?\s+(to\s+serve\s+)?on|scheduled\s+volunteer|serving\s+(on|this|next|last)|band\s+for|vocals?\s+for|tech\s+for|who\s+(do|did)\s+we\s+have)',
         # Song history - asking WHEN a song was played
-        'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|play)|have\s+we\s+(ever\s+)?(played|done|used)|(?:the\s+)?(?:title|song|name)\s+is\s+|it\'?s\s+called',
+        # Includes patterns like "when did we last play X", "when was the last time we did X"
+        'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|play)|have\s+we\s+(ever\s+)?(played|done|used)|(?:the\s+)?(?:title|song|name)\s+is\s+|it\'?s\s+called|when\s+did\s+we\s+(?:last\s+)?play\b|when\s+was\s+the\s+last\s+time\s+we\s+(did|played|used)',
         # Setlist - asking WHAT songs were played on a date
-        'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|songs?\s+(from|for|on|we\s+(play|sang|did))|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?)\s+(that|on\s+that)\s+(day|date|service|sunday|easter)|(songs?|play|sang|played)\s+.*(easter|christmas|good\s+friday))',
+        'setlist': r'(setlist|song\s*set|what\s+(other\s+)?songs?\s+(did|do|are|were|will|was)|what\s+did\s+we\s+(play|sing)|songs?\s+(from|for|on|we\s+(play|sang|did))|worship\s+set|played\s+on|was\s+played|last\s+played|(played|songs?|sang|sing)\s+(that|on\s+that)\s+(day|date|service|sunday|easter)|(songs?|play|sang|played|sing)\s+.*(easter|christmas|good\s+friday))',
         'chord_chart': r'chord\s*chart|chords?\s+(for|to)|lead\s+sheet|charts?\s+(for|to)',
         # Lyrics patterns - include section requests like "lyrics to the bridge" or just "the lyrics"
-        'lyrics': r'lyrics?\s+(for|to)|words?\s+(for|to)|(give|show|get)\s+(me\s+)?(the\s+)?lyrics|(what\s+are\s+)?the\s+lyrics|lyrics?\s+to\s+the\s+(verse|chorus|bridge|intro|outro|pre-?chorus)',
+        # Also matches "what's the chorus of [song]" and similar patterns
+        'lyrics': r'lyrics?\s+(for|to)|words?\s+(for|to)|(give|show|get)\s+(me\s+)?(the\s+)?lyrics|(what\s+are\s+)?the\s+lyrics|lyrics?\s+to\s+the\s+(verse|chorus|bridge|intro|outro|pre-?chorus)|what\'?s\s+the\s+(chorus|verse|bridge|intro|outro|pre-?chorus)\s+of',
         'song_search': r'(find|search|look\s*up|get|show)\s+(the\s+)?(song|music)',
-        'song_info': r'(what\s+key|which\s+key|bpm|tempo|how\s+(long|fast))\s+.*(song|play)',
+        # Song info - key, tempo, BPM queries. Match various formats:
+        # "what key is [song] in?", "what's the BPM for [song]?", "how fast is [song]?", "what tempo is [song]?"
+        'song_info': r'(what\s+key|which\s+key|what\'?s\s+the\s+(key|bpm|tempo)|what\s+tempo\s+is|bpm\s+(for|of)|tempo\s+(for|of)|how\s+(long|fast)\s+is)',
     }
 
     # Check for date and song history indicators (used for disambiguation)
@@ -1449,6 +1481,8 @@ def check_ambiguous_song_or_person(message: str) -> Tuple[bool, Optional[str], b
         r'last\s+time\s+we\s+played\s+([a-zA-Z][a-zA-Z\s\']*?)(?:\s*\?|$)',
         r'when\s+was\s+([a-zA-Z][a-zA-Z\s\']*?)\s+(?:last\s+)?played(?:\s*\?|$)',
         r'did\s+we\s+(?:ever\s+)?play\s+([a-zA-Z][a-zA-Z\s\']*?)(?:\s*\?|$)',
+        # "when was X last on the schedule" - could be song or person
+        r'when\s+was\s+([a-zA-Z][a-zA-Z\s\']*?)\s+(?:last\s+)?on\s+the\s+schedule(?:\s*\?|$)',
     ]
 
     for pattern in ambiguous_patterns:
