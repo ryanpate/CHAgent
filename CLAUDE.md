@@ -579,6 +579,8 @@ PLANNING_CENTER_SECRET=your-secret
 
 ```
 CHAgent/
+├── CLAUDE.md                 # Project documentation (this file)
+├── SKILL.md                  # Development patterns & workflows for Claude Code
 ├── core/
 │   ├── agent.py              # AI agent logic, query detection, RAG
 │   ├── planning_center.py    # PCO API integration
@@ -604,6 +606,8 @@ CHAgent/
 └── accounts/
     └── models.py             # Custom User with org helpers
 ```
+
+> **Note**: See `SKILL.md` for detailed development patterns including multi-tenant coding, adding AI query types, and common workflows.
 
 ---
 
@@ -1045,30 +1049,30 @@ The following features have been implemented:
 - [x] TenantMiddleware for request context injection
 - [x] Data migration for existing Cherry Hills data
 
-### Phase 2: Tenant-Scoped Queries (In Progress)
-- [ ] Update all views with `.filter(organization=request.organization)`
-- [ ] Update Planning Center API for per-org credentials
-- [ ] Add organization-scoped caching
+### Phase 2: Tenant-Scoped Queries (✅ Complete)
+- [x] Update all views with `.filter(organization=request.organization)`
+- [x] Update Planning Center API for per-org credentials
+- [x] Add organization-scoped caching
 
-### Phase 3: Organization Onboarding
-- [ ] Public signup page with organization creation
-- [ ] Planning Center OAuth flow (per-organization)
-- [ ] Stripe checkout integration
-- [ ] Team member invitation flow
+### Phase 3: Organization Onboarding (✅ Complete)
+- [x] Public signup page with organization creation (`/signup/`)
+- [x] Planning Center OAuth flow per-organization (`/onboarding/connect-pco/`)
+- [x] Stripe checkout integration (`/onboarding/checkout/`)
+- [x] Team member invitation flow (`/onboarding/invite-team/`, `/invite/<token>/`)
 
-### Phase 4: Public Marketing
-- [ ] Landing page explaining Aria's capabilities
-- [ ] Pricing page with plan comparison
-- [ ] Demo/trial signup flow
-- [ ] Customer testimonials
+### Phase 4: Public Marketing (✅ Complete)
+- [x] Landing page explaining Aria's capabilities (`/`)
+- [x] Pricing page with plan comparison (`/pricing/`)
+- [x] Demo/trial signup flow (14-day trial via onboarding)
+- [ ] Customer testimonials (future enhancement)
 
-### Phase 5: Organization Management
-- [ ] Organization settings UI
-- [ ] Team member management (invite, roles, permissions)
-- [ ] Billing dashboard (Stripe portal integration)
-- [ ] Usage analytics per organization
+### Phase 5: Organization Management (✅ Complete)
+- [x] Organization settings UI (`/settings/`)
+- [x] Team member management - invite, roles, permissions (`/settings/members/`)
+- [x] Billing dashboard - Stripe portal integration (`/settings/billing/`)
+- [x] Usage analytics per organization (`/analytics/`)
 
-### Phase 6: Platform Administration
+### Phase 6: Platform Administration (In Progress)
 - [ ] Super-admin dashboard for all organizations
 - [ ] Usage metrics and revenue reporting
 - [ ] Customer support tools
