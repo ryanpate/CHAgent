@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+
+{% block title %}Organization Settings{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-ch-gold">Organization Settings</h1>
+        <p class="text-gray-400 mt-1">Manage your organization's settings and preferences</p>
+    </div>
+
+    <!-- Settings Navigation -->
+    <div class="flex gap-4 mb-6 border-b border-gray-700 pb-4">
+        <a href="{% url 'org_settings' %}" class="px-4 py-2 bg-ch-gold text-black rounded font-medium">
+            General
+        </a>
+        {% if membership.can_manage_users %}
+        <a href="{% url 'org_settings_members' %}" class="px-4 py-2 text-gray-400 hover:text-white rounded hover:bg-ch-gray transition">
+            Team Members
+        </a>
+        {% endif %}
+        {% if membership.can_manage_billing %}
+        <a href="{% url 'org_settings_billing' %}" class="px-4 py-2 text-gray-400 hover:text-white rounded hover:bg-ch-gray transition">
+            Billing
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Settings Form -->
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Organization Info Section -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h2 class="text-lg font-semibold mb-4">Organization Information</h2>
+
+            <div class="grid gap-4 md:grid-cols-2">
+                <div>
+                    <label for="name" class="block text-sm font-medium text-gray-300 mb-1">
+                        Organization Name
+                    </label>
+                    <input type="text" id="name" name="name" value="{{ organization.name }}"
+                           class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">
+                </div>
+
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-300 mb-1">
+                        Contact Email
+                    </label>
+                    <input type="email" id="email" name="email" value="{{ organization.email }}"
+                           class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">
+                </div>
+
+                <div>
+                    <label for="phone" class="block text-sm font-medium text-gray-300 mb-1">
+                        Phone Number
+                    </label>
+                    <input type="tel" id="phone" name="phone" value="{{ organization.phone }}"
+                           class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">
+                </div>
+
+                <div>
+                    <label for="website" class="block text-sm font-medium text-gray-300 mb-1">
+                        Website
+                    </label>
+                    <input type="url" id="website" name="website" value="{{ organization.website }}"
+                           placeholder="https://..."
+                           class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">
+                </div>
+
+                <div>
+                    <label for="timezone" class="block text-sm font-medium text-gray-300 mb-1">
+                        Timezone
+                    </label>
+                    <select id="timezone" name="timezone"
+                            class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">
+                        {% for tz in timezones %}
+                        <option value="{{ tz }}" {% if organization.timezone == tz %}selected{% endif %}>{{ tz }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Assistant Section -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h2 class="text-lg font-semibold mb-4">AI Assistant</h2>
+
+            <div class="max-w-md">
+                <label for="ai_assistant_name" class="block text-sm font-medium text-gray-300 mb-1">
+                    Assistant Name
+                </label>
+                <input type="text" id="ai_assistant_name" name="ai_assistant_name"
+                       value="{{ organization.ai_assistant_name }}"
+                       placeholder="Aria"
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">
+                <p class="text-sm text-gray-500 mt-1">
+                    Customize the name of your AI assistant. Default is "Aria".
+                </p>
+            </div>
+        </div>
+
+        <!-- Planning Center Section -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h2 class="text-lg font-semibold mb-4">Planning Center Integration</h2>
+
+            {% if organization.planning_center_connected_at %}
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 text-green-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <span>Connected</span>
+                </div>
+                <span class="text-gray-500 text-sm">
+                    since {{ organization.planning_center_connected_at|date:"M j, Y" }}
+                </span>
+            </div>
+            {% else %}
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 text-gray-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    <span>Not connected</span>
+                </div>
+                <a href="{% url 'onboarding_connect_pco' %}" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 transition text-sm">
+                    Connect Planning Center
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Organization Details (Read Only) -->
+        <div class="bg-ch-dark rounded-lg p-6">
+            <h2 class="text-lg font-semibold mb-4">Organization Details</h2>
+
+            <div class="grid gap-4 md:grid-cols-2 text-sm">
+                <div>
+                    <span class="text-gray-500">Organization ID:</span>
+                    <span class="ml-2 font-mono text-gray-300">{{ organization.slug }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Created:</span>
+                    <span class="ml-2 text-gray-300">{{ organization.created_at|date:"M j, Y" }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Status:</span>
+                    <span class="ml-2 px-2 py-0.5 rounded text-xs
+                        {% if organization.subscription_status == 'active' %}bg-green-500/20 text-green-400
+                        {% elif organization.subscription_status == 'trial' %}bg-blue-500/20 text-blue-400
+                        {% elif organization.subscription_status == 'past_due' %}bg-yellow-500/20 text-yellow-400
+                        {% else %}bg-red-500/20 text-red-400{% endif %}">
+                        {{ organization.subscription_status|title }}
+                    </span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Plan:</span>
+                    <span class="ml-2 text-gray-300">{{ organization.subscription_plan.name|default:"Free Trial" }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="flex justify-end">
+            <button type="submit"
+                    class="px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                Save Changes
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
