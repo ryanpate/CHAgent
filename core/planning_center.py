@@ -2386,66 +2386,94 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             if service_type_id and plan_id:
                 # OPTIMIZATION: Get team members with person data included
                 # The status field already tells us who declined due to blockout
-                team_result = self._get(
-                    f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/team_members",
-                    params={'include': 'person', 'per_page': 100}
+                # PAGINATION: Fetch all pages to get all team members
+                offset = 0
+                per_page = 100
+
+                while True:
+                    team_result = self._get(
+                        f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/team_members",
+                        params={'include': 'person', 'per_page': per_page, 'offset': offset}
+                    )
+                    result['api_calls_made'] += 1
+
+                    members_data = team_result.get('data', [])
+                    if not members_data:
+                        break  # No more results
+
+                    # Build person lookup from included data
+                    people_lookup = {}
+                    for inc in team_result.get('included', []):
+                        if inc.get('type') == 'Person':
+                            people_lookup[inc.get('id')] = inc
+
+                    for member in members_data:
+                        attrs = member.get('attributes', {})
+                        name = attrs.get('name', '')
+                        status = attrs.get('status', '')
+
+                        # Get person_id from relationships
+                        person_id = None
+                        relationships = member.get('relationships', {})
+                        person_data = relationships.get('person', {}).get('data', {})
+                        if person_data:
+                            person_id = person_data.get('id')
+
+                        if person_id:
+                            team_member_ids.add(person_id)
+                            team_member_names[person_id] = name
+
+                            # OPTIMIZATION: If status is 'B' (Blocked), they're already blocked!
+                            # No need to make additional API call
+                            if status == 'B':
+                                already_blocked.add(person_id)
+                                result['blocked_people'].append({
+                                    'name': name,
+                                    'person_id': person_id,
+                                    'reason': 'Blocked (from schedule status)',
+                                    'starts_at': None,
+                                    'ends_at': None
+                                })
+
+                    # Check if we got fewer results than requested (last page)
+                    if len(members_data) < per_page:
+                        break
+
+                    offset += per_page
+
+                logger.info(f"Found {len(team_member_ids)} team members, {len(already_blocked)} already blocked from status")
+
+        # If no plan found, get all services people with pagination
+        if not team_member_ids:
+            logger.info(f"No plan found for {date_str}, checking all services people")
+            offset = 0
+            per_page = 100
+
+            while True:
+                services_people = self._get(
+                    "/services/v2/people",
+                    params={'per_page': per_page, 'offset': offset, 'order': '-updated_at'}
                 )
                 result['api_calls_made'] += 1
 
-                # Build person lookup from included data
-                people_lookup = {}
-                for inc in team_result.get('included', []):
-                    if inc.get('type') == 'Person':
-                        people_lookup[inc.get('id')] = inc
+                people_data = services_people.get('data', [])
+                if not people_data:
+                    break
 
-                for member in team_result.get('data', []):
-                    attrs = member.get('attributes', {})
-                    name = attrs.get('name', '')
-                    status = attrs.get('status', '')
-
-                    # Get person_id from relationships
-                    person_id = None
-                    relationships = member.get('relationships', {})
-                    person_data = relationships.get('person', {}).get('data', {})
-                    if person_data:
-                        person_id = person_data.get('id')
-
+                for person in people_data:
+                    person_id = person.get('id')
+                    attrs = person.get('attributes', {})
+                    name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
                     if person_id:
                         team_member_ids.add(person_id)
                         team_member_names[person_id] = name
 
-                        # OPTIMIZATION: If status is 'B' (Blocked), they're already blocked!
-                        # No need to make additional API call
-                        if status == 'B':
-                            already_blocked.add(person_id)
-                            result['blocked_people'].append({
-                                'name': name,
-                                'person_id': person_id,
-                                'reason': 'Blocked (from schedule status)',
-                                'starts_at': None,
-                                'ends_at': None
-                            })
+                if len(people_data) < per_page:
+                    break
 
-                logger.info(f"Found {len(team_member_ids)} team members, {len(already_blocked)} already blocked from status")
+                offset += per_page
 
-        # If no plan found, get recently active services people
-        if not team_member_ids:
-            logger.info(f"No plan found for {date_str}, checking recent active team members")
-            services_people = self._get(
-                "/services/v2/people",
-                params={'per_page': 100, 'order': '-updated_at'}
-            )
-            result['api_calls_made'] += 1
-
-            for person in services_people.get('data', []):
-                person_id = person.get('id')
-                attrs = person.get('attributes', {})
-                name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
-                if person_id:
-                    team_member_ids.add(person_id)
-                    team_member_names[person_id] = name
-
-            logger.info(f"Using {len(team_member_ids)} recently active services people")
+            logger.info(f"Using {len(team_member_ids)} services people (all pages)")
 
         result['total_people_checked'] = len(team_member_ids)
 

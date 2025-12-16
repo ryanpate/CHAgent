@@ -366,6 +366,51 @@ class TestGetBlockoutsForDateOptimization:
                 assert result['blocked_people'][0]['name'] == 'John Smith'
                 assert result['blocked_people'][0]['reason'] == 'Family Trip'
 
+    def test_paginates_through_all_team_members(self, mock_plan_response):
+        """Should fetch all team members across multiple pages (more than 100)."""
+        # Create page 1 with 100 members
+        page1_members = []
+        for i in range(100):
+            page1_members.append({
+                'id': f'tm{i}',
+                'type': 'TeamMember',
+                'attributes': {'name': f'Person {i}', 'status': 'C'},
+                'relationships': {'person': {'data': {'id': str(i), 'type': 'Person'}}}
+            })
+
+        # Create page 2 with 50 more members
+        page2_members = []
+        for i in range(100, 150):
+            page2_members.append({
+                'id': f'tm{i}',
+                'type': 'TeamMember',
+                'attributes': {'name': f'Person {i}', 'status': 'C'},
+                'relationships': {'person': {'data': {'id': str(i), 'type': 'Person'}}}
+            })
+
+        page1_response = {'data': page1_members, 'included': []}
+        page2_response = {'data': page2_members, 'included': []}
+        empty_response = {'data': []}
+
+        with patch('core.planning_center.PlanningCenterServicesAPI._get') as mock_get:
+            with patch('core.planning_center.PlanningCenterServicesAPI.find_plan_by_date') as mock_find_plan:
+                mock_find_plan.return_value = mock_plan_response
+
+                # Responses: page1, page2, then empty blockouts for all 150 people
+                blockout_responses = [empty_response] * 150
+                mock_get.side_effect = [page1_response, page2_response] + blockout_responses
+
+                from core.planning_center import PlanningCenterServicesAPI
+                api = PlanningCenterServicesAPI()
+
+                result = api.get_blockouts_for_date('December 14, 2025')
+
+                # Should have checked all 150 team members
+                assert result['total_people_checked'] == 150
+
+                # API calls: 2 for pagination + 150 for individual blockouts
+                assert result['api_calls_made'] == 152
+
 
 class TestBlockoutCacheTimeout:
     """Tests for cache timeout configuration."""
