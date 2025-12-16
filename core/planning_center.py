@@ -16,8 +16,10 @@ logger = logging.getLogger(__name__)
 # Cache keys for PCO data
 PCO_PEOPLE_CACHE_KEY = 'pco_people_list'
 PCO_PLANS_CACHE_KEY = 'pco_plans_list'
+PCO_BLOCKOUTS_CACHE_KEY = 'pco_person_blockouts'  # Per-person blockouts cache
 PCO_CACHE_TIMEOUT = 3600  # 1 hour
 PCO_PLANS_CACHE_TIMEOUT = 900  # 15 minutes for plans (they change more often)
+PCO_BLOCKOUTS_CACHE_TIMEOUT = 1800  # 30 minutes for blockouts (they change rarely)
 
 # Default service type - Cherry Hills Sunday Morning Main Service
 # This is used when no specific service type is requested
@@ -2305,13 +2307,41 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         return all_people
 
+    def _get_cached_person_blockouts(self, person_id: str) -> list:
+        """
+        Get blockouts for a person, using cache when available.
+
+        Args:
+            person_id: The PCO person ID.
+
+        Returns:
+            List of blockout records.
+        """
+        cache_key = f"{PCO_BLOCKOUTS_CACHE_KEY}_{person_id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            blockouts_result = self._get(
+                f"/services/v2/people/{person_id}/blockouts",
+                params={'per_page': 50}
+            )
+            blockouts = blockouts_result.get('data', [])
+            cache.set(cache_key, blockouts, PCO_BLOCKOUTS_CACHE_TIMEOUT)
+            return blockouts
+        except Exception as e:
+            logger.warning(f"Error fetching blockouts for person {person_id}: {e}")
+            return []
+
     def get_blockouts_for_date(self, date_str: str) -> dict:
         """
         Get team members who are blocked out on a specific date.
 
-        Instead of checking all services people (which causes rate limits),
-        this method finds the service plan for that date and checks blockouts
-        only for team members associated with that service.
+        OPTIMIZED: This method uses multiple strategies to minimize API calls:
+        1. First checks team_member status codes (B=Blocked) - no extra API calls
+        2. Uses cached blockouts when available
+        3. Falls back to individual API calls only for uncached people
 
         Args:
             date_str: Date string to check (e.g., "December 14", "12/14/2025").
@@ -2321,15 +2351,17 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             - 'date': The parsed date
             - 'blocked_people': List of people blocked out on that date
             - 'total_people_checked': Number of people checked
+            - 'api_calls_made': Number of API calls (for monitoring optimization)
         """
         from datetime import datetime, timedelta
-        import time
 
         result = {
             'date': date_str,
             'date_parsed': None,
             'blocked_people': [],
-            'total_people_checked': 0
+            'total_people_checked': 0,
+            'api_calls_made': 0,
+            'cache_hits': 0
         }
 
         # Parse the date
@@ -2341,26 +2373,35 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         result['date_parsed'] = target_date.isoformat()
 
         # First, try to find the service plan for this date
-        # This gives us a scoped list of team members to check
         plan = self.find_plan_by_date(date_str)
 
         team_member_ids = set()
         team_member_names = {}  # Map ID to name
+        already_blocked = set()  # People already known to be blocked (from status)
 
         if plan and plan.get('plan_id'):
-            # Get team members from the plan
             plan_id = plan.get('plan_id')
             service_type_id = plan.get('service_type_id')
 
             if service_type_id and plan_id:
+                # OPTIMIZATION: Get team members with person data included
+                # The status field already tells us who declined due to blockout
                 team_result = self._get(
                     f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/team_members",
-                    params={'per_page': 100}
+                    params={'include': 'person', 'per_page': 100}
                 )
+                result['api_calls_made'] += 1
+
+                # Build person lookup from included data
+                people_lookup = {}
+                for inc in team_result.get('included', []):
+                    if inc.get('type') == 'Person':
+                        people_lookup[inc.get('id')] = inc
 
                 for member in team_result.get('data', []):
                     attrs = member.get('attributes', {})
                     name = attrs.get('name', '')
+                    status = attrs.get('status', '')
 
                     # Get person_id from relationships
                     person_id = None
@@ -2373,16 +2414,28 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                         team_member_ids.add(person_id)
                         team_member_names[person_id] = name
 
-                logger.info(f"Found {len(team_member_ids)} team members from plan for {date_str}")
+                        # OPTIMIZATION: If status is 'B' (Blocked), they're already blocked!
+                        # No need to make additional API call
+                        if status == 'B':
+                            already_blocked.add(person_id)
+                            result['blocked_people'].append({
+                                'name': name,
+                                'person_id': person_id,
+                                'reason': 'Blocked (from schedule status)',
+                                'starts_at': None,
+                                'ends_at': None
+                            })
 
-        # If no plan found or no team members, get a limited sample of active services people
+                logger.info(f"Found {len(team_member_ids)} team members, {len(already_blocked)} already blocked from status")
+
+        # If no plan found, get recently active services people
         if not team_member_ids:
             logger.info(f"No plan found for {date_str}, checking recent active team members")
-            # Get only first page of services people (max 100)
             services_people = self._get(
                 "/services/v2/people",
                 params={'per_page': 100, 'order': '-updated_at'}
             )
+            result['api_calls_made'] += 1
 
             for person in services_people.get('data', []):
                 person_id = person.get('id')
@@ -2396,42 +2449,56 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         result['total_people_checked'] = len(team_member_ids)
 
-        # Check blockouts for each team member with rate limiting
-        checked = 0
-        for person_id in team_member_ids:
+        # Check blockouts for remaining people (not already known to be blocked)
+        # OPTIMIZATION: Use cached blockouts when available
+        people_to_check = team_member_ids - already_blocked
+
+        for person_id in people_to_check:
             person_name = team_member_names.get(person_id, 'Unknown')
 
-            # Add small delay every 20 requests to avoid rate limits
-            if checked > 0 and checked % 20 == 0:
-                time.sleep(0.5)
+            # Try to get from cache first
+            cache_key = f"{PCO_BLOCKOUTS_CACHE_KEY}_{person_id}"
+            cached_blockouts = cache.get(cache_key)
 
-            try:
-                blockouts_result = self._get(
-                    f"/services/v2/people/{person_id}/blockouts",
-                    params={'per_page': 50}
-                )
+            if cached_blockouts is not None:
+                # Use cached data
+                result['cache_hits'] += 1
+                blockouts = cached_blockouts
+            else:
+                # Fetch from API
+                try:
+                    blockouts_result = self._get(
+                        f"/services/v2/people/{person_id}/blockouts",
+                        params={'per_page': 50}
+                    )
+                    result['api_calls_made'] += 1
+                    blockouts = blockouts_result.get('data', [])
+                    # Cache for next time
+                    cache.set(cache_key, blockouts, PCO_BLOCKOUTS_CACHE_TIMEOUT)
+                except Exception as e:
+                    logger.warning(f"Error checking blockouts for {person_name}: {e}")
+                    continue
 
-                for blockout in blockouts_result.get('data', []):
-                    b_attrs = blockout.get('attributes', {})
-                    starts_at = b_attrs.get('starts_at')
-                    ends_at = b_attrs.get('ends_at')
+            # Check if any blockout covers the target date
+            for blockout in blockouts:
+                b_attrs = blockout.get('attributes', {})
+                starts_at = b_attrs.get('starts_at')
+                ends_at = b_attrs.get('ends_at')
 
-                    if self._date_in_blockout_range(target_date, starts_at, ends_at):
-                        result['blocked_people'].append({
-                            'name': person_name,
-                            'person_id': person_id,
-                            'reason': b_attrs.get('reason', ''),
-                            'starts_at': starts_at,
-                            'ends_at': ends_at
-                        })
-                        break  # Person is blocked, no need to check more blockouts
+                if self._date_in_blockout_range(target_date, starts_at, ends_at):
+                    result['blocked_people'].append({
+                        'name': person_name,
+                        'person_id': person_id,
+                        'reason': b_attrs.get('reason', ''),
+                        'starts_at': starts_at,
+                        'ends_at': ends_at
+                    })
+                    break  # Person is blocked, no need to check more blockouts
 
-                checked += 1
-            except Exception as e:
-                logger.warning(f"Error checking blockouts for {person_name}: {e}")
-                continue
-
-        logger.info(f"Found {len(result['blocked_people'])} people blocked out on {target_date}")
+        logger.info(
+            f"Blockout check for {target_date}: {len(result['blocked_people'])} blocked, "
+            f"{result['api_calls_made']} API calls, {result['cache_hits']} cache hits"
+        )
         return result
 
     def _date_in_blockout_range(self, check_date, starts_at: str, ends_at: str) -> bool:
