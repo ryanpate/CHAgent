@@ -19,7 +19,11 @@ PCO_PLANS_CACHE_KEY = 'pco_plans_list'
 PCO_BLOCKOUTS_CACHE_KEY = 'pco_person_blockouts'  # Per-person blockouts cache
 PCO_CACHE_TIMEOUT = 3600  # 1 hour
 PCO_PLANS_CACHE_TIMEOUT = 900  # 15 minutes for plans (they change more often)
-PCO_BLOCKOUTS_CACHE_TIMEOUT = 1800  # 30 minutes for blockouts (they change rarely)
+PCO_BLOCKOUTS_CACHE_TIMEOUT = 14400  # 4 hours for blockouts (they change rarely)
+
+# Rate limiting settings for blockout queries
+PCO_BLOCKOUT_RATE_LIMIT_CALLS = 10  # Number of calls before delay
+PCO_BLOCKOUT_RATE_LIMIT_DELAY = 1.0  # Delay in seconds after rate limit threshold
 
 # Default service type - Cherry Hills Sunday Morning Main Service
 # This is used when no specific service type is requested
@@ -42,25 +46,52 @@ class PlanningCenterAPI:
         """Check if Planning Center credentials are configured."""
         return bool(self.app_id and self.secret)
 
-    def _get(self, endpoint: str, params: dict = None) -> dict:
-        """Make authenticated GET request to Planning Center API."""
+    def _get(self, endpoint: str, params: dict = None, retry_on_429: bool = True) -> dict:
+        """
+        Make authenticated GET request to Planning Center API.
+
+        Args:
+            endpoint: API endpoint path.
+            params: Optional query parameters.
+            retry_on_429: If True, retry with exponential backoff on rate limit errors.
+
+        Returns:
+            JSON response dict or empty dict on error.
+        """
+        import time
+
         if not self.is_configured:
             logger.warning("Planning Center not configured")
             return {}
 
         url = f"{self.BASE_URL}{endpoint}"
-        try:
-            response = requests.get(
-                url,
-                auth=(self.app_id, self.secret),
-                params=params,
-                timeout=30
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
-            logger.error(f"Planning Center API error: {e}")
-            return {}
+        max_retries = 3 if retry_on_429 else 1
+        base_delay = 2.0  # Start with 2 second delay
+
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(
+                    url,
+                    auth=(self.app_id, self.secret),
+                    params=params,
+                    timeout=30
+                )
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.HTTPError as e:
+                if response.status_code == 429 and attempt < max_retries - 1:
+                    # Rate limited - wait with exponential backoff
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"Rate limited (429), waiting {delay}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(delay)
+                    continue
+                logger.error(f"Planning Center API error: {e}")
+                raise  # Re-raise to let caller handle it
+            except requests.RequestException as e:
+                logger.error(f"Planning Center API error: {e}")
+                return {}
+
+        return {}
 
     def _get_all_pages(self, endpoint: str, params: dict = None) -> list:
         """
@@ -2496,16 +2527,17 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 result['cache_hits'] += 1
                 blockouts = cached_blockouts
             else:
-                # Rate limiting: add small delay every 20 API calls to avoid 429
+                # Rate limiting: add delay to avoid 429 errors
                 api_call_count += 1
-                if api_call_count > 0 and api_call_count % 20 == 0:
-                    time.sleep(0.5)  # 500ms delay every 20 calls
+                if api_call_count > 0 and api_call_count % PCO_BLOCKOUT_RATE_LIMIT_CALLS == 0:
+                    time.sleep(PCO_BLOCKOUT_RATE_LIMIT_DELAY)
 
-                # Fetch from API
+                # Fetch from API with retry logic
                 try:
                     blockouts_result = self._get(
                         f"/services/v2/people/{person_id}/blockouts",
-                        params={'per_page': 50}
+                        params={'per_page': 50},
+                        retry_on_429=True
                     )
                     result['api_calls_made'] += 1
                     blockouts = blockouts_result.get('data', [])
@@ -2735,13 +2767,15 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             person_name = team_member_names.get(person_id, 'Unknown')
 
             # Rate limiting
-            if checked > 0 and checked % 20 == 0:
-                time.sleep(0.5)
+            checked += 1
+            if checked > 0 and checked % PCO_BLOCKOUT_RATE_LIMIT_CALLS == 0:
+                time.sleep(PCO_BLOCKOUT_RATE_LIMIT_DELAY)
 
             try:
                 blockouts_result = self._get(
                     f"/services/v2/people/{person_id}/blockouts",
-                    params={'per_page': 50}
+                    params={'per_page': 50},
+                    retry_on_429=True
                 )
 
                 is_blocked = False
@@ -3038,15 +3072,16 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 result['cache_hits'] += 1
                 blockouts = cached_blockouts
             else:
-                # Rate limiting: add small delay every 20 API calls to avoid 429
+                # Rate limiting: add delay to avoid 429 errors
                 api_call_count += 1
-                if api_call_count > 0 and api_call_count % 20 == 0:
-                    time.sleep(0.5)  # 500ms delay every 20 calls
+                if api_call_count > 0 and api_call_count % PCO_BLOCKOUT_RATE_LIMIT_CALLS == 0:
+                    time.sleep(PCO_BLOCKOUT_RATE_LIMIT_DELAY)
 
                 try:
                     blockouts_result = self._get(
                         f"/services/v2/people/{person_id}/blockouts",
-                        params={'per_page': 50}
+                        params={'per_page': 50},
+                        retry_on_429=True
                     )
                     result['api_calls_made'] += 1
                     blockouts = blockouts_result.get('data', [])
