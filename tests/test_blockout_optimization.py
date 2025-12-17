@@ -515,7 +515,14 @@ class TestBlockoutCacheTimeout:
 
     def test_cache_constants_defined(self):
         """Cache constants should be properly defined."""
-        from core.planning_center import PCO_BLOCKOUTS_CACHE_KEY, PCO_BLOCKOUTS_CACHE_TIMEOUT
+        from core.planning_center import (
+            PCO_BLOCKOUTS_CACHE_KEY,
+            PCO_BLOCKOUTS_CACHE_TIMEOUT,
+            PCO_BLOCKOUT_RATE_LIMIT_CALLS,
+            PCO_BLOCKOUT_RATE_LIMIT_DELAY
+        )
 
         assert PCO_BLOCKOUTS_CACHE_KEY == 'pco_person_blockouts'
-        assert PCO_BLOCKOUTS_CACHE_TIMEOUT == 1800  # 30 minutes
+        assert PCO_BLOCKOUTS_CACHE_TIMEOUT == 14400  # 4 hours for blockouts
+        assert PCO_BLOCKOUT_RATE_LIMIT_CALLS == 10  # Rate limit threshold
+        assert PCO_BLOCKOUT_RATE_LIMIT_DELAY == 1.0  # 1 second delay
