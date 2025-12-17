@@ -2481,6 +2481,9 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         # OPTIMIZATION: Use cached blockouts when available
         people_to_check = team_member_ids - already_blocked
 
+        import time
+        api_call_count = 0
+
         for person_id in people_to_check:
             person_name = team_member_names.get(person_id, 'Unknown')
 
@@ -2493,6 +2496,11 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 result['cache_hits'] += 1
                 blockouts = cached_blockouts
             else:
+                # Rate limiting: add small delay every 20 API calls to avoid 429
+                api_call_count += 1
+                if api_call_count > 0 and api_call_count % 20 == 0:
+                    time.sleep(0.5)  # 500ms delay every 20 calls
+
                 # Fetch from API
                 try:
                     blockouts_result = self._get(
@@ -2938,8 +2946,9 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         """
         Get blockouts for a date range (like "first week of February 2026").
 
-        This method expands the date range and checks blockouts for each date,
-        consolidating the results.
+        OPTIMIZED: Instead of calling get_blockouts_for_date for each day (which would
+        make N*M API calls), this fetches each person's blockouts ONCE and checks
+        locally if any blockout covers any date in the range.
 
         Args:
             date_str: Date range string.
@@ -2947,6 +2956,8 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         Returns:
             Dict with consolidated blockout information for all dates in range.
         """
+        import time
+
         dates = self.expand_week_reference(date_str)
 
         if not dates:
@@ -2962,27 +2973,108 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             'cache_hits': 0
         }
 
-        for date_obj, formatted_date in dates:
-            # Check blockouts for this specific date
-            date_result = self.get_blockouts_for_date(formatted_date.split(' (')[0])
+        # Extract date objects for local comparison
+        date_objects = [(d[0], d[1]) for d in dates]
+        for date_obj, formatted in date_objects:
+            result['dates_checked'].append({'date': formatted, 'blocked_count': 0})
 
-            result['dates_checked'].append({
-                'date': formatted_date,
-                'blocked_count': len(date_result.get('blocked_people', []))
-            })
-            result['api_calls_made'] += date_result.get('api_calls_made', 0)
-            result['cache_hits'] += date_result.get('cache_hits', 0)
+        # Step 1: Get team members ONCE (use the first date to find the relevant plan)
+        first_date_str = date_objects[0][1].split(' (')[0]  # e.g., "February 1, 2026"
+        plan = self.find_plan_by_date(first_date_str)
 
-            # Track total people (use max from any single date)
-            if date_result.get('total_people_checked', 0) > result['total_people_checked']:
-                result['total_people_checked'] = date_result.get('total_people_checked', 0)
+        team_member_ids = set()
+        team_member_names = {}
 
-            # Consolidate blocked people by name
-            for person in date_result.get('blocked_people', []):
-                name = person.get('name', 'Unknown')
-                if name not in result['all_blocked_people']:
-                    result['all_blocked_people'][name] = []
-                result['all_blocked_people'][name].append(formatted_date)
+        if plan and plan.get('plan_id'):
+            plan_id = plan.get('plan_id')
+            service_type_id = plan.get('service_type_id')
+
+            if service_type_id and plan_id:
+                # Fetch all team members with pagination
+                offset = 0
+                per_page = 100
+
+                while True:
+                    team_result = self._get(
+                        f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/team_members",
+                        params={'include': 'person', 'per_page': per_page, 'offset': offset}
+                    )
+                    result['api_calls_made'] += 1
+
+                    members_data = team_result.get('data', [])
+                    if not members_data:
+                        break
+
+                    for member in members_data:
+                        attrs = member.get('attributes', {})
+                        name = attrs.get('name', '')
+                        person_id = None
+                        relationships = member.get('relationships', {})
+                        person_data = relationships.get('person', {}).get('data', {})
+                        if person_data:
+                            person_id = person_data.get('id')
+
+                        if person_id:
+                            team_member_ids.add(person_id)
+                            team_member_names[person_id] = name
+
+                    if len(members_data) < per_page:
+                        break
+                    offset += per_page
+
+        result['total_people_checked'] = len(team_member_ids)
+        logger.info(f"Date range check: Found {len(team_member_ids)} team members to check")
+
+        # Step 2: Fetch blockouts for each person ONCE (with rate limiting and caching)
+        api_call_count = 0
+        for person_id in team_member_ids:
+            person_name = team_member_names.get(person_id, 'Unknown')
+
+            # Check cache first
+            cache_key = f"{PCO_BLOCKOUTS_CACHE_KEY}_{person_id}"
+            cached_blockouts = cache.get(cache_key)
+
+            if cached_blockouts is not None:
+                result['cache_hits'] += 1
+                blockouts = cached_blockouts
+            else:
+                # Rate limiting: add small delay every 20 API calls to avoid 429
+                api_call_count += 1
+                if api_call_count > 0 and api_call_count % 20 == 0:
+                    time.sleep(0.5)  # 500ms delay every 20 calls
+
+                try:
+                    blockouts_result = self._get(
+                        f"/services/v2/people/{person_id}/blockouts",
+                        params={'per_page': 50}
+                    )
+                    result['api_calls_made'] += 1
+                    blockouts = blockouts_result.get('data', [])
+                    cache.set(cache_key, blockouts, PCO_BLOCKOUTS_CACHE_TIMEOUT)
+                except Exception as e:
+                    logger.warning(f"Error fetching blockouts for {person_name}: {e}")
+                    continue
+
+            # Step 3: Check locally if any blockout covers any date in the range
+            for date_obj, formatted_date in date_objects:
+                for blockout in blockouts:
+                    b_attrs = blockout.get('attributes', {})
+                    starts_at = b_attrs.get('starts_at')
+                    ends_at = b_attrs.get('ends_at')
+
+                    if self._date_in_blockout_range(date_obj, starts_at, ends_at):
+                        # This person is blocked on this date
+                        if person_name not in result['all_blocked_people']:
+                            result['all_blocked_people'][person_name] = []
+                        if formatted_date not in result['all_blocked_people'][person_name]:
+                            result['all_blocked_people'][person_name].append(formatted_date)
+
+                        # Update the blocked count for this date
+                        for date_info in result['dates_checked']:
+                            if date_info['date'] == formatted_date:
+                                date_info['blocked_count'] += 1
+                                break
+                        break  # Found a blockout for this date, move to next date
 
         logger.info(
             f"Date range check for '{date_str}': {len(result['all_blocked_people'])} unique people blocked, "
