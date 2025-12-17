@@ -485,6 +485,19 @@ class TestDateRangeBlockoutQuery:
         assert query_type == 'date_blockouts'
         assert date == "first week of February 2026"
 
+    def test_is_blockout_query_detects_week_no_preposition(self):
+        """Should detect 'who is blocked out the first week' (no 'for/on')."""
+        from core.agent import is_blockout_query
+
+        # This is the actual user query pattern that was failing
+        is_blockout, query_type, person, date = is_blockout_query(
+            "Who is blocked out the first week of february"
+        )
+
+        assert is_blockout is True
+        assert query_type == 'date_blockouts'
+        assert "first week of february" in date.lower()
+
     def test_is_blockout_query_detects_week_without_year(self):
         """Should detect week patterns without year specified."""
         from core.agent import is_blockout_query
