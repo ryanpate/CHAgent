@@ -412,6 +412,91 @@ class TestGetBlockoutsForDateOptimization:
                 assert result['api_calls_made'] == 152
 
 
+class TestWeekExpansion:
+    """Tests for the expand_week_reference helper method."""
+
+    @pytest.fixture
+    def api(self):
+        """Create a mock API instance."""
+        with patch('core.planning_center.PlanningCenterServicesAPI._get'):
+            from core.planning_center import PlanningCenterServicesAPI
+            return PlanningCenterServicesAPI()
+
+    def test_expands_first_week_of_february_2026(self, api):
+        """Should expand 'first week of February 2026' to correct dates."""
+        dates = api.expand_week_reference("first week of February 2026")
+
+        # First week of February 2026 is Feb 1-7
+        assert len(dates) == 7
+        date_strs = [d[1] for d in dates]
+
+        # Check correct weekdays are included
+        assert "February 1, 2026 (Sunday)" in date_strs
+        assert "February 2, 2026 (Monday)" in date_strs
+        assert "February 7, 2026 (Saturday)" in date_strs
+
+    def test_expands_second_week(self, api):
+        """Should expand second week correctly."""
+        dates = api.expand_week_reference("second week of February 2026")
+
+        # Second week is Feb 8-14
+        assert len(dates) == 7
+        date_strs = [d[1] for d in dates]
+        assert "February 8, 2026 (Sunday)" in date_strs
+        assert "February 14, 2026 (Saturday)" in date_strs
+
+    def test_returns_empty_for_non_week_reference(self, api):
+        """Should return empty list for regular dates."""
+        assert api.expand_week_reference("December 14, 2025") == []
+        assert api.expand_week_reference("this Sunday") == []
+        assert api.expand_week_reference("") == []
+
+    def test_handles_last_week_of_month(self, api):
+        """Should handle 'last week' correctly."""
+        dates = api.expand_week_reference("last week of February 2026")
+
+        # Should include the last days of February 2026
+        date_strs = [d[1] for d in dates]
+        assert any("February 28" in d for d in date_strs)
+
+    def test_includes_year_in_formatted_output(self, api):
+        """Formatted dates should include the year."""
+        dates = api.expand_week_reference("first week of February 2026")
+
+        for date_obj, formatted in dates:
+            assert "2026" in formatted
+            # Should have format like "February 1, 2026 (Sunday)"
+            assert "(" in formatted and ")" in formatted
+
+
+class TestDateRangeBlockoutQuery:
+    """Tests for date range blockout queries (e.g., 'first week of February')."""
+
+    def test_is_blockout_query_detects_week_pattern(self):
+        """Should detect week-of-month patterns in blockout queries."""
+        from core.agent import is_blockout_query
+
+        # Use a query pattern that matches existing blockout detection
+        is_blockout, query_type, person, date = is_blockout_query(
+            "who is blocked out for the first week of February 2026"
+        )
+
+        assert is_blockout is True
+        assert query_type == 'date_blockouts'
+        assert date == "first week of February 2026"
+
+    def test_is_blockout_query_detects_week_without_year(self):
+        """Should detect week patterns without year specified."""
+        from core.agent import is_blockout_query
+
+        is_blockout, query_type, person, date = is_blockout_query(
+            "who has blockouts for the second week of March"
+        )
+
+        assert is_blockout is True
+        assert "second week of march" in date.lower()
+
+
 class TestBlockoutCacheTimeout:
     """Tests for cache timeout configuration."""
 

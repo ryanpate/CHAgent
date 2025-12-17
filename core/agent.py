@@ -536,22 +536,35 @@ def is_blockout_query(message: str) -> Tuple[bool, str, Optional[str], Optional[
                     person_name = None
 
         # Extract date reference
-        date_patterns = [
-            r'(?:on|for)\s+((?:last|this|next)\s+(?:sunday|week|month|service))',
-            r'(?:on|for)\s+((?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)',
-            r'(?:on|for)\s+(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
-            r'(?:on|for)\s+(\d{1,2}-\d{1,2}(?:-\d{2,4})?)',
-            r'((?:last|this|next)\s+(?:sunday|week|month|service))',
-            r'((?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)',
-            r'(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
-        ]
-
-        for pattern in date_patterns:
-            match = re.search(pattern, message, re.IGNORECASE)
-            if match:
-                date_reference = match.group(1).strip()
-                logger.info(f"Blockout date extraction successful: '{date_reference}'")
-                break
+        # First check for week-of-month pattern specifically
+        week_pattern = r'(?:in\s+)?(?:the\s+)?(first|second|third|fourth|last)\s+week\s+(?:of\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+(\d{4}))?'
+        week_match = re.search(week_pattern, message, re.IGNORECASE)
+        if week_match:
+            groups = week_match.groups()
+            week_ordinal = groups[0]  # first, second, etc.
+            month = groups[1]
+            year = groups[2] if len(groups) > 2 and groups[2] else None
+            date_reference = f"{week_ordinal} week of {month}"
+            if year:
+                date_reference += f" {year}"
+            logger.info(f"Blockout date extraction successful (week pattern): '{date_reference}'")
+        else:
+            # Standard date patterns
+            standard_date_patterns = [
+                r'(?:on|for)\s+((?:last|this|next)\s+(?:sunday|week|month|service))',
+                r'(?:on|for)\s+((?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)',
+                r'(?:on|for)\s+(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
+                r'(?:on|for)\s+(\d{1,2}-\d{1,2}(?:-\d{2,4})?)',
+                r'((?:last|this|next)\s+(?:sunday|week|month|service))',
+                r'((?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)',
+                r'(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
+            ]
+            for pattern in standard_date_patterns:
+                match = re.search(pattern, message, re.IGNORECASE)
+                if match:
+                    date_reference = match.group(1).strip()
+                    logger.info(f"Blockout date extraction successful: '{date_reference}'")
+                    break
 
     logger.info(f"is_blockout_query result: blockout_query={is_blockout}, type={query_type}, name={person_name}, date={date_reference}")
     return is_blockout, query_type, person_name, date_reference
@@ -1009,6 +1022,48 @@ def format_date_blockouts(blockout_data: dict) -> str:
         parts.append(f"\n{available_count} of {total_checked} team members available.")
 
     parts.append("[END BLOCKOUTS FOR DATE]\n")
+    return '\n'.join(parts)
+
+
+def format_date_range_blockouts(range_data: dict) -> str:
+    """
+    Format blockout information for a date range (e.g., week) for the AI context.
+
+    Args:
+        range_data: Dict with date range blockout information.
+
+    Returns:
+        Formatted string with consolidated blockout info for the date range.
+    """
+    if not range_data:
+        return ""
+
+    parts = ["\n[BLOCKOUTS FOR DATE RANGE]"]
+    parts.append(f"Date Range: {range_data.get('date_range', 'Unknown')}")
+
+    dates_checked = range_data.get('dates_checked', [])
+    if dates_checked:
+        parts.append(f"\nDates Checked ({len(dates_checked)} days):")
+        for date_info in dates_checked:
+            parts.append(f"  - {date_info.get('date', 'Unknown')}")
+
+    all_blocked = range_data.get('all_blocked_people', {})
+    if all_blocked:
+        parts.append(f"\nBlocked Out ({len(all_blocked)} unique people):")
+        for name, blocked_dates in sorted(all_blocked.items()):
+            if len(blocked_dates) == len(dates_checked):
+                parts.append(f"  - {name}: Entire week")
+            else:
+                dates_short = [d.split(' (')[1].rstrip(')') for d in blocked_dates]
+                parts.append(f"  - {name}: {', '.join(dates_short)}")
+    else:
+        parts.append("\nNo one is blocked out during this date range.")
+
+    total_checked = range_data.get('total_people_checked', 0)
+    if total_checked:
+        parts.append(f"\nTotal team members checked: {total_checked}")
+
+    parts.append("[END BLOCKOUTS FOR DATE RANGE]\n")
     return '\n'.join(parts)
 
 
@@ -3377,11 +3432,19 @@ def query_agent(question: str, user, session_id: str) -> str:
                     blockout_data_context = "\n[BLOCKOUT QUERY: Please specify which volunteer's blockouts you want to see.]\n"
 
             elif blockout_query_type == 'date_blockouts':
-                # Looking for who is blocked out on a specific date
+                # Looking for who is blocked out on a specific date or date range
                 if blockout_date:
-                    blockout_data = services_api.get_blockouts_for_date(blockout_date)
-                    blockout_data_context = format_date_blockouts(blockout_data)
-                    logger.info(f"Fetched blockouts for date '{blockout_date}': {len(blockout_data.get('blocked_people', []))} people blocked")
+                    # First check if this is a date range (e.g., "first week of February 2026")
+                    range_data = services_api.get_blockouts_for_date_range(blockout_date)
+                    if range_data:
+                        # It's a date range - use consolidated format
+                        blockout_data_context = format_date_range_blockouts(range_data)
+                        logger.info(f"Fetched blockouts for date range '{blockout_date}': {len(range_data.get('all_blocked_people', {}))} unique people blocked")
+                    else:
+                        # Single date - use standard format
+                        blockout_data = services_api.get_blockouts_for_date(blockout_date)
+                        blockout_data_context = format_date_blockouts(blockout_data)
+                        logger.info(f"Fetched blockouts for date '{blockout_date}': {len(blockout_data.get('blocked_people', []))} people blocked")
                 else:
                     blockout_data_context = "\n[BLOCKOUT QUERY: Please specify which date you want to check blockouts for (e.g., 'this Sunday', 'December 15', '12/15').]\n"
 

@@ -2848,3 +2848,145 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         logger.warning(f"Could not parse date string: {date_str}")
         return None
+
+    def expand_week_reference(self, date_str: str) -> list:
+        """
+        Expand a week-of-month reference into individual dates.
+
+        Args:
+            date_str: Date string like "first week of February 2026".
+
+        Returns:
+            List of (date, formatted_date_with_weekday) tuples for each day in the week,
+            or empty list if not a week reference.
+        """
+        from datetime import datetime, timedelta
+        import re
+
+        if not date_str:
+            return []
+
+        date_str_lower = date_str.lower().strip()
+
+        # Check for week-of-month pattern
+        week_pattern = r'(first|second|third|fourth|last)\s+week\s+(?:of\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+(\d{4}))?'
+        match = re.search(week_pattern, date_str_lower)
+
+        if not match:
+            return []
+
+        week_ordinal = match.group(1)
+        month_str = match.group(2)
+        year_str = match.group(3)
+
+        # Map month names to numbers
+        month_names = {
+            'january': 1, 'february': 2, 'march': 3, 'april': 4,
+            'may': 5, 'june': 6, 'july': 7, 'august': 8,
+            'september': 9, 'october': 10, 'november': 11, 'december': 12
+        }
+
+        month = month_names.get(month_str)
+        if not month:
+            return []
+
+        # Determine year
+        today = datetime.now().date()
+        if year_str:
+            year = int(year_str)
+        else:
+            year = today.year
+
+        # Find the first day of the month
+        first_of_month = datetime(year, month, 1).date()
+
+        # Map ordinals to week numbers (0-indexed for calculation)
+        ordinal_map = {'first': 0, 'second': 1, 'third': 2, 'fourth': 3, 'last': -1}
+        week_num = ordinal_map.get(week_ordinal, 0)
+
+        # Calculate the start of the target week
+        if week_num == -1:
+            # Last week of month - find last day, then go back to Sunday
+            if month == 12:
+                last_of_month = datetime(year + 1, 1, 1).date() - timedelta(days=1)
+            else:
+                last_of_month = datetime(year, month + 1, 1).date() - timedelta(days=1)
+
+            # Find the Sunday of the last week (week starts on Sunday)
+            days_since_sunday = (last_of_month.weekday() + 1) % 7
+            week_start = last_of_month - timedelta(days=days_since_sunday)
+        else:
+            # First day of first week is the first Sunday on or before the 7th
+            # Or we can define week 1 as days 1-7, week 2 as days 8-14, etc.
+            # For simplicity: first week = days 1-7, second week = days 8-14, etc.
+            week_start = first_of_month + timedelta(days=week_num * 7)
+
+        # Generate all days in the week (Sunday to Saturday)
+        dates = []
+        for i in range(7):
+            current_date = week_start + timedelta(days=i)
+            # Only include dates that are in the target month
+            if current_date.month == month:
+                weekday_name = current_date.strftime('%A')
+                formatted = f"{current_date.strftime('%B')} {current_date.day}, {current_date.year} ({weekday_name})"
+                dates.append((current_date, formatted))
+
+        logger.info(f"Expanded '{date_str}' to {len(dates)} dates: {[d[1] for d in dates]}")
+        return dates
+
+    def get_blockouts_for_date_range(self, date_str: str) -> dict:
+        """
+        Get blockouts for a date range (like "first week of February 2026").
+
+        This method expands the date range and checks blockouts for each date,
+        consolidating the results.
+
+        Args:
+            date_str: Date range string.
+
+        Returns:
+            Dict with consolidated blockout information for all dates in range.
+        """
+        dates = self.expand_week_reference(date_str)
+
+        if not dates:
+            # Not a date range, use single date check
+            return None
+
+        result = {
+            'date_range': date_str,
+            'dates_checked': [],
+            'all_blocked_people': {},  # name -> list of blocked dates
+            'total_people_checked': 0,
+            'api_calls_made': 0,
+            'cache_hits': 0
+        }
+
+        for date_obj, formatted_date in dates:
+            # Check blockouts for this specific date
+            date_result = self.get_blockouts_for_date(formatted_date.split(' (')[0])
+
+            result['dates_checked'].append({
+                'date': formatted_date,
+                'blocked_count': len(date_result.get('blocked_people', []))
+            })
+            result['api_calls_made'] += date_result.get('api_calls_made', 0)
+            result['cache_hits'] += date_result.get('cache_hits', 0)
+
+            # Track total people (use max from any single date)
+            if date_result.get('total_people_checked', 0) > result['total_people_checked']:
+                result['total_people_checked'] = date_result.get('total_people_checked', 0)
+
+            # Consolidate blocked people by name
+            for person in date_result.get('blocked_people', []):
+                name = person.get('name', 'Unknown')
+                if name not in result['all_blocked_people']:
+                    result['all_blocked_people'][name] = []
+                result['all_blocked_people'][name].append(formatted_date)
+
+        logger.info(
+            f"Date range check for '{date_str}': {len(result['all_blocked_people'])} unique people blocked, "
+            f"{result['api_calls_made']} API calls, {result['cache_hits']} cache hits"
+        )
+
+        return result
