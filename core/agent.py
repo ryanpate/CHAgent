@@ -484,8 +484,8 @@ def is_blockout_query(message: str) -> Tuple[bool, str, Optional[str], Optional[
         # "Team availability for [date]" or "Who's available on [date]?" - check FIRST (before availability_check)
         'team_availability': r'team\s+availability|who\'?s?\s+(?:is\s+)?available\s+(?:on|for|this|next)|availability\s+(?:on|for)\s+(?:the\s+)?(?:team|this|next)',
         # "Who is blocked out on [date]?" or "Who has blockouts on [date]?" - check BEFORE person_blockouts
-        # Matches "who has blockouts for [date]" pattern specifically
-        'date_blockouts': r'who\s+(?:is|are|has|have)\s+blocked?\s*out(?:s)?\s+(?:on|for|this|next)|who\s+(?:has|have)\s+block\s*out(?:s)?\s+(?:on|for)|who\s+can\'?t\s+(?:make\s+it|serve|be\s+there)\s+(?:on|for|this|next)|blocked?\s*out\s+(?:on|this|next)',
+        # Also matches "who is blocked out the first week" (no preposition)
+        'date_blockouts': r'who\s+(?:is|are|has|have)\s+blocked?\s*out(?:s)?\s+(?:on|for|in|the|this|next)|who\s+(?:has|have)\s+block\s*out(?:s)?\s+(?:on|for|in|the)|who\s+can\'?t\s+(?:make\s+it|serve|be\s+there)\s+(?:on|for|in|the|this|next)|blocked?\s*out\s+(?:on|in|the|this|next)',
         # "Is [person] available on [date]?" or "Can [person] serve on [date]?"
         'availability_check': r'(?:is|are)\s+.+\s+(?:available|free|able\s+to\s+serve)\s+(?:on|for|this|next)|can\s+.+\s+(?:serve|make\s+it|be\s+there)\s+(?:on|for|this|next)|.+\s+availability\s+(?:on|for)',
         # "When is [person] blocked out?" or "What are [person]'s blockouts?" - check LAST
