@@ -45,6 +45,8 @@ class TenantMiddleware(MiddlewareMixin):
         # Subscription/billing pages (must be accessible when expired)
         '/billing/',
         '/subscribe/',
+        # Platform admin portal
+        '/platform-admin/',
     ]
 
     def process_request(self, request):
@@ -338,6 +340,31 @@ def require_role(*roles):
             return view_func(request, *args, **kwargs)
         return wrapper
     return decorator
+
+
+def require_superadmin(view_func):
+    """
+    Decorator to require platform superadmin access.
+
+    Usage:
+        @login_required
+        @require_superadmin
+        def admin_dashboard(request):
+            ...
+    """
+    from functools import wraps
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden("Authentication required")
+
+        if not request.user.is_superadmin:
+            return HttpResponseForbidden("Platform administrator access required")
+
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
 
 
 class TenantQuerySetMixin:

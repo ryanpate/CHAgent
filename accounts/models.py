@@ -6,6 +6,12 @@ class User(AbstractUser):
     """Extended user model for team members."""
     display_name = models.CharField(max_length=100, blank=True)
 
+    # Platform administration
+    is_superadmin = models.BooleanField(
+        default=False,
+        help_text="Platform administrator with access to all organizations"
+    )
+
     # Default organization for users with multiple orgs
     default_organization = models.ForeignKey(
         'core.Organization',

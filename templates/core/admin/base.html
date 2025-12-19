@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Platform Admin{% endblock %} | Aria</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'ch-black': '#0f0f0f',
+                        'ch-dark': '#1a1a1a',
+                        'ch-gray': '#252525',
+                        'ch-gold': '#c9a227',
+                        'ch-gold-muted': '#8b7355',
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body class="bg-ch-black text-white font-sans">
+    <!-- Admin Navigation -->
+    <nav class="bg-ch-dark border-b border-ch-gray">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <span class="text-xl font-bold text-ch-gold">Aria</span>
+                        <span class="ml-2 px-2 py-1 text-xs bg-red-600 text-white rounded">Admin</span>
+                    </div>
+                    <div class="hidden sm:ml-8 sm:flex sm:space-x-4">
+                        <a href="{% url 'admin_dashboard' %}" class="{% if request.resolver_match.url_name == 'admin_dashboard' %}bg-ch-gray text-white{% else %}text-gray-300 hover:bg-ch-gray hover:text-white{% endif %} px-3 py-2 rounded-md text-sm font-medium">
+                            Overview
+                        </a>
+                        <a href="{% url 'admin_organizations_list' %}" class="{% if 'organizations' in request.path %}bg-ch-gray text-white{% else %}text-gray-300 hover:bg-ch-gray hover:text-white{% endif %} px-3 py-2 rounded-md text-sm font-medium">
+                            Organizations
+                        </a>
+                        <a href="{% url 'admin_revenue_analytics' %}" class="{% if 'revenue' in request.path %}bg-ch-gray text-white{% else %}text-gray-300 hover:bg-ch-gray hover:text-white{% endif %} px-3 py-2 rounded-md text-sm font-medium">
+                            Revenue
+                        </a>
+                        <a href="{% url 'admin_usage_analytics' %}" class="{% if 'usage' in request.path %}bg-ch-gray text-white{% else %}text-gray-300 hover:bg-ch-gray hover:text-white{% endif %} px-3 py-2 rounded-md text-sm font-medium">
+                            Usage
+                        </a>
+                        <a href="{% url 'admin_users_list' %}" class="{% if 'users' in request.path %}bg-ch-gray text-white{% else %}text-gray-300 hover:bg-ch-gray hover:text-white{% endif %} px-3 py-2 rounded-md text-sm font-medium">
+                            Users
+                        </a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    {% if request.session.admin_impersonating %}
+                    <a href="{% url 'admin_exit_impersonation' %}" class="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded-md text-sm font-medium">
+                        Exit Impersonation
+                    </a>
+                    {% endif %}
+                    <span class="text-sm text-gray-400">{{ user.username }}</span>
+                    <a href="{% url 'dashboard' %}" class="text-gray-300 hover:text-white text-sm">
+                        App
+                    </a>
+                    <a href="{% url 'logout' %}" class="text-gray-300 hover:text-white text-sm">
+                        Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Messages -->
+    {% if messages %}
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+        {% for message in messages %}
+        <div class="{% if message.tags == 'error' %}bg-red-900 border-red-700{% elif message.tags == 'success' %}bg-green-900 border-green-700{% else %}bg-blue-900 border-blue-700{% endif %} border-l-4 p-4 mb-4">
+            <p class="text-sm">{{ message }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,81 @@
+{% extends 'core/admin/base.html' %}
+
+{% block title %}Revenue Analytics{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div>
+        <h1 class="text-3xl font-bold text-white">Revenue Analytics</h1>
+        <p class="text-gray-400 mt-1">Monitor subscription revenue and growth</p>
+    </div>
+
+    <!-- Revenue Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-ch-dark rounded-lg p-6 border border-ch-gray">
+            <div class="text-sm text-gray-400">MRR</div>
+            <div class="text-3xl font-bold text-white mt-2">${{ mrr|floatformat:0 }}</div>
+            <div class="text-xs text-gray-500 mt-1">Monthly Recurring Revenue</div>
+        </div>
+
+        <div class="bg-ch-dark rounded-lg p-6 border border-ch-gray">
+            <div class="text-sm text-gray-400">ARR</div>
+            <div class="text-3xl font-bold text-white mt-2">${{ arr|floatformat:0 }}</div>
+            <div class="text-xs text-gray-500 mt-1">Annual Recurring Revenue</div>
+        </div>
+
+        <div class="bg-ch-dark rounded-lg p-6 border border-ch-gray">
+            <div class="text-sm text-gray-400">Average Revenue</div>
+            <div class="text-3xl font-bold text-white mt-2">${{ avg_revenue|floatformat:0 }}</div>
+            <div class="text-xs text-gray-500 mt-1">Per Organization</div>
+        </div>
+
+        <div class="bg-ch-dark rounded-lg p-6 border border-ch-gray">
+            <div class="text-sm text-gray-400">Active Subscriptions</div>
+            <div class="text-3xl font-bold text-white mt-2">{{ active_subscription_count }}</div>
+            <div class="text-xs text-gray-500 mt-1">Paying Customers</div>
+        </div>
+    </div>
+
+    <!-- Growth Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-ch-dark rounded-lg p-6 border border-ch-gray">
+            <div class="text-sm text-gray-400">New Subscriptions</div>
+            <div class="text-3xl font-bold text-green-500 mt-2">+{{ new_subscriptions }}</div>
+            <div class="text-xs text-gray-500 mt-1">Last 30 Days</div>
+        </div>
+
+        <div class="bg-ch-dark rounded-lg p-6 border border-ch-gray">
+            <div class="text-sm text-gray-400">Churned</div>
+            <div class="text-3xl font-bold text-red-500 mt-2">{{ churned_count }}</div>
+            <div class="text-xs text-gray-500 mt-1">Last 30 Days</div>
+        </div>
+
+        <div class="bg-ch-dark rounded-lg p-6 border border-ch-gray">
+            <div class="text-sm text-gray-400">Churn Rate</div>
+            <div class="text-3xl font-bold text-white mt-2">{{ churn_rate|floatformat:1 }}%</div>
+            <div class="text-xs text-gray-500 mt-1">Monthly Churn</div>
+        </div>
+    </div>
+
+    <!-- Revenue by Plan -->
+    <div class="bg-ch-dark rounded-lg p-6 border border-ch-gray">
+        <h2 class="text-xl font-semibold text-white mb-4">Revenue by Plan</h2>
+        <div class="space-y-4">
+            {% for plan_name, revenue in revenue_by_plan.items %}
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm text-gray-300">{{ plan_name }}</span>
+                    <span class="text-sm font-semibold text-white">${{ revenue|floatformat:0 }}/mo</span>
+                </div>
+                <div class="bg-ch-gray rounded-full h-2">
+                    <div class="bg-ch-gold h-2 rounded-full" style="width: {% widthratio revenue mrr 100 %}%"></div>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                    {% widthratio revenue mrr 100 %}% of MRR
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

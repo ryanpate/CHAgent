@@ -1,0 +1,129 @@
+{% extends 'core/admin/base.html' %}
+
+{% block title %}Organizations{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-white">Organizations</h1>
+            <p class="text-gray-400 mt-1">Manage all platform organizations</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-ch-dark rounded-lg p-4 border border-ch-gray">
+        <form method="get" class="flex flex-wrap gap-4">
+            <!-- Search -->
+            <div class="flex-1 min-w-64">
+                <input
+                    type="text"
+                    name="search"
+                    value="{{ search_query }}"
+                    placeholder="Search by name, slug, or email..."
+                    class="w-full bg-ch-gray text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-ch-gold focus:outline-none"
+                >
+            </div>
+
+            <!-- Status Filter -->
+            <select name="status" class="bg-ch-gray text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-ch-gold focus:outline-none">
+                <option value="">All Statuses</option>
+                <option value="trial" {% if current_status == 'trial' %}selected{% endif %}>Trial</option>
+                <option value="active" {% if current_status == 'active' %}selected{% endif %}>Active</option>
+                <option value="past_due" {% if current_status == 'past_due' %}selected{% endif %}>Past Due</option>
+                <option value="cancelled" {% if current_status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                <option value="suspended" {% if current_status == 'suspended' %}selected{% endif %}>Suspended</option>
+            </select>
+
+            <!-- Plan Filter -->
+            <select name="plan" class="bg-ch-gray text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-ch-gold focus:outline-none">
+                <option value="">All Plans</option>
+                {% for plan in plans %}
+                <option value="{{ plan.slug }}" {% if current_plan == plan.slug %}selected{% endif %}>{{ plan.name }}</option>
+                {% endfor %}
+            </select>
+
+            <button type="submit" class="bg-ch-gold hover:bg-ch-gold-muted text-black font-semibold px-6 py-2 rounded-lg">
+                Filter
+            </button>
+
+            {% if current_status or current_plan or search_query %}
+            <a href="{% url 'admin_organizations_list' %}" class="bg-ch-gray hover:bg-gray-700 text-white px-6 py-2 rounded-lg">
+                Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Organizations Table -->
+    <div class="bg-ch-dark rounded-lg border border-ch-gray overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-ch-gray">
+                <thead class="bg-ch-gray">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Organization</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Plan</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Members</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Volunteers</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Interactions</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Created</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-ch-gray">
+                    {% for org in organizations %}
+                    <tr class="hover:bg-ch-gray transition">
+                        <td class="px-4 py-3">
+                            <div class="text-sm font-medium text-white">{{ org.name }}</div>
+                            <div class="text-xs text-gray-400">{{ org.slug }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-300">
+                            {% if org.subscription_plan %}
+                            {{ org.subscription_plan.name }}
+                            <div class="text-xs text-gray-500">${{ org.subscription_plan.price_monthly|floatformat:0 }}/mo</div>
+                            {% else %}
+                            <span class="text-gray-500">No plan</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if org.subscription_status == 'active' %}
+                            <span class="px-2 py-1 text-xs bg-green-900 text-green-300 rounded">Active</span>
+                            {% elif org.subscription_status == 'trial' %}
+                            <span class="px-2 py-1 text-xs bg-yellow-900 text-yellow-300 rounded">Trial</span>
+                            {% elif org.subscription_status == 'past_due' %}
+                            <span class="px-2 py-1 text-xs bg-red-900 text-red-300 rounded">Past Due</span>
+                            {% elif org.subscription_status == 'cancelled' %}
+                            <span class="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded">Cancelled</span>
+                            {% elif org.subscription_status == 'suspended' %}
+                            <span class="px-2 py-1 text-xs bg-red-900 text-red-300 rounded">Suspended</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-white text-center">{{ org.member_count }}</td>
+                        <td class="px-4 py-3 text-sm text-white text-center">{{ org.volunteer_count }}</td>
+                        <td class="px-4 py-3 text-sm text-white text-center">{{ org.interaction_count }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-400">{{ org.created_at|date:"M d, Y" }}</td>
+                        <td class="px-4 py-3">
+                            <div class="flex space-x-2">
+                                <a href="{% url 'admin_organization_detail' org.id %}" class="text-ch-gold hover:text-ch-gold-muted text-sm">
+                                    View
+                                </a>
+                                <a href="{% url 'admin_organization_impersonate' org.id %}" class="text-blue-500 hover:text-blue-400 text-sm">
+                                    Impersonate
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-4 py-8 text-center text-gray-400">
+                            No organizations found
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

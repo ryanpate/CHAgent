@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import views, admin_views
 
 urlpatterns = [
     # Public pages
@@ -115,4 +115,14 @@ urlpatterns = [
     path('settings/members/<int:member_id>/remove/', views.org_remove_member, name='org_remove_member'),
     path('settings/invitations/<int:invitation_id>/cancel/', views.org_cancel_invitation, name='org_cancel_invitation'),
     path('settings/billing/', views.org_settings_billing, name='org_settings_billing'),
+    # Platform Admin Dashboard
+    path('platform-admin/', admin_views.admin_dashboard, name='admin_dashboard'),
+    path('platform-admin/organizations/', admin_views.admin_organizations_list, name='admin_organizations_list'),
+    path('platform-admin/organizations/<int:org_id>/', admin_views.admin_organization_detail, name='admin_organization_detail'),
+    path('platform-admin/organizations/<int:org_id>/impersonate/', admin_views.admin_organization_impersonate, name='admin_organization_impersonate'),
+    path('platform-admin/organizations/<int:org_id>/update-status/', admin_views.admin_organization_update_status, name='admin_organization_update_status'),
+    path('platform-admin/exit-impersonation/', admin_views.admin_exit_impersonation, name='admin_exit_impersonation'),
+    path('platform-admin/revenue/', admin_views.admin_revenue_analytics, name='admin_revenue_analytics'),
+    path('platform-admin/usage/', admin_views.admin_usage_analytics, name='admin_usage_analytics'),
+    path('platform-admin/users/', admin_views.admin_users_list, name='admin_users_list'),
 ]
