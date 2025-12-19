@@ -128,8 +128,8 @@ def admin_organizations_list(request):
     # Annotate with usage metrics
     organizations = organizations.annotate(
         member_count=Count('memberships', filter=Q(memberships__is_active=True)),
-        volunteer_count=Count('volunteer', distinct=True),
-        interaction_count=Count('interaction', distinct=True),
+        volunteer_count=Count('volunteers', distinct=True),
+        interaction_count=Count('interactions', distinct=True),
     )
 
     # Order by most recent first
@@ -181,7 +181,7 @@ def admin_organization_detail(request, org_id):
         'announcements': Announcement.objects.filter(organization=organization).count(),
         'channels': Channel.objects.filter(organization=organization).count(),
         'projects': Project.objects.filter(organization=organization).count(),
-        'tasks': Task.objects.filter(organization=organization).count(),
+        'tasks': Task.objects.filter(project__organization=organization).count(),
     }
 
     # Recent activity (last 30 days)
@@ -366,23 +366,23 @@ def admin_usage_analytics(request):
 
     # Feature adoption
     orgs_with_volunteers = Organization.objects.annotate(
-        vol_count=Count('volunteer')
+        vol_count=Count('volunteers')
     ).filter(vol_count__gt=0).count()
 
     orgs_with_interactions = Organization.objects.annotate(
-        int_count=Count('interaction')
+        int_count=Count('interactions')
     ).filter(int_count__gt=0).count()
 
     orgs_with_followups = Organization.objects.annotate(
-        fu_count=Count('followup')
+        fu_count=Count('followups')
     ).filter(fu_count__gt=0).count()
 
     orgs_with_channels = Organization.objects.annotate(
-        ch_count=Count('channel')
+        ch_count=Count('channels')
     ).filter(ch_count__gt=0).count()
 
     orgs_with_projects = Organization.objects.annotate(
-        proj_count=Count('project')
+        proj_count=Count('projects')
     ).filter(proj_count__gt=0).count()
 
     total_orgs = Organization.objects.filter(subscription_status__in=['active', 'trial']).count()
