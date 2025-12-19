@@ -425,7 +425,7 @@ def admin_users_list(request):
     List all platform users with activity metrics.
     """
     users = User.objects.annotate(
-        org_count=Count('organizationmembership', filter=Q(organizationmembership__is_active=True))
+        org_count=Count('organization_memberships', filter=Q(organization_memberships__is_active=True))
     ).order_by('-date_joined')
 
     # Apply search
