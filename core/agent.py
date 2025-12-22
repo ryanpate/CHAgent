@@ -757,6 +757,11 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
                 r'(\d{1,2}-\d{1,2}(?:-\d{2,4})?)',
                 # Easter pattern - matches "Easter", "Easter 2025", "Easter last year", "last Easter"
                 r'((?:last|this|next)\s+easter|easter(?:\s+\d{4}|\s+(?:last|this|next)\s+year)?)',
+                # Holiday patterns - Christmas Eve, Christmas, Thanksgiving, Good Friday
+                r'(christmas\s+eve(?:\s+\d{4})?)',
+                r'(christmas(?:\s+\d{4})?)',
+                r'(thanksgiving(?:\s+\d{4})?)',
+                r'(good\s+friday(?:\s+\d{4})?)',
             ]
             for pattern in date_patterns:
                 match = re.search(pattern, message_lower)
