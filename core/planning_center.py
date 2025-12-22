@@ -2056,6 +2056,33 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             target_date = today - timedelta(days=1)
         elif 'today' in date_lower:
             target_date = today
+        elif 'christmas eve' in date_lower:
+            # Handle Christmas Eve - December 24
+            year_match = re.search(r'(\d{4})', date_lower)
+            year = int(year_match.group(1)) if year_match else today.year
+            target_date = datetime(year, 12, 24).date()
+            logger.info(f"Calculated Christmas Eve {year} as {target_date}")
+        elif 'christmas' in date_lower:
+            # Handle Christmas - December 25
+            year_match = re.search(r'(\d{4})', date_lower)
+            year = int(year_match.group(1)) if year_match else today.year
+            target_date = datetime(year, 12, 25).date()
+            logger.info(f"Calculated Christmas {year} as {target_date}")
+        elif 'thanksgiving' in date_lower:
+            # Thanksgiving is the 4th Thursday of November
+            year_match = re.search(r'(\d{4})', date_lower)
+            year = int(year_match.group(1)) if year_match else today.year
+            nov_first = datetime(year, 11, 1)
+            first_thursday = nov_first + timedelta(days=(3 - nov_first.weekday() + 7) % 7)
+            target_date = (first_thursday + timedelta(weeks=3)).date()
+            logger.info(f"Calculated Thanksgiving {year} as {target_date}")
+        elif 'good friday' in date_lower:
+            # Good Friday is 2 days before Easter
+            year_match = re.search(r'(\d{4})', date_lower)
+            year = int(year_match.group(1)) if year_match else today.year
+            easter = self._calculate_easter(year)
+            target_date = easter - timedelta(days=2)
+            logger.info(f"Calculated Good Friday {year} as {target_date}")
         elif 'easter' in date_lower:
             # Handle Easter date queries
             # Supported formats:
