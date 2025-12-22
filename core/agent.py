@@ -583,7 +583,7 @@ def _has_date_reference(message_lower: str) -> bool:
         r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}',
         r'\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?',  # MM/DD or MM-DD format
         r'(yesterday|today|tomorrow)',
-        r'(easter|christmas|thanksgiving|good\s+friday)(\s+\d{4})?',
+        r'(easter|christmas(\s+eve)?|thanksgiving|good\s+friday)(\s+\d{4})?',
         r'(that|the)\s+(day|date|sunday|service)',
     ]
     return any(re.search(p, message_lower) for p in date_patterns)
@@ -635,7 +635,8 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
         # Added "schedule" (without 'd') to handle common typo, and "scheduled to serve" pattern
         # Also handles "servers" typo for "serves"
         # Also handles contractions like "who's playing" and "what's the team"
-        'team_schedule': r'(who\s+(is|are|was|were)\s+(on|serving|scheduled?|playing|singing)|who\'?s\s+(playing|scheduled|singing|serving)|what\'?s\s+the\s+team|who\s+is\s+scheduled?\s+to\s+serve|who\s+serve[sd]?|who\s+servers?|who\s+played\s+(?:on|last|this)|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled?\s+(to\s+serve\s+)?on|scheduled\s+volunteer|serving\s+(on|this|next|last)|band\s+for|vocals?\s+for|tech\s+for|who\s+(do|did)\s+we\s+have)',
+        # Added "who plays" pattern for simple present tense queries like "who plays Christmas Eve?"
+        'team_schedule': r'(who\s+(is|are|was|were)\s+(on|serving|scheduled?|playing|singing)|who\'?s\s+(playing|scheduled|singing|serving)|what\'?s\s+the\s+team|who\s+is\s+scheduled?\s+to\s+serve|who\s+serve[sd]?|who\s+servers?|who\s+plays?\s|who\s+played\s+(?:on|last|this)|volunteer[s]?\s+(on|for|are)|team\s+member|who[\'s]*\s+(on|serving)|what\s+volunteer|scheduled?\s+(to\s+serve\s+)?on|scheduled\s+volunteer|serving\s+(on|this|next|last)|band\s+for|vocals?\s+for|tech\s+for|who\s+(do|did)\s+we\s+have)',
         # Song history - asking WHEN a song was played
         # Includes patterns like "when did we last play X", "when was the last time we did X"
         'song_history': r'when\s+(was|did)\s+(the\s+)?(this\s+)?song\s+.*(used|played|performed|scheduled)|when\s+was\s+.+\s+played\s+(last|most\s+recently)|song\s+(usage|history)|last\s+time\s+.*(song|played|used)|how\s+(often|many\s+times)\s+.*(song|play)|have\s+we\s+(ever\s+)?(played|done|used)|(?:the\s+)?(?:title|song|name)\s+is\s+|it\'?s\s+called|when\s+did\s+we\s+(?:last\s+)?play\b|when\s+was\s+the\s+last\s+time\s+we\s+(did|played|used)',

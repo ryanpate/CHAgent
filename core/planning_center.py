@@ -2833,6 +2833,31 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         elif date_str_lower == 'yesterday':
             return today - timedelta(days=1)
 
+        # Handle holidays
+        year = today.year
+        # Check if a year is specified in the date string
+        year_match = re.search(r'(\d{4})', date_str)
+        if year_match:
+            year = int(year_match.group(1))
+
+        if 'christmas eve' in date_str_lower:
+            return datetime(year, 12, 24).date()
+        elif 'christmas' in date_str_lower:
+            return datetime(year, 12, 25).date()
+        elif 'thanksgiving' in date_str_lower:
+            # Thanksgiving is the 4th Thursday of November
+            nov_first = datetime(year, 11, 1)
+            # Find first Thursday
+            first_thursday = nov_first + timedelta(days=(3 - nov_first.weekday() + 7) % 7)
+            # Add 3 weeks for 4th Thursday
+            return (first_thursday + timedelta(weeks=3)).date()
+        elif 'good friday' in date_str_lower:
+            # Good Friday is 2 days before Easter
+            easter = self._calculate_easter(year)
+            return easter - timedelta(days=2)
+        elif 'easter' in date_str_lower:
+            return self._calculate_easter(year)
+
         # Handle "this/next/last Sunday" etc.
         day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
         for i, day_name in enumerate(day_names):
