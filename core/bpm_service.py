@@ -14,6 +14,7 @@ from typing import Optional, Tuple
 
 import requests
 from django.conf import settings
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,9 @@ BPM_PATTERNS = [
 # Reasonable BPM range for worship music
 MIN_BPM = 40
 MAX_BPM = 200
+
+# Negative cache timeout (24 hours) - how long to remember "song not found" results
+NEGATIVE_CACHE_TIMEOUT = 60 * 60 * 24
 
 
 def extract_bpm_from_text(text: str) -> Tuple[Optional[int], Optional[str]]:
@@ -173,6 +177,9 @@ def lookup_bpm_songbpm(title: str, artist: str = None) -> Tuple[Optional[int], O
     when displaying BPM data from this source. The format_song_details() function
     in agent.py includes this attribution automatically.
 
+    OPTIMIZATION: Uses only the /search/ endpoint since it returns tempo directly,
+    avoiding a second API call to /song/. This halves our API usage.
+
     Args:
         title: Song title to search for
         artist: Optional artist name for more accurate matching
@@ -190,7 +197,8 @@ def lookup_bpm_songbpm(title: str, artist: str = None) -> Tuple[Optional[int], O
         return None, None
 
     try:
-        # First search for the song
+        # Search for the song - the search results include tempo directly,
+        # so we don't need a second API call to /song/
         search_query = title
         if artist:
             search_query = f"{artist} {title}"
@@ -200,6 +208,7 @@ def lookup_bpm_songbpm(title: str, artist: str = None) -> Tuple[Optional[int], O
             'api_key': api_key,
             'type': 'song',
             'lookup': search_query,
+            'limit': 10,  # Limit results to reduce response size
         }
 
         logger.info(f"Searching SongBPM API for: {search_query}")
@@ -214,38 +223,25 @@ def lookup_bpm_songbpm(title: str, artist: str = None) -> Tuple[Optional[int], O
             logger.info(f"No results from SongBPM API for: {search_query}")
             return None, None
 
-        # Find best match (first result that has tempo)
+        # Find best match - search results already include tempo!
         for result in search_results:
             song_id = result.get('id')
-            if not song_id:
-                continue
-
-            # Get full song details
-            song_url = f"{SONGBPM_API_BASE}/song/"
-            song_params = {
-                'api_key': api_key,
-                'id': song_id,
-            }
-
-            song_response = requests.get(song_url, params=song_params, timeout=15)
-            song_response.raise_for_status()
-            song_data = song_response.json()
-
-            song_info = song_data.get('song', {})
-            tempo = song_info.get('tempo')
+            tempo = result.get('tempo')
 
             if tempo:
                 try:
                     bpm = int(float(tempo))
                     if MIN_BPM <= bpm <= MAX_BPM:
+                        # Get artist info from the nested artist object
+                        artist_info = result.get('artist', {})
                         metadata = {
                             'songbpm_id': song_id,
-                            'matched_title': song_info.get('title', ''),
-                            'matched_artist': song_info.get('artist', {}).get('name', ''),
-                            'key': song_info.get('key_of', ''),
-                            'time_signature': song_info.get('time_sig', ''),
+                            'matched_title': result.get('title', ''),
+                            'matched_artist': artist_info.get('name', '') if isinstance(artist_info, dict) else '',
+                            'key': result.get('key_of', ''),
+                            'time_signature': result.get('time_sig', ''),
                         }
-                        logger.info(f"SongBPM API found BPM {bpm} for '{song_info.get('title')}'")
+                        logger.info(f"SongBPM API found BPM {bpm} for '{result.get('title')}'")
                         return bpm, metadata
                 except (ValueError, TypeError):
                     continue
@@ -411,21 +407,30 @@ def get_song_bpm(song_id: str, organization=None, song_details: dict = None,
                 return bpm, 'audio_analysis', confidence
 
     # Step 4: SongBPM API lookup (final fallback)
-    bpm, metadata = lookup_bpm_songbpm(song_title, song_author)
-    if bpm:
-        SongBPMCache.set_cached_bpm(
-            pco_song_id=song_id,
-            bpm=bpm,
-            bpm_source='songbpm_api',
-            song_title=song_title,
-            organization=organization,
-            song_artist=song_author,
-            confidence='medium',
-            source_metadata=metadata or {}
-        )
+    # Check negative cache first to avoid repeated API calls for songs not in database
+    negative_cache_key = f"bpm_not_found:{song_id}"
+    if cache.get(negative_cache_key):
+        logger.info(f"Skipping SongBPM API for '{song_title}' - cached as not found")
+    else:
+        bpm, metadata = lookup_bpm_songbpm(song_title, song_author)
+        if bpm:
+            SongBPMCache.set_cached_bpm(
+                pco_song_id=song_id,
+                bpm=bpm,
+                bpm_source='songbpm_api',
+                song_title=song_title,
+                organization=organization,
+                song_artist=song_author,
+                confidence='medium',
+                source_metadata=metadata or {}
+            )
 
-        logger.info(f"Found BPM {bpm} from SongBPM API for '{song_title}'")
-        return bpm, 'songbpm_api', 'medium'
+            logger.info(f"Found BPM {bpm} from SongBPM API for '{song_title}'")
+            return bpm, 'songbpm_api', 'medium'
+        else:
+            # Cache the "not found" result to avoid repeated API calls
+            cache.set(negative_cache_key, True, NEGATIVE_CACHE_TIMEOUT)
+            logger.info(f"Cached 'not found' for '{song_title}' - will skip API for 24 hours")
 
     logger.info(f"No BPM found for '{song_title}' from any source")
     return None, None, None
