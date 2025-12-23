@@ -379,9 +379,10 @@ def get_song_bpm(song_id: str, organization=None, song_details: dict = None,
     auth = (services_api.app_id, services_api.secret) if services_api.is_configured else None
 
     for attach in attachments:
-        content_type = attach.get('content_type', '')
-        filename = attach.get('filename', '')
-        url = attach.get('url', '')
+        # Use 'or' to handle both missing keys AND explicit None values
+        content_type = attach.get('content_type') or ''
+        filename = attach.get('filename') or ''
+        url = attach.get('url') or ''
 
         # Check if this is an audio file
         is_audio = (
