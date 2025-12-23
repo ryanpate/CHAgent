@@ -1,10 +1,10 @@
 # Nixpacks configuration for Railway
 # See: https://nixpacks.com/docs/configuration/file
 
-# System packages needed for OCR (scanned PDF chord charts)
+# System packages needed for OCR (scanned PDF chord charts) and audio analysis (BPM detection)
 # These are additional packages - nixpacks will still auto-detect Python
 [phases.setup]
-aptPkgs = ["tesseract-ocr", "poppler-utils"]
+aptPkgs = ["tesseract-ocr", "poppler-utils", "libsndfile1", "ffmpeg"]
 
 [phases.build]
 # Only run collectstatic during build - it doesn't need DATABASE_URL
