@@ -18,7 +18,8 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 # SongBPM API configuration
-SONGBPM_API_BASE = "https://api.getsongbpm.com"
+# Note: api.getsong.co is the correct URL (api.getsongbpm.com has Cloudflare protection)
+SONGBPM_API_BASE = "https://api.getsong.co"
 SONGBPM_API_KEY = getattr(settings, 'SONGBPM_API_KEY', '')
 
 # BPM extraction regex patterns for chord charts
