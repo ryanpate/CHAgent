@@ -756,7 +756,7 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
         # Try to extract date for setlist or team_schedule queries
         if query_type in ['setlist', 'team_schedule'] and not extracted_value:
             date_patterns = [
-                r'(last\s+sunday|this\s+sunday|next\s+sunday|yesterday|today)',
+                r'(last\s+sunday|this\s+sunday|next\s+sunday|yesterday|today|tomorrow)',
                 r'(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?',
                 r'(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
                 r'(\d{1,2}-\d{1,2}(?:-\d{2,4})?)',

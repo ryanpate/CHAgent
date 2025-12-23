@@ -2056,6 +2056,9 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             target_date = today - timedelta(days=1)
         elif 'today' in date_lower:
             target_date = today
+        elif 'tomorrow' in date_lower:
+            target_date = today + timedelta(days=1)
+            logger.info(f"Parsed 'tomorrow' as {target_date}")
         elif 'christmas eve' in date_lower:
             # Handle Christmas Eve - December 24
             year_match = re.search(r'(\d{4})', date_lower)
