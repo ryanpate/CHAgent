@@ -709,6 +709,11 @@ def is_song_or_setlist_query(message: str) -> Tuple[bool, str, Optional[str]]:
             r"'([^']+)'",  # Single-quoted title
             r'(?:chord\s*chart|chords?|lyrics?|song)\s+(?:for|to)\s+["\']?([^"\'?]+)["\']?',
             r'(?:find|search|look\s*up|get)\s+(?:the\s+)?(?:song\s+)?["\']?([^"\'?]+)["\']?',
+            # BPM/tempo/key extraction patterns
+            r'(?:what\s+is|what\'?s)\s+the\s+(?:bpm|tempo|key)\s+(?:for|of)\s+["\']?(.+?)["\']?\??$',  # "what is the BPM of Gratitude?"
+            r'(?:bpm|tempo)\s+(?:for|of)\s+["\']?(.+?)["\']?\??$',  # "BPM of Gratitude"
+            r'what\s+(?:key|bpm|tempo)\s+is\s+["\']?(.+?)["\']?\s+in\??$',  # "what key is Gratitude in?"
+            r'how\s+(?:fast|long)\s+is\s+["\']?(.+?)["\']?\??$',  # "how fast is Gratitude?"
             # Song history patterns - "when is/was the last time [song] was played"
             r'(?:when\s+(?:is|was)\s+)?(?:the\s+)?last\s+time\s+(.+?)\s+was\s+(?:played|used|scheduled|performed)',
             # "when was the song [title] played last?"
