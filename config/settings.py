@@ -196,6 +196,9 @@ LOGIN_URL = '/accounts/login/'
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 
+# SongBPM API for BPM lookups (https://getsongbpm.com)
+SONGBPM_API_KEY = os.environ.get('SONGBPM_API_KEY', '')
+
 # Optional: Planning Center Integration
 PLANNING_CENTER_APP_ID = os.environ.get('PLANNING_CENTER_APP_ID', '')
 PLANNING_CENTER_SECRET = os.environ.get('PLANNING_CENTER_SECRET', '')

@@ -13,6 +13,11 @@ except ImportError:
     VectorField = None
 
 
+def generate_invitation_token():
+    """Generate a secure token for organization invitations."""
+    return secrets.token_urlsafe(32)
+
+
 # =============================================================================
 # Multi-Tenancy Models - Organization & Subscription Management
 # =============================================================================
@@ -478,7 +483,7 @@ class OrganizationInvitation(models.Model):
     token = models.CharField(
         max_length=100,
         unique=True,
-        default=lambda: secrets.token_urlsafe(32)
+        default=generate_invitation_token
     )
     status = models.CharField(
         max_length=20,
@@ -3063,3 +3068,172 @@ class NotificationLog(models.Model):
 
     def __str__(self):
         return f"{self.notification_type}: {self.title} -> {self.user.username}"
+
+
+class SongBPMCache(models.Model):
+    """
+    Caches BPM values for songs with source tracking.
+
+    BPM values are retrieved from multiple sources in priority order:
+    1. PCO arrangement BPM (authoritative)
+    2. Chord chart text parsing
+    3. Audio analysis (librosa)
+    4. SongBPM API lookup
+    """
+    BPM_SOURCE_CHOICES = [
+        ('pco', 'Planning Center'),
+        ('chord_chart', 'Chord Chart Text'),
+        ('audio_analysis', 'Audio Analysis'),
+        ('songbpm_api', 'SongBPM API'),
+        ('manual', 'Manual Entry'),
+    ]
+
+    CONFIDENCE_CHOICES = [
+        ('high', 'High'),
+        ('medium', 'Medium'),
+        ('low', 'Low'),
+    ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='song_bpm_caches',
+        null=True,
+        blank=True
+    )
+
+    # PCO song identifiers
+    pco_song_id = models.CharField(
+        max_length=50,
+        db_index=True,
+        help_text="Planning Center Online song ID"
+    )
+    pco_arrangement_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="PCO arrangement ID (if BPM is arrangement-specific)"
+    )
+
+    # Song metadata for SongBPM API lookups and display
+    song_title = models.CharField(
+        max_length=255,
+        help_text="Song title for display and API lookups"
+    )
+    song_artist = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Song artist/author for API lookups"
+    )
+
+    # BPM data
+    bpm = models.PositiveIntegerField(
+        help_text="Beats per minute (tempo)"
+    )
+    bpm_source = models.CharField(
+        max_length=20,
+        choices=BPM_SOURCE_CHOICES,
+        db_index=True,
+        help_text="Source where BPM was obtained"
+    )
+    confidence = models.CharField(
+        max_length=10,
+        choices=CONFIDENCE_CHOICES,
+        default='high',
+        help_text="Confidence level of the BPM value"
+    )
+
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Source-specific metadata
+    source_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Additional metadata from the BPM source"
+    )
+
+    class Meta:
+        ordering = ['-updated_at']
+        verbose_name = 'Song BPM Cache'
+        verbose_name_plural = 'Song BPM Caches'
+        indexes = [
+            models.Index(fields=['pco_song_id', 'organization']),
+            models.Index(fields=['song_title', 'song_artist']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'pco_song_id', 'pco_arrangement_id'],
+                name='unique_org_song_arrangement_bpm'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.song_title} - {self.bpm} BPM ({self.get_bpm_source_display()})"
+
+    @classmethod
+    def get_cached_bpm(cls, pco_song_id: str, organization=None, arrangement_id: str = None):
+        """
+        Get cached BPM for a song.
+
+        Args:
+            pco_song_id: PCO song ID
+            organization: Organization instance (for multi-tenant)
+            arrangement_id: Optional arrangement ID for arrangement-specific BPM
+
+        Returns:
+            Tuple of (bpm, source, confidence) or (None, None, None) if not cached
+        """
+        filters = {'pco_song_id': pco_song_id}
+        if organization:
+            filters['organization'] = organization
+        if arrangement_id:
+            filters['pco_arrangement_id'] = arrangement_id
+
+        cache_entry = cls.objects.filter(**filters).first()
+        if cache_entry:
+            return (cache_entry.bpm, cache_entry.bpm_source, cache_entry.confidence)
+        return (None, None, None)
+
+    @classmethod
+    def set_cached_bpm(cls, pco_song_id: str, bpm: int, bpm_source: str,
+                       song_title: str, organization=None, arrangement_id: str = None,
+                       song_artist: str = '', confidence: str = 'high',
+                       source_metadata: dict = None):
+        """
+        Cache a BPM value for a song.
+
+        Args:
+            pco_song_id: PCO song ID
+            bpm: BPM value
+            bpm_source: Source of the BPM (pco, chord_chart, audio_analysis, songbpm_api)
+            song_title: Song title
+            organization: Organization instance
+            arrangement_id: Optional arrangement ID
+            song_artist: Song artist/author
+            confidence: Confidence level (high, medium, low)
+            source_metadata: Additional metadata from the source
+
+        Returns:
+            SongBPMCache instance
+        """
+        defaults = {
+            'bpm': bpm,
+            'bpm_source': bpm_source,
+            'song_title': song_title,
+            'song_artist': song_artist or '',
+            'confidence': confidence,
+            'source_metadata': source_metadata or {},
+        }
+
+        lookup = {
+            'pco_song_id': pco_song_id,
+            'organization': organization,
+            'pco_arrangement_id': arrangement_id,
+        }
+
+        cache_entry, created = cls.objects.update_or_create(
+            **lookup, defaults=defaults
+        )
+        return cache_entry

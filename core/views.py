@@ -218,7 +218,8 @@ def chat_send(request):
         )
     else:
         # Process as a question using RAG
-        response_text = query_agent(message, request.user, session_id)
+        organization = getattr(request, 'organization', None)
+        response_text = query_agent(message, request.user, session_id, organization=organization)
 
     # Get the two most recent messages (user + assistant)
     recent_messages = ChatMessage.objects.filter(

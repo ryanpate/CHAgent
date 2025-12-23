@@ -1169,12 +1169,13 @@ def format_team_availability(availability_data: dict) -> str:
     return '\n'.join(parts)
 
 
-def format_song_details(song: dict) -> str:
+def format_song_details(song: dict, organization=None) -> str:
     """
     Format song details into a readable string for the AI context.
 
     Args:
         song: Song details dict from PCO API.
+        organization: Optional Organization instance for BPM cache lookup.
 
     Returns:
         Formatted string with song info and attachments.
@@ -1191,6 +1192,33 @@ def format_song_details(song: dict) -> str:
         parts.append(f"CCLI#: {song.get('ccli_number')}")
     if song.get('copyright'):
         parts.append(f"Copyright: {song.get('copyright')}")
+
+    # Enhanced BPM retrieval with fallbacks
+    song_id = song.get('id')
+    bpm_value = None
+    bpm_source = None
+
+    if song_id:
+        try:
+            from .bpm_service import get_song_bpm
+            bpm_value, bpm_source, confidence = get_song_bpm(
+                song_id,
+                organization=organization,
+                song_details=song
+            )
+        except Exception as e:
+            logger.warning(f"Error retrieving BPM for song {song_id}: {e}")
+
+    # Display BPM with source if found
+    if bpm_value:
+        source_labels = {
+            'pco': 'Planning Center',
+            'chord_chart': 'extracted from chord chart',
+            'audio_analysis': 'audio analysis',
+            'songbpm_api': '[GetSongBPM.com](https://getsongbpm.com)',  # Attribution required per API terms
+        }
+        source_label = source_labels.get(bpm_source, bpm_source or 'unknown')
+        parts.append(f"BPM: {bpm_value} (source: {source_label})")
 
     # Track if we found any lyrics or chord content
     has_lyrics_content = False
@@ -2521,7 +2549,7 @@ def detect_song_selection(message: str, pending_suggestions: list) -> Optional[i
     return None
 
 
-def handle_song_selection(selection_index: int, pending_suggestions: list, query_type: str = 'song_info') -> str:
+def handle_song_selection(selection_index: int, pending_suggestions: list, query_type: str = 'song_info', organization=None) -> str:
     """
     Handle a song selection by fetching the full details of the selected song.
 
@@ -2529,6 +2557,7 @@ def handle_song_selection(selection_index: int, pending_suggestions: list, query
         selection_index: 0-based index of the selected song.
         pending_suggestions: List of pending song suggestions.
         query_type: Type of data requested (lyrics, chord_chart, song_info, song_history).
+        organization: Optional Organization instance for BPM cache lookup.
 
     Returns:
         Formatted string with the song details.
@@ -2561,7 +2590,7 @@ def handle_song_selection(selection_index: int, pending_suggestions: list, query
         song_details = services_api.get_song_with_attachments(song_title, fetch_content=True)
 
         if song_details:
-            return format_song_details(song_details)
+            return format_song_details(song_details, organization=organization)
         else:
             return f"\n[SONG: Could not retrieve details for '{song_title}'.]\n"
 
@@ -2937,7 +2966,7 @@ def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None, ser
             return f"\n[SERVICE PLAN: No service plan found for '{date_str}'.]\n"
 
 
-def query_agent(question: str, user, session_id: str) -> str:
+def query_agent(question: str, user, session_id: str, organization=None) -> str:
     """
     Answer a question using RAG (Retrieval Augmented Generation):
     1. Get/create conversation context for tracking state
@@ -2950,6 +2979,7 @@ def query_agent(question: str, user, session_id: str) -> str:
         question: The user's question.
         user: The user asking the question.
         session_id: The chat session ID for conversation history.
+        organization: Optional Organization instance for multi-tenant features.
 
     Returns:
         The AI assistant's response.
@@ -2993,7 +3023,7 @@ def query_agent(question: str, user, session_id: str) -> str:
                     break
 
             # Handle the selection and get the song data
-            song_data_context = handle_song_selection(selection_index, pending_suggestions, query_type)
+            song_data_context = handle_song_selection(selection_index, pending_suggestions, query_type, organization=organization)
 
             # Clear the pending suggestions
             conversation_context.clear_pending_song_suggestions()
@@ -3546,7 +3576,7 @@ def query_agent(question: str, user, session_id: str) -> str:
                                 if song_title:
                                     song_details = services_api.get_song_with_attachments(song_title)
                                     if song_details:
-                                        song_details_parts.append(format_song_details(song_details))
+                                        song_details_parts.append(format_song_details(song_details, organization=organization))
                                         logger.info(f"Fetched attachments for '{song_title}'")
                             if song_details_parts:
                                 song_data_context += "\n" + "\n".join(song_details_parts)
@@ -3624,7 +3654,7 @@ def query_agent(question: str, user, session_id: str) -> str:
                     search_result = services_api.search_song_with_suggestions(song_to_lookup)
 
                     if search_result['found'] and search_result['song']:
-                        song_data_context = format_song_details(search_result['song'])
+                        song_data_context = format_song_details(search_result['song'], organization=organization)
                         # Store the song for future follow-ups
                         actual_title = search_result['song'].get('title', song_to_lookup)
                         conversation_context.set_current_song(actual_title)

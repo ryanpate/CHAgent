@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
-from .models import Volunteer, Interaction, ChatMessage, ResponseFeedback, ReportCache
+from .models import Volunteer, Interaction, ChatMessage, ResponseFeedback, ReportCache, SongBPMCache
 
 
 @admin.register(Volunteer)
@@ -227,3 +227,87 @@ class ReportCacheAdmin(admin.ModelAdmin):
     def clear_all_caches(self, request, queryset):
         count = ReportCache.clear_all()
         self.message_user(request, f'{count} cache entry(ies) deleted.')
+
+
+@admin.register(SongBPMCache)
+class SongBPMCacheAdmin(admin.ModelAdmin):
+    """Admin configuration for SongBPMCache model."""
+    list_display = (
+        'song_title',
+        'bpm',
+        'bpm_source_badge',
+        'confidence_badge',
+        'song_artist',
+        'organization',
+        'updated_at',
+    )
+    list_filter = ('bpm_source', 'confidence', 'organization', 'created_at')
+    search_fields = ('song_title', 'song_artist', 'pco_song_id')
+    ordering = ('-updated_at',)
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Song Information', {
+            'fields': (
+                'song_title',
+                'song_artist',
+                'pco_song_id',
+                'pco_arrangement_id',
+                'organization',
+            )
+        }),
+        ('BPM Data', {
+            'fields': (
+                'bpm',
+                'bpm_source',
+                'confidence',
+                'source_metadata',
+            )
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+    actions = ['clear_selected_cache']
+
+    def bpm_source_badge(self, obj):
+        """Display BPM source with color badge."""
+        colors = {
+            'pco': '#22c55e',  # Green
+            'chord_chart': '#3b82f6',  # Blue
+            'audio_analysis': '#f59e0b',  # Amber
+            'songbpm_api': '#8b5cf6',  # Purple
+            'manual': '#6b7280',  # Gray
+        }
+        color = colors.get(obj.bpm_source, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; '
+            'border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_bpm_source_display()
+        )
+    bpm_source_badge.short_description = 'Source'
+    bpm_source_badge.admin_order_field = 'bpm_source'
+
+    def confidence_badge(self, obj):
+        """Display confidence level with color badge."""
+        colors = {
+            'high': '#22c55e',  # Green
+            'medium': '#f59e0b',  # Amber
+            'low': '#ef4444',  # Red
+        }
+        color = colors.get(obj.confidence, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; '
+            'border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_confidence_display()
+        )
+    confidence_badge.short_description = 'Confidence'
+    confidence_badge.admin_order_field = 'confidence'
+
+    @admin.action(description='Clear selected BPM cache entries')
+    def clear_selected_cache(self, request, queryset):
+        count = queryset.count()
+        queryset.delete()
+        self.message_user(request, f'{count} BPM cache entry(ies) deleted.')
