@@ -484,13 +484,21 @@ def notify_task_assignment(task, user):
 
     due_info = f" (due {task.due_date.strftime('%b %d')})" if task.due_date else ""
 
+    # Handle standalone tasks vs project tasks
+    if task.project:
+        url = f'/comms/projects/{task.project.id}/tasks/{task.id}/'
+        data = {'task_id': task.id, 'project_id': task.project.id}
+    else:
+        url = f'/tasks/{task.id}/'
+        data = {'task_id': task.id}
+
     return send_notification_to_user(
         user=user,
         notification_type='followup',  # Reuse followup type for task notifications
         title=f"Task assigned: {task.title}",
         body=f"{assigner_name} assigned you to this task{due_info}",
-        url=f'/comms/projects/{task.project.id}/tasks/{task.id}/',
-        data={'task_id': task.id, 'project_id': task.project.id},
+        url=url,
+        data=data,
         priority='high' if task.priority in ['high', 'urgent'] else 'normal',
     )
 
@@ -499,15 +507,25 @@ def notify_task_due_soon(task):
     """
     Send notification for a task that's due soon (e.g., today or tomorrow).
     """
+    # Handle standalone tasks vs project tasks
+    if task.project:
+        url = f'/comms/projects/{task.project.id}/tasks/{task.id}/'
+        data = {'task_id': task.id, 'project_id': task.project.id}
+        context = task.project.name
+    else:
+        url = f'/tasks/{task.id}/'
+        data = {'task_id': task.id}
+        context = 'Personal Task'
+
     total_sent = 0
     for user in task.assignees.all():
         sent = send_notification_to_user(
             user=user,
             notification_type='followup',
             title=f"Task due soon: {task.title}",
-            body=f"Due {task.due_date.strftime('%b %d')} - {task.project.name}",
-            url=f'/comms/projects/{task.project.id}/tasks/{task.id}/',
-            data={'task_id': task.id, 'project_id': task.project.id},
+            body=f"Due {task.due_date.strftime('%b %d')} - {context}",
+            url=url,
+            data=data,
             priority='high',
         )
         total_sent += sent
@@ -521,6 +539,12 @@ def notify_task_comment(comment):
     task = comment.task
     author = comment.author
     author_name = author.display_name or author.username if author else 'Someone'
+
+    # Handle standalone tasks vs project tasks
+    if task.project:
+        url = f'/comms/projects/{task.project.id}/tasks/{task.id}/'
+    else:
+        url = f'/tasks/{task.id}/'
 
     # Notify all assignees except the commenter
     users_to_notify = set(task.assignees.all())
@@ -540,7 +564,7 @@ def notify_task_comment(comment):
             notification_type='channel',  # Reuse channel type for task comments
             title=f"Comment on: {task.title}",
             body=f"{author_name}: {comment.content[:80]}...",
-            url=f'/comms/projects/{task.project.id}/tasks/{task.id}/',
+            url=url,
             data={'task_id': task.id, 'comment_id': comment.id},
         )
         total_sent += sent
