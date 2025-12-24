@@ -1,7 +1,11 @@
 from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
-from .models import Volunteer, Interaction, ChatMessage, ResponseFeedback, ReportCache, SongBPMCache
+from .models import (
+    Volunteer, Interaction, ChatMessage, ResponseFeedback, ReportCache, SongBPMCache,
+    Announcement, AnnouncementRead, Channel, ChannelMessage, DirectMessage,
+    Project, Task, TaskComment, TaskChecklist, TaskTemplate
+)
 
 
 @admin.register(Volunteer)
@@ -311,3 +315,362 @@ class SongBPMCacheAdmin(admin.ModelAdmin):
         count = queryset.count()
         queryset.delete()
         self.message_user(request, f'{count} BPM cache entry(ies) deleted.')
+
+
+# =============================================================================
+# Team Communication Hub Admin
+# =============================================================================
+
+@admin.register(Announcement)
+class AnnouncementAdmin(admin.ModelAdmin):
+    """Admin configuration for Announcement model."""
+    list_display = ('title', 'priority_badge', 'author', 'is_pinned', 'is_active', 'organization', 'created_at')
+    list_filter = ('priority', 'is_pinned', 'is_active', 'organization', 'created_at')
+    search_fields = ('title', 'content', 'author__username')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'updated_at')
+    filter_horizontal = ()
+    fieldsets = (
+        ('Content', {
+            'fields': ('title', 'content', 'author', 'organization')
+        }),
+        ('Settings', {
+            'fields': ('priority', 'is_pinned', 'is_active', 'target_teams')
+        }),
+        ('Scheduling', {
+            'fields': ('publish_at', 'expires_at'),
+            'classes': ('collapse',),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def priority_badge(self, obj):
+        """Display priority with color badge."""
+        colors = {
+            'normal': '#6b7280',
+            'important': '#f59e0b',
+            'urgent': '#ef4444',
+        }
+        color = colors.get(obj.priority, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; '
+            'border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_priority_display()
+        )
+    priority_badge.short_description = 'Priority'
+    priority_badge.admin_order_field = 'priority'
+
+
+@admin.register(AnnouncementRead)
+class AnnouncementReadAdmin(admin.ModelAdmin):
+    """Admin configuration for AnnouncementRead model."""
+    list_display = ('announcement', 'user', 'read_at')
+    list_filter = ('read_at',)
+    search_fields = ('announcement__title', 'user__username')
+    ordering = ('-read_at',)
+    readonly_fields = ('read_at',)
+
+
+@admin.register(Channel)
+class ChannelAdmin(admin.ModelAdmin):
+    """Admin configuration for Channel model."""
+    list_display = ('name', 'channel_type', 'is_private', 'is_archived', 'organization', 'created_by', 'created_at')
+    list_filter = ('channel_type', 'is_private', 'is_archived', 'organization', 'created_at')
+    search_fields = ('name', 'description', 'slug')
+    ordering = ('name',)
+    readonly_fields = ('created_at', 'updated_at')
+    filter_horizontal = ('members',)
+    prepopulated_fields = {'slug': ('name',)}
+    fieldsets = (
+        ('Channel Info', {
+            'fields': ('name', 'slug', 'description', 'organization')
+        }),
+        ('Type & Settings', {
+            'fields': ('channel_type', 'team_name', 'is_private', 'is_archived')
+        }),
+        ('Members', {
+            'fields': ('members', 'created_by'),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+
+@admin.register(ChannelMessage)
+class ChannelMessageAdmin(admin.ModelAdmin):
+    """Admin configuration for ChannelMessage model."""
+    list_display = ('short_content', 'channel', 'author', 'is_edited', 'created_at')
+    list_filter = ('channel', 'is_edited', 'created_at')
+    search_fields = ('content', 'author__username', 'channel__name')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'updated_at')
+    filter_horizontal = ('mentioned_users', 'mentioned_volunteers')
+
+    def short_content(self, obj):
+        """Display truncated content."""
+        return obj.content[:60] + '...' if len(obj.content) > 60 else obj.content
+    short_content.short_description = 'Content'
+
+
+@admin.register(DirectMessage)
+class DirectMessageAdmin(admin.ModelAdmin):
+    """Admin configuration for DirectMessage model."""
+    list_display = ('short_content', 'sender', 'recipient', 'is_read', 'created_at')
+    list_filter = ('is_read', 'created_at')
+    search_fields = ('content', 'sender__username', 'recipient__username')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'read_at')
+
+    def short_content(self, obj):
+        """Display truncated content."""
+        return obj.content[:60] + '...' if len(obj.content) > 60 else obj.content
+    short_content.short_description = 'Content'
+
+
+# =============================================================================
+# Project and Task Management Admin
+# =============================================================================
+
+@admin.register(Project)
+class ProjectAdmin(admin.ModelAdmin):
+    """Admin configuration for Project model."""
+    list_display = ('name', 'status_badge', 'priority_badge', 'owner', 'due_date', 'progress_display', 'organization', 'created_at')
+    list_filter = ('status', 'priority', 'organization', 'created_at')
+    search_fields = ('name', 'description', 'owner__username')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'updated_at', 'completed_at')
+    filter_horizontal = ('members',)
+    fieldsets = (
+        ('Project Info', {
+            'fields': ('name', 'description', 'organization')
+        }),
+        ('Status & Priority', {
+            'fields': ('status', 'priority')
+        }),
+        ('Dates', {
+            'fields': ('start_date', 'due_date', 'service_date', 'completed_at')
+        }),
+        ('Team', {
+            'fields': ('owner', 'members', 'channel')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def status_badge(self, obj):
+        """Display status with color badge."""
+        colors = {
+            'planning': '#6b7280',
+            'active': '#22c55e',
+            'on_hold': '#f59e0b',
+            'completed': '#3b82f6',
+            'archived': '#4b5563',
+        }
+        color = colors.get(obj.status, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; '
+            'border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_status_display()
+        )
+    status_badge.short_description = 'Status'
+    status_badge.admin_order_field = 'status'
+
+    def priority_badge(self, obj):
+        """Display priority with color badge."""
+        colors = {
+            'low': '#6b7280',
+            'medium': '#3b82f6',
+            'high': '#f59e0b',
+            'urgent': '#ef4444',
+        }
+        color = colors.get(obj.priority, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; '
+            'border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_priority_display()
+        )
+    priority_badge.short_description = 'Priority'
+    priority_badge.admin_order_field = 'priority'
+
+    def progress_display(self, obj):
+        """Display progress as a percentage bar."""
+        progress = obj.progress_percent
+        color = '#22c55e' if progress == 100 else '#3b82f6' if progress > 50 else '#f59e0b'
+        return format_html(
+            '<div style="width: 100px; background: #374151; border-radius: 4px; overflow: hidden;">'
+            '<div style="width: {}%; background: {}; height: 16px; text-align: center; color: white; '
+            'font-size: 10px; line-height: 16px;">{}</div></div>',
+            progress, color, f'{progress}%'
+        )
+    progress_display.short_description = 'Progress'
+
+
+class TaskChecklistInline(admin.TabularInline):
+    """Inline admin for TaskChecklist items within Task."""
+    model = TaskChecklist
+    extra = 0
+    fields = ('title', 'is_completed', 'order', 'completed_by', 'completed_at')
+    readonly_fields = ('completed_by', 'completed_at')
+
+
+class TaskCommentInline(admin.TabularInline):
+    """Inline admin for TaskComment items within Task."""
+    model = TaskComment
+    extra = 0
+    fields = ('content', 'author', 'created_at')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(Task)
+class TaskAdmin(admin.ModelAdmin):
+    """Admin configuration for Task model."""
+    list_display = ('title', 'project', 'status_badge', 'priority_badge', 'get_assignees', 'due_date', 'is_overdue_display', 'created_at')
+    list_filter = ('status', 'priority', 'project', 'due_date', 'created_at')
+    search_fields = ('title', 'description', 'project__name')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'updated_at', 'completed_at')
+    filter_horizontal = ('assignees',)
+    inlines = [TaskChecklistInline, TaskCommentInline]
+    fieldsets = (
+        ('Task Info', {
+            'fields': ('title', 'description', 'project')
+        }),
+        ('Status & Priority', {
+            'fields': ('status', 'priority', 'order')
+        }),
+        ('Assignment', {
+            'fields': ('assignees', 'created_by')
+        }),
+        ('Dates', {
+            'fields': ('due_date', 'due_time', 'completed_at')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def status_badge(self, obj):
+        """Display status with color badge."""
+        colors = {
+            'todo': '#6b7280',
+            'in_progress': '#3b82f6',
+            'review': '#f59e0b',
+            'completed': '#22c55e',
+            'cancelled': '#4b5563',
+        }
+        color = colors.get(obj.status, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; '
+            'border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_status_display()
+        )
+    status_badge.short_description = 'Status'
+    status_badge.admin_order_field = 'status'
+
+    def priority_badge(self, obj):
+        """Display priority with color badge."""
+        colors = {
+            'low': '#6b7280',
+            'medium': '#3b82f6',
+            'high': '#f59e0b',
+            'urgent': '#ef4444',
+        }
+        color = colors.get(obj.priority, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; '
+            'border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_priority_display()
+        )
+    priority_badge.short_description = 'Priority'
+    priority_badge.admin_order_field = 'priority'
+
+    def get_assignees(self, obj):
+        """Display assignees as a comma-separated list."""
+        assignees = obj.assignees.all()[:3]
+        names = [a.get_full_name() or a.username for a in assignees]
+        if obj.assignees.count() > 3:
+            names.append(f'+{obj.assignees.count() - 3} more')
+        return ', '.join(names) if names else '-'
+    get_assignees.short_description = 'Assignees'
+
+    def is_overdue_display(self, obj):
+        """Display overdue status with icon."""
+        if obj.is_overdue:
+            return format_html(
+                '<span style="color: #ef4444;" title="Overdue">&#9888; Overdue</span>'
+            )
+        return format_html('<span style="color: #22c55e;">&#10003;</span>')
+    is_overdue_display.short_description = 'On Time'
+
+
+@admin.register(TaskComment)
+class TaskCommentAdmin(admin.ModelAdmin):
+    """Admin configuration for TaskComment model."""
+    list_display = ('short_content', 'task', 'author', 'created_at')
+    list_filter = ('task__project', 'created_at')
+    search_fields = ('content', 'author__username', 'task__title')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'updated_at')
+    filter_horizontal = ('mentioned_users',)
+
+    def short_content(self, obj):
+        """Display truncated content."""
+        return obj.content[:60] + '...' if len(obj.content) > 60 else obj.content
+    short_content.short_description = 'Content'
+
+
+@admin.register(TaskChecklist)
+class TaskChecklistAdmin(admin.ModelAdmin):
+    """Admin configuration for TaskChecklist model."""
+    list_display = ('title', 'task', 'is_completed', 'completed_by', 'completed_at', 'order')
+    list_filter = ('is_completed', 'task__project', 'completed_at')
+    search_fields = ('title', 'task__title')
+    ordering = ('task', 'order')
+    readonly_fields = ('completed_at', 'created_at', 'updated_at')
+
+
+@admin.register(TaskTemplate)
+class TaskTemplateAdmin(admin.ModelAdmin):
+    """Admin configuration for TaskTemplate model."""
+    list_display = ('name', 'title_template', 'project', 'recurrence_type', 'is_active', 'next_occurrence', 'created_at')
+    list_filter = ('recurrence_type', 'is_active', 'project', 'created_at')
+    search_fields = ('name', 'title_template', 'project__name')
+    ordering = ('project', 'name')
+    readonly_fields = ('last_generated_date', 'created_at', 'updated_at')
+    filter_horizontal = ('default_assignees',)
+    fieldsets = (
+        ('Template Info', {
+            'fields': ('name', 'title_template', 'description_template', 'project')
+        }),
+        ('Recurrence Settings', {
+            'fields': ('recurrence_type', 'recurrence_days', 'weekday_occurrence', 'is_active')
+        }),
+        ('Default Task Settings', {
+            'fields': ('default_assignees', 'default_priority', 'default_status', 'days_before_due', 'due_time')
+        }),
+        ('Checklist Items', {
+            'fields': ('default_checklist',),
+            'classes': ('collapse',),
+        }),
+        ('Generation Status', {
+            'fields': ('last_generated_date', 'next_occurrence', 'created_by'),
+            'classes': ('collapse',),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
