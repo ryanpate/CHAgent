@@ -2047,7 +2047,7 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             if days_since_sunday == 0:
                 days_since_sunday = 7
             target_date = today - timedelta(days=days_since_sunday)
-        elif 'this sunday' in date_lower or 'next sunday' in date_lower:
+        elif 'this sunday' in date_lower or 'next sunday' in date_lower or 'this coming sunday' in date_lower or 'coming sunday' in date_lower:
             days_until_sunday = (6 - today.weekday()) % 7
             if days_until_sunday == 0:
                 days_until_sunday = 7
