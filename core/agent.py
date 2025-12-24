@@ -1986,7 +1986,7 @@ def parse_json_response(response) -> dict:
         return {}
 
 
-def process_interaction(content: str, user) -> dict:
+def process_interaction(content: str, user, organization=None) -> dict:
     """
     Process a new interaction entry:
     1. Generate embedding
@@ -1997,6 +1997,7 @@ def process_interaction(content: str, user) -> dict:
     Args:
         content: The interaction note content.
         user: The user who logged the interaction.
+        organization: The organization this interaction belongs to.
 
     Returns:
         Dictionary with:
@@ -2036,6 +2037,7 @@ def process_interaction(content: str, user) -> dict:
     # Step 4: Create interaction
     interaction = Interaction.objects.create(
         user=user,
+        organization=organization,
         content=content,
         ai_summary=extracted.get('summary', ''),
         ai_extracted_data=extracted.get('extracted_data', {}),

@@ -162,6 +162,7 @@ def chat_send(request):
     """Handle chat message submission via HTMX."""
     message = request.POST.get('message', '').strip()
     session_id = request.COOKIES.get('chat_session_id', str(uuid.uuid4()))
+    org = get_org(request)
 
     if not message:
         return HttpResponse('')
@@ -181,7 +182,7 @@ def chat_send(request):
 
     if is_interaction:
         # Process as a new interaction
-        result = process_interaction(message, request.user)
+        result = process_interaction(message, request.user, organization=org)
         interaction = result['interaction']
         volunteers = result['volunteers']
         pending_matches = result.get('pending_matches', [])
@@ -557,10 +558,12 @@ def interaction_detail(request, pk):
 @require_http_methods(["GET", "POST"])
 def interaction_create(request):
     """Create a new interaction manually."""
+    org = get_org(request)
+
     if request.method == 'POST':
         content = request.POST.get('content', '').strip()
         if content:
-            result = process_interaction(content, request.user)
+            result = process_interaction(content, request.user, organization=org)
             return redirect('interaction_detail', pk=result['interaction'].pk)
 
     return render(request, 'core/interaction_create.html')
