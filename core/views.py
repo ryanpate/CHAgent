@@ -1608,6 +1608,16 @@ def comms_hub(request):
     else:
         org_users = User.objects.filter(is_active=True).order_by('first_name', 'last_name', 'username')
 
+    # Get all team tasks (not completed/cancelled) for visibility
+    all_tasks = Task.objects.exclude(
+        status__in=['completed', 'cancelled']
+    ).select_related('project', 'created_by').prefetch_related('assignees')
+    if org:
+        all_tasks = all_tasks.filter(
+            models.Q(project__organization=org) | models.Q(organization=org, project__isnull=True)
+        )
+    all_tasks = all_tasks.order_by('due_date', '-priority', '-created_at')[:15]
+
     context = {
         'announcements': announcements,
         'channels': channels,
@@ -1616,6 +1626,7 @@ def comms_hub(request):
         'unread_dm_count': unread_dm_count,
         'org_users': org_users,
         'priority_choices': Task.PRIORITY_CHOICES,
+        'all_tasks': all_tasks,
     }
     return render(request, 'core/comms/hub.html', context)
 
