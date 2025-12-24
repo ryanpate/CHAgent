@@ -1864,6 +1864,7 @@ class VolunteerInsight(models.Model):
         ('overdue_followup', 'Overdue Follow-up'),
         ('frequent_declines', 'Frequent Schedule Declines'),
         ('milestone', 'Service Milestone'),
+        ('interaction_followup', 'Interaction Follow-up Needed'),
     ]
 
     PRIORITY_CHOICES = [

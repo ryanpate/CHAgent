@@ -1378,6 +1378,14 @@ def care_dashboard(request):
         ('birthday_upcoming', 'Birthday Upcoming'),
         ('overdue_followup', 'Overdue Follow-up'),
         ('new_volunteer', 'New Volunteer'),
+        ('interaction_followup', 'Interaction Follow-up'),
+    ]
+
+    # Build type breakdown for the bottom cards (list of tuples: label, count)
+    type_counts = dashboard.get('type_counts', {})
+    type_breakdown = [
+        (label, type_counts.get(type_value, 0))
+        for type_value, label in type_choices
     ]
 
     context = {
@@ -1386,6 +1394,7 @@ def care_dashboard(request):
         'filter_type': filter_type,
         'filter_priority': filter_priority,
         'type_choices': type_choices,
+        'type_breakdown': type_breakdown,
     }
     return render(request, 'core/care/dashboard.html', context)
 
@@ -1396,13 +1405,29 @@ def care_dismiss_insight(request, pk):
     """
     Dismiss an insight (mark as addressed/dismissed).
     """
+    import logging
+    logger = logging.getLogger('django.request')
     from .models import VolunteerInsight
 
+    logger.warning(f"[CARE DEBUG] care_dismiss_insight called with pk={pk}")
+
     org = get_org(request)
+    logger.warning(f"[CARE DEBUG] org={org}, org_id={org.id if org else None}")
+
+    # Check if insight exists at all (without org filter)
+    all_count = VolunteerInsight.objects.filter(pk=pk).count()
+    logger.warning(f"[CARE DEBUG] Insight pk={pk} exists globally: {all_count > 0}")
+
+    if all_count > 0:
+        insight_check = VolunteerInsight.objects.get(pk=pk)
+        logger.warning(f"[CARE DEBUG] Insight org_id={insight_check.organization_id}")
 
     queryset = VolunteerInsight.objects.all()
     if org:
         queryset = queryset.filter(organization=org)
+
+    filtered_count = queryset.filter(pk=pk).count()
+    logger.warning(f"[CARE DEBUG] After org filter, insight found: {filtered_count > 0}")
 
     insight = get_object_or_404(queryset, pk=pk)
     action = request.POST.get('action', 'dismiss')
@@ -1433,13 +1458,29 @@ def care_create_followup(request, pk):
     """
     Create a follow-up from an insight.
     """
+    import logging
+    logger = logging.getLogger('django.request')
     from .models import VolunteerInsight
 
+    logger.warning(f"[CARE DEBUG] care_create_followup called with pk={pk}")
+
     org = get_org(request)
+    logger.warning(f"[CARE DEBUG] org={org}, org_id={org.id if org else None}")
+
+    # Check if insight exists at all (without org filter)
+    all_count = VolunteerInsight.objects.filter(pk=pk).count()
+    logger.warning(f"[CARE DEBUG] Insight pk={pk} exists globally: {all_count > 0}")
+
+    if all_count > 0:
+        insight_check = VolunteerInsight.objects.get(pk=pk)
+        logger.warning(f"[CARE DEBUG] Insight org_id={insight_check.organization_id}")
 
     queryset = VolunteerInsight.objects.all()
     if org:
         queryset = queryset.filter(organization=org)
+
+    filtered_count = queryset.filter(pk=pk).count()
+    logger.warning(f"[CARE DEBUG] After org filter, insight found: {filtered_count > 0}")
 
     insight = get_object_or_404(queryset, pk=pk)
 
@@ -1474,14 +1515,33 @@ def care_create_followup(request, pk):
 @require_POST
 def care_refresh_insights(request):
     """
-    Generate new proactive care insights.
+    Clear existing insights and generate fresh proactive care insights.
+
+    This does a full refresh by:
+    1. Deleting all active insights for this organization
+    2. Regenerating insights from scratch based on current data
     """
+    from .models import VolunteerInsight
     from .reports import ProactiveCareGenerator
 
     org = get_org(request)
 
+    # Clear all active insights for this organization to start fresh
+    cleared_count = 0
+    if org:
+        cleared_count = VolunteerInsight.objects.filter(
+            organization=org,
+            status='active'
+        ).delete()[0]
+    else:
+        cleared_count = VolunteerInsight.objects.filter(
+            status='active'
+        ).delete()[0]
+
+    # Generate fresh insights
     generator = ProactiveCareGenerator(organization=org)
     results = generator.generate_all_insights()
+    results['cleared_count'] = cleared_count
 
     if request.headers.get('HX-Request'):
         return render(request, 'core/partials/care_refresh_result.html', {

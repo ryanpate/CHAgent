@@ -202,13 +202,13 @@
     </div>
 
     <!-- Type Breakdown -->
-    {% if dashboard.type_counts %}
+    {% if type_breakdown %}
     <div class="mt-8 bg-ch-dark rounded-lg p-6">
         <h3 class="font-semibold text-lg mb-4">Insights by Type</h3>
         <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {% for type_value, label in type_choices %}
+            {% for label, count in type_breakdown %}
             <div class="bg-ch-gray/50 rounded p-4 text-center">
-                <p class="text-2xl font-bold text-ch-gold">{{ dashboard.type_counts|default_if_none:0 }}</p>
+                <p class="text-2xl font-bold text-ch-gold">{{ count }}</p>
                 <p class="text-sm text-gray-400">{{ label }}</p>
             </div>
             {% endfor %}

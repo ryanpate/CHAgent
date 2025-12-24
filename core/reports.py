@@ -944,6 +944,7 @@ class ProactiveCareGenerator:
             ('birthday_upcoming', self._generate_birthday_insights),
             ('overdue_followup', self._generate_overdue_followup_insights),
             ('new_volunteer', self._generate_new_volunteer_insights),
+            ('interaction_followup', self._generate_interaction_followup_insights),
         ]
 
         for insight_type, generator_func in generators:
@@ -958,10 +959,9 @@ class ProactiveCareGenerator:
         from .models import VolunteerInsight
 
         thirty_days_ago = self.now - timedelta(days=30)
-        sixty_days_ago = self.now - timedelta(days=60)
 
         # Find volunteers with interactions but none recently
-        volunteers_needing_contact = Volunteer.objects.annotate(
+        volunteers_needing_contact = self._filter_by_org(Volunteer.objects).annotate(
             total_interactions=Count('interactions'),
             recent_interactions=Count(
                 'interactions',
@@ -994,6 +994,7 @@ class ProactiveCareGenerator:
                     priority = 'low'
 
                 VolunteerInsight.objects.create(
+                    organization=self.organization,
                     volunteer=volunteer,
                     insight_type='no_recent_contact',
                     priority=priority,
@@ -1017,12 +1018,12 @@ class ProactiveCareGenerator:
 
         seven_days_ago = self.now - timedelta(days=7)
 
-        # Find recent prayer requests
-        recent_prayers = ExtractedKnowledge.objects.filter(
+        # Find recent prayer requests (filter by organization)
+        recent_prayers = self._filter_by_org(ExtractedKnowledge.objects.filter(
             knowledge_type='prayer_request',
             is_current=True,
             created_at__gte=seven_days_ago
-        ).select_related('volunteer')
+        )).select_related('volunteer')
 
         count = 0
         for prayer in recent_prayers:
@@ -1036,6 +1037,7 @@ class ProactiveCareGenerator:
 
             if not existing:
                 VolunteerInsight.objects.create(
+                    organization=self.organization,
                     volunteer=prayer.volunteer,
                     insight_type='prayer_need',
                     priority='medium',
@@ -1056,11 +1058,11 @@ class ProactiveCareGenerator:
         """Generate insights for upcoming volunteer birthdays."""
         from .models import VolunteerInsight
 
-        # Get birthdays from extracted knowledge
-        birthday_knowledge = ExtractedKnowledge.objects.filter(
+        # Get birthdays from extracted knowledge (filter by organization)
+        birthday_knowledge = self._filter_by_org(ExtractedKnowledge.objects.filter(
             knowledge_type='birthday',
             is_current=True
-        ).select_related('volunteer')
+        )).select_related('volunteer')
 
         count = 0
         for bk in birthday_knowledge:
@@ -1102,6 +1104,7 @@ class ProactiveCareGenerator:
                                 title = f"{bk.volunteer.name}'s birthday in {days_until} days"
 
                             VolunteerInsight.objects.create(
+                                organization=self.organization,
                                 volunteer=bk.volunteer,
                                 insight_type='birthday_upcoming',
                                 priority=priority,
@@ -1124,11 +1127,12 @@ class ProactiveCareGenerator:
         """Generate insights for overdue follow-ups."""
         from .models import VolunteerInsight
 
-        overdue_followups = FollowUp.objects.filter(
+        # Filter by organization
+        overdue_followups = self._filter_by_org(FollowUp.objects.filter(
             status='pending',
             follow_up_date__lt=self.today,
             volunteer__isnull=False
-        ).select_related('volunteer')
+        )).select_related('volunteer')
 
         count = 0
         for followup in overdue_followups:
@@ -1150,6 +1154,7 @@ class ProactiveCareGenerator:
                     priority = 'medium'
 
                 VolunteerInsight.objects.create(
+                    organization=self.organization,
                     volunteer=followup.volunteer,
                     insight_type='overdue_followup',
                     priority=priority,
@@ -1171,12 +1176,12 @@ class ProactiveCareGenerator:
         """Generate insights for new volunteers who may need check-ins."""
         from .models import VolunteerInsight
 
-        # Volunteers created in the last 30 days
+        # Volunteers created in the last 30 days (filter by organization)
         thirty_days_ago = self.now - timedelta(days=30)
 
-        new_volunteers = Volunteer.objects.filter(
+        new_volunteers = self._filter_by_org(Volunteer.objects.filter(
             created_at__gte=thirty_days_ago
-        ).annotate(
+        )).annotate(
             interaction_count=Count('interactions')
         )
 
@@ -1194,6 +1199,7 @@ class ProactiveCareGenerator:
                     days_since_added = (self.now - volunteer.created_at).days
 
                     VolunteerInsight.objects.create(
+                        organization=self.organization,
                         volunteer=volunteer,
                         insight_type='new_volunteer',
                         priority='medium',
@@ -1212,6 +1218,122 @@ class ProactiveCareGenerator:
 
         return count
 
+    def _generate_interaction_followup_insights(self) -> int:
+        """
+        Generate insights from interactions that may need follow-up.
+
+        Scans recent interactions for:
+        - Prayer requests mentioned but no follow-up created
+        - Concerns or issues mentioned
+        - Action items or commitments made
+        """
+        from .models import VolunteerInsight
+
+        # Look at interactions from the last 14 days
+        fourteen_days_ago = self.now - timedelta(days=14)
+
+        interactions = self._filter_by_org(Interaction.objects.filter(
+            created_at__gte=fourteen_days_ago
+        )).select_related('user').prefetch_related('volunteers')
+
+        count = 0
+        for interaction in interactions:
+            # Check AI-extracted data for potential follow-ups
+            extracted_data = interaction.ai_extracted_data or {}
+
+            # Check for prayer requests in extracted data
+            prayer_requests = extracted_data.get('prayer_requests', [])
+            for volunteer in interaction.volunteers.all():
+                for prayer in prayer_requests:
+                    # Check if we already have an insight for this
+                    existing = VolunteerInsight.objects.filter(
+                        volunteer=volunteer,
+                        insight_type='interaction_followup',
+                        status='active',
+                        context_data__contains={'interaction_id': interaction.id, 'type': 'prayer'}
+                    ).exists()
+
+                    if not existing:
+                        VolunteerInsight.objects.create(
+                            organization=self.organization,
+                            volunteer=volunteer,
+                            insight_type='interaction_followup',
+                            priority='medium',
+                            title=f"Follow up on prayer request from {volunteer.name}",
+                            message=f"Prayer request mentioned in interaction: {prayer[:100]}{'...' if len(str(prayer)) > 100 else ''}",
+                            suggested_action="Check in to see how they're doing and if there's anything the team can do.",
+                            context_data={
+                                'interaction_id': interaction.id,
+                                'type': 'prayer',
+                                'content': str(prayer)[:200],
+                                'logged_by': interaction.user.display_name if interaction.user else 'Unknown',
+                                'logged_date': interaction.created_at.isoformat()
+                            }
+                        )
+                        count += 1
+
+            # Check for concerns in extracted data
+            concerns = extracted_data.get('concerns', [])
+            for volunteer in interaction.volunteers.all():
+                for concern in concerns:
+                    existing = VolunteerInsight.objects.filter(
+                        volunteer=volunteer,
+                        insight_type='interaction_followup',
+                        status='active',
+                        context_data__contains={'interaction_id': interaction.id, 'type': 'concern'}
+                    ).exists()
+
+                    if not existing:
+                        VolunteerInsight.objects.create(
+                            organization=self.organization,
+                            volunteer=volunteer,
+                            insight_type='interaction_followup',
+                            priority='high',
+                            title=f"Concern noted for {volunteer.name}",
+                            message=f"A concern was mentioned: {concern[:100]}{'...' if len(str(concern)) > 100 else ''}",
+                            suggested_action="Follow up to address this concern and offer support.",
+                            context_data={
+                                'interaction_id': interaction.id,
+                                'type': 'concern',
+                                'content': str(concern)[:200],
+                                'logged_by': interaction.user.display_name if interaction.user else 'Unknown',
+                                'logged_date': interaction.created_at.isoformat()
+                            }
+                        )
+                        count += 1
+
+            # Check for action items
+            action_items = extracted_data.get('action_items', []) or extracted_data.get('follow_ups', [])
+            for volunteer in interaction.volunteers.all():
+                for action in action_items:
+                    existing = VolunteerInsight.objects.filter(
+                        volunteer=volunteer,
+                        insight_type='interaction_followup',
+                        status='active',
+                        context_data__contains={'interaction_id': interaction.id, 'type': 'action'}
+                    ).exists()
+
+                    if not existing:
+                        VolunteerInsight.objects.create(
+                            organization=self.organization,
+                            volunteer=volunteer,
+                            insight_type='interaction_followup',
+                            priority='medium',
+                            title=f"Action item for {volunteer.name}",
+                            message=f"An action item was noted: {action[:100]}{'...' if len(str(action)) > 100 else ''}",
+                            suggested_action="Complete or follow up on this action item.",
+                            context_data={
+                                'interaction_id': interaction.id,
+                                'type': 'action',
+                                'content': str(action)[:200],
+                                'logged_by': interaction.user.display_name if interaction.user else 'Unknown',
+                                'logged_date': interaction.created_at.isoformat()
+                            }
+                        )
+                        count += 1
+
+        return count
+
     def get_proactive_care_dashboard(self) -> dict:
         """
         Get data for the proactive care dashboard.
@@ -1224,6 +1346,10 @@ class ProactiveCareGenerator:
         active_insights = VolunteerInsight.objects.filter(
             status='active'
         ).select_related('volunteer').order_by('-priority', '-created_at')
+
+        # Filter by organization
+        if self.organization:
+            active_insights = active_insights.filter(organization=self.organization)
 
         # Group by priority
         by_priority = {
