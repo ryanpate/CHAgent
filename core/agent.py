@@ -2150,6 +2150,185 @@ def skip_volunteer_match(interaction_id: int, original_name: str) -> bool:
     return True
 
 
+def detect_followup_opportunities(interaction_content: str, volunteer_names: list = None) -> dict:
+    """
+    Analyze interaction content to detect potential follow-up opportunities.
+
+    Uses Claude to identify things that might warrant follow-up action:
+    - Prayer requests
+    - Health concerns
+    - Family situations needing support
+    - Action items or commitments
+    - Concerns or issues raised
+
+    Args:
+        interaction_content: The text content of the interaction.
+        volunteer_names: List of volunteer names mentioned in the interaction.
+
+    Returns:
+        Dict with:
+        - has_followup: bool - whether a follow-up opportunity was detected
+        - title: str - suggested title for the follow-up
+        - description: str - description of what needs follow-up
+        - category: str - category (prayer_request, concern, action_item, health, family, feedback)
+        - priority: str - suggested priority (low, medium, high, urgent)
+        - volunteer_name: str - which volunteer this is about (if identifiable)
+        - reason: str - why this warrants a follow-up
+    """
+    client = get_anthropic_client()
+    if not client:
+        return {'has_followup': False}
+
+    volunteer_context = ""
+    if volunteer_names:
+        volunteer_context = f"\nVolunteers mentioned: {', '.join(volunteer_names)}"
+
+    prompt = f"""Analyze this interaction note and determine if it contains something that warrants a follow-up action.
+
+Look for:
+- Prayer requests (someone asking for prayer or mentioning a difficult situation)
+- Health concerns (illness, surgery, recovery, medical issues)
+- Family situations (births, deaths, marriages, divorces, children issues)
+- Action items (commitments made, things to check on, promises to follow up)
+- Concerns or issues (burnout, frustration, conflicts, struggles)
+- Feedback that needs addressing
+
+Interaction content:
+{interaction_content}
+{volunteer_context}
+
+If a follow-up opportunity exists, respond with JSON:
+{{
+  "has_followup": true,
+  "title": "Brief title for the follow-up (max 50 chars)",
+  "description": "What specifically needs to be followed up on",
+  "category": "prayer_request|concern|action_item|health|family|feedback",
+  "priority": "low|medium|high|urgent",
+  "volunteer_name": "Name of volunteer this is about (or empty if unclear)",
+  "reason": "Brief explanation of why this warrants follow-up"
+}}
+
+If no follow-up is needed, respond with:
+{{"has_followup": false}}
+
+Respond ONLY with the JSON object, no other text."""
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        response_text = response.content[0].text.strip()
+
+        # Parse JSON response
+        import json
+        # Handle potential markdown code blocks
+        if response_text.startswith('```'):
+            response_text = response_text.split('```')[1]
+            if response_text.startswith('json'):
+                response_text = response_text[4:]
+            response_text = response_text.strip()
+
+        result = json.loads(response_text)
+        return result
+
+    except Exception as e:
+        logger.error(f"Error detecting follow-up opportunities: {e}")
+        return {'has_followup': False}
+
+
+def handle_followup_response(message: str, session_id: str, user, organization=None) -> str:
+    """
+    Handle user responses during the follow-up creation flow.
+
+    Checks if there's a pending follow-up and processes the user's response
+    (confirmation, date input, etc.)
+
+    Args:
+        message: The user's message.
+        session_id: The chat session ID.
+        user: The user object.
+        organization: The organization context.
+
+    Returns:
+        Response text if this was a follow-up flow message, None otherwise.
+    """
+    from .models import ConversationContext, FollowUp, Volunteer
+
+    # Get or create conversation context
+    context, _ = ConversationContext.objects.get_or_create(
+        session_id=session_id,
+        defaults={'organization': organization}
+    )
+
+    pending = context.get_pending_followup()
+    if not pending:
+        return None
+
+    state = pending.get('state', 'awaiting_confirmation')
+    message_lower = message.lower().strip()
+
+    # Check for cancellation
+    if message_lower in ('no', 'nope', 'cancel', 'never mind', 'nevermind', 'skip', 'no thanks'):
+        context.clear_pending_followup()
+        context.save()
+        return "No problem! I won't create a follow-up for this. Is there anything else I can help with?"
+
+    if state == 'awaiting_confirmation':
+        # Check for affirmative response
+        affirmative_words = ('yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'please', 'do it', 'create it', 'yes please', 'absolutely', 'definitely')
+        if any(word in message_lower for word in affirmative_words):
+            # Move to date collection
+            pending['state'] = 'awaiting_date'
+            context.pending_followup = pending
+            context.save()
+            return f"Great! When would you like to follow up on this? You can say things like:\n- \"next week\"\n- \"in 3 days\"\n- \"January 15\"\n- \"tomorrow\""
+
+        # If not clearly affirmative, treat as other query
+        return None
+
+    elif state == 'awaiting_date':
+        # Parse the date from the message
+        from .planning_center import parse_date_reference
+        parsed_date = parse_date_reference(message)
+
+        if parsed_date:
+            # We have a date - create the follow-up
+            volunteer = None
+            if pending.get('volunteer_name'):
+                volunteer = Volunteer.objects.filter(
+                    name__icontains=pending['volunteer_name'],
+                    organization=organization
+                ).first()
+
+            followup = FollowUp.objects.create(
+                organization=organization,
+                created_by=user,
+                assigned_to=user,
+                volunteer=volunteer,
+                title=pending.get('title', 'Follow-up needed'),
+                description=pending.get('description', ''),
+                category=pending.get('category', 'action_item'),
+                priority=pending.get('priority', 'medium'),
+                follow_up_date=parsed_date,
+                source_interaction_id=pending.get('interaction_id')
+            )
+
+            context.clear_pending_followup()
+            context.save()
+
+            volunteer_text = f" for {volunteer.name}" if volunteer else ""
+            return f"I've created the follow-up{volunteer_text}:\n\n**{followup.title}**\nScheduled for: {parsed_date.strftime('%B %d, %Y')}\nPriority: {followup.priority.title()}\n\nYou can view and manage your follow-ups in the Follow-ups section. Is there anything else I can help with?"
+
+        else:
+            # Couldn't parse date, ask again
+            return "I couldn't understand that date. Could you try again? For example:\n- \"next Monday\"\n- \"in 2 weeks\"\n- \"December 30\"\n- \"tomorrow\""
+
+    return None
+
+
 def extract_knowledge_from_interaction(interaction, user=None):
     """
     Extract structured knowledge from an interaction and store it.

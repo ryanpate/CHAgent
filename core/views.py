@@ -160,6 +160,9 @@ def chat(request):
 @require_POST
 def chat_send(request):
     """Handle chat message submission via HTMX."""
+    from .agent import handle_followup_response, detect_followup_opportunities
+    from .models import ConversationContext
+
     message = request.POST.get('message', '').strip()
     session_id = request.COOKIES.get('chat_session_id', str(uuid.uuid4()))
     org = get_org(request)
@@ -172,6 +175,40 @@ def chat_send(request):
     start_new_session = should_start_new_conversation(message)
     if start_new_session:
         session_id = str(uuid.uuid4())
+
+    # Check if we're in a follow-up creation flow
+    followup_response = handle_followup_response(message, session_id, request.user, organization=org)
+    if followup_response:
+        # Save user message
+        ChatMessage.objects.create(
+            user=request.user,
+            organization=org,
+            session_id=session_id,
+            role='user',
+            content=message
+        )
+        # Save assistant response
+        ChatMessage.objects.create(
+            user=request.user,
+            organization=org,
+            session_id=session_id,
+            role='assistant',
+            content=followup_response
+        )
+        # Return the messages
+        recent_messages = ChatMessage.objects.filter(
+            user=request.user,
+            session_id=session_id
+        ).order_by('-created_at')[:2]
+        recent_messages = list(reversed(recent_messages))
+
+        return render(request, 'core/chat_message.html', {
+            'chat_messages': recent_messages,
+            'pending_matches': [],
+            'unmatched': [],
+            'interaction_id': None,
+            'new_session': False,
+        })
 
     # Detect if this is logging an interaction or asking a question
     is_interaction = detect_interaction_intent(message)
@@ -190,7 +227,8 @@ def chat_send(request):
         interaction_id = interaction.id
 
         # Generate a confirmation response
-        volunteer_names = ", ".join([v.name for v in volunteers]) if volunteers else None
+        volunteer_names_list = [v.name for v in volunteers] if volunteers else []
+        volunteer_names = ", ".join(volunteer_names_list) if volunteer_names_list else None
         response_text = "I've logged your interaction.\n\n"
         if result.get('extracted', {}).get('summary'):
             response_text += f"**Summary:** {result['extracted']['summary']}\n\n"
@@ -200,19 +238,48 @@ def chat_send(request):
 
         # Note about pending/unmatched (will show UI below)
         if pending_matches or unmatched:
-            response_text += "I found some names that need your input to match correctly."
+            response_text += "I found some names that need your input to match correctly.\n\n"
+
+        # Detect follow-up opportunities
+        followup_opportunity = detect_followup_opportunities(message, volunteer_names_list)
+        if followup_opportunity.get('has_followup'):
+            # Store pending follow-up in conversation context
+            context, _ = ConversationContext.objects.get_or_create(
+                session_id=session_id,
+                defaults={'organization': org}
+            )
+            context.pending_followup = {
+                'state': 'awaiting_confirmation',
+                'title': followup_opportunity.get('title', 'Follow-up needed'),
+                'description': followup_opportunity.get('description', ''),
+                'category': followup_opportunity.get('category', 'action_item'),
+                'priority': followup_opportunity.get('priority', 'medium'),
+                'volunteer_name': followup_opportunity.get('volunteer_name', ''),
+                'interaction_id': interaction.id
+            }
+            context.save()
+
+            # Add follow-up suggestion to response
+            category_display = followup_opportunity.get('category', 'action_item').replace('_', ' ').title()
+            response_text += f"---\n\n**Potential Follow-up Detected**\n\n"
+            response_text += f"I noticed something that might need follow-up:\n\n"
+            response_text += f"**{followup_opportunity.get('title')}**\n"
+            response_text += f"*{followup_opportunity.get('reason')}*\n\n"
+            response_text += f"Would you like me to create a follow-up reminder for this?"
         else:
             response_text += "Is there anything else you'd like to add or any questions about volunteers?"
 
         # Save to chat history
         ChatMessage.objects.create(
             user=request.user,
+            organization=org,
             session_id=session_id,
             role='user',
             content=message
         )
         ChatMessage.objects.create(
             user=request.user,
+            organization=org,
             session_id=session_id,
             role='assistant',
             content=response_text
