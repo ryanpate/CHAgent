@@ -14,6 +14,7 @@ def fix_missing_organizations(apps, schema_editor):
     ChatMessage = apps.get_model('core', 'ChatMessage')
     FollowUp = apps.get_model('core', 'FollowUp')
     ExtractedKnowledge = apps.get_model('core', 'ExtractedKnowledge')
+    VolunteerInsight = apps.get_model('core', 'VolunteerInsight')
 
     # Get the first organization (Cherry Hills)
     org = Organization.objects.first()
@@ -45,6 +46,11 @@ def fix_missing_organizations(apps, schema_editor):
     knowledge_count = ExtractedKnowledge.objects.filter(organization__isnull=True).update(organization=org)
     if knowledge_count:
         print(f"Fixed {knowledge_count} extracted knowledge records missing organization")
+
+    # Fix VolunteerInsight (critical for proactive care dashboard)
+    insight_count = VolunteerInsight.objects.filter(organization__isnull=True).update(organization=org)
+    if insight_count:
+        print(f"Fixed {insight_count} volunteer insights missing organization")
 
 
 def reverse_migration(apps, schema_editor):
