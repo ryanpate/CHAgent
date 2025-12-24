@@ -2028,7 +2028,7 @@ def process_interaction(content: str, user, organization=None) -> dict:
 
     # Step 3: Match volunteers against PCO and local database
     volunteer_names = extracted.get('volunteers', [])
-    match_result = match_volunteers_for_interaction(volunteer_names)
+    match_result = match_volunteers_for_interaction(volunteer_names, organization=organization)
 
     confirmed_volunteers = match_result['confirmed']
     pending_matches = match_result['pending']

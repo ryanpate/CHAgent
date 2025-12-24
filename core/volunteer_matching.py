@@ -59,8 +59,9 @@ class VolunteerMatcher:
     4. PCO fuzzy match
     """
 
-    def __init__(self):
+    def __init__(self, organization=None):
         self.pco_api = PlanningCenterAPI()
+        self.organization = organization
 
     def find_volunteer(self, name: str) -> VolunteerMatch:
         """
@@ -296,18 +297,20 @@ class VolunteerMatcher:
             name=name,
             normalized_name=normalized,
             planning_center_id=pco_id,
-            team=team
+            team=team,
+            organization=self.organization
         )
         logger.info(f"Created new volunteer: {name} (PCO ID: {pco_id})")
         return volunteer
 
 
-def match_volunteers_for_interaction(extracted_names: list) -> dict:
+def match_volunteers_for_interaction(extracted_names: list, organization=None) -> dict:
     """
     Match a list of extracted volunteer names.
 
     Args:
         extracted_names: List of dicts with 'name' and optional 'team'.
+        organization: The organization context for creating new volunteers.
 
     Returns:
         Dict with:
@@ -315,7 +318,7 @@ def match_volunteers_for_interaction(extracted_names: list) -> dict:
         - 'pending': List of VolunteerMatch objects needing confirmation
         - 'unmatched': List of names with no matches found
     """
-    matcher = VolunteerMatcher()
+    matcher = VolunteerMatcher(organization=organization)
     result = {
         'confirmed': [],
         'pending': [],
@@ -349,10 +352,18 @@ def match_volunteers_for_interaction(extracted_names: list) -> dict:
             result['pending'].append(match)
 
         else:
-            # No match found
+            # No match found in PCO - create volunteer locally anyway
+            # This ensures all mentioned volunteers appear in the Volunteers list
+            volunteer = matcher.get_or_create_volunteer(
+                name=name,
+                pco_id=None,
+                team=team
+            )
+            result['confirmed'].append(volunteer)
             result['unmatched'].append({
                 'name': name,
-                'team': team
+                'team': team,
+                'created_locally': True
             })
 
     return result
