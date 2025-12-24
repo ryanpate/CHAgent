@@ -246,7 +246,7 @@ def chat_send(request):
             # Store pending follow-up in conversation context
             context, _ = ConversationContext.objects.get_or_create(
                 session_id=session_id,
-                defaults={'organization': org}
+                defaults={'organization': org, 'user': request.user}
             )
             context.pending_followup = {
                 'state': 'awaiting_confirmation',

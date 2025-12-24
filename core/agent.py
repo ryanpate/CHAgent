@@ -2260,7 +2260,7 @@ def handle_followup_response(message: str, session_id: str, user, organization=N
     # Get or create conversation context
     context, _ = ConversationContext.objects.get_or_create(
         session_id=session_id,
-        defaults={'organization': organization}
+        defaults={'organization': organization, 'user': user}
     )
 
     pending = context.get_pending_followup()
