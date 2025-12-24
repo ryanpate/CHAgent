@@ -107,6 +107,52 @@
                 </a>
             </div>
 
+            <!-- My Tasks -->
+            <div class="bg-ch-dark rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                        </svg>
+                        My Tasks
+                        {% if overdue_task_count %}
+                        <span class="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{{ overdue_task_count }} overdue</span>
+                        {% endif %}
+                    </h3>
+                    <a href="{% url 'my_tasks' %}" class="text-ch-gold hover:underline text-sm">All</a>
+                </div>
+                <div class="space-y-2">
+                    {% for task in my_tasks %}
+                    <a href="{% url 'task_detail' task.project.pk task.pk %}"
+                       class="flex items-center justify-between px-3 py-2 rounded hover:bg-ch-gray transition text-sm
+                              {% if task.is_overdue %}border-l-2 border-red-500{% endif %}">
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium truncate {% if task.is_overdue %}text-red-400{% endif %}">{{ task.title }}</p>
+                            <p class="text-xs text-gray-500">{{ task.project.name }}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            {% if task.due_date %}
+                            <span class="text-xs {% if task.is_overdue %}text-red-400{% else %}text-gray-500{% endif %}">
+                                {{ task.due_date|date:"M j" }}
+                            </span>
+                            {% endif %}
+                            <span class="w-2 h-2 rounded-full
+                                {% if task.priority == 'urgent' %}bg-red-500
+                                {% elif task.priority == 'high' %}bg-orange-500
+                                {% elif task.priority == 'medium' %}bg-yellow-500
+                                {% else %}bg-gray-500{% endif %}">
+                            </span>
+                        </div>
+                    </a>
+                    {% empty %}
+                    <p class="text-gray-400 text-sm text-center py-4">No tasks assigned to you</p>
+                    {% endfor %}
+                </div>
+                <a href="{% url 'my_tasks' %}" class="block mt-4 text-center text-sm text-ch-gold hover:underline">
+                    View All Tasks
+                </a>
+            </div>
+
             <!-- Projects -->
             <div class="bg-ch-dark rounded-lg p-6">
                 <div class="flex items-center justify-between mb-4">

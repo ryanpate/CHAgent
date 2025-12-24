@@ -1526,9 +1526,9 @@ def care_refresh_insights(request):
 @login_required
 def comms_hub(request):
     """
-    Main communication hub - shows announcements, channels, and messages.
+    Main communication hub - shows announcements, channels, messages, and tasks.
     """
-    from .models import Announcement, Channel, DirectMessage, AnnouncementRead, Project
+    from .models import Announcement, Channel, DirectMessage, AnnouncementRead, Project, Task
 
     org = get_org(request)
 
@@ -1598,12 +1598,31 @@ def comms_hub(request):
                 'unread': not dm.is_read and dm.recipient == request.user
             }
 
+    # Get user's tasks (assigned to them, not completed)
+    today = timezone.now().date()
+    my_tasks = Task.objects.filter(
+        assignees=request.user
+    ).exclude(
+        status__in=['completed', 'cancelled']
+    ).select_related('project').order_by('due_date', '-priority', 'created_at')
+    if org:
+        my_tasks = my_tasks.filter(project__organization=org)
+    my_tasks = my_tasks[:10]
+
+    # Count overdue tasks
+    overdue_task_count = Task.objects.filter(
+        assignees=request.user,
+        due_date__lt=today
+    ).exclude(status__in=['completed', 'cancelled']).count()
+
     context = {
         'announcements': announcements,
         'channels': channels,
         'projects': projects,
         'conversations': list(conversations.values())[:10],
         'unread_dm_count': unread_dm_count,
+        'my_tasks': my_tasks,
+        'overdue_task_count': overdue_task_count,
     }
     return render(request, 'core/comms/hub.html', context)
 
