@@ -1405,29 +1405,13 @@ def care_dismiss_insight(request, pk):
     """
     Dismiss an insight (mark as addressed/dismissed).
     """
-    import logging
-    logger = logging.getLogger('django.request')
     from .models import VolunteerInsight
 
-    logger.warning(f"[CARE DEBUG] care_dismiss_insight called with pk={pk}")
-
     org = get_org(request)
-    logger.warning(f"[CARE DEBUG] org={org}, org_id={org.id if org else None}")
-
-    # Check if insight exists at all (without org filter)
-    all_count = VolunteerInsight.objects.filter(pk=pk).count()
-    logger.warning(f"[CARE DEBUG] Insight pk={pk} exists globally: {all_count > 0}")
-
-    if all_count > 0:
-        insight_check = VolunteerInsight.objects.get(pk=pk)
-        logger.warning(f"[CARE DEBUG] Insight org_id={insight_check.organization_id}")
 
     queryset = VolunteerInsight.objects.all()
     if org:
         queryset = queryset.filter(organization=org)
-
-    filtered_count = queryset.filter(pk=pk).count()
-    logger.warning(f"[CARE DEBUG] After org filter, insight found: {filtered_count > 0}")
 
     insight = get_object_or_404(queryset, pk=pk)
     action = request.POST.get('action', 'dismiss')
@@ -1458,29 +1442,13 @@ def care_create_followup(request, pk):
     """
     Create a follow-up from an insight.
     """
-    import logging
-    logger = logging.getLogger('django.request')
     from .models import VolunteerInsight
 
-    logger.warning(f"[CARE DEBUG] care_create_followup called with pk={pk}")
-
     org = get_org(request)
-    logger.warning(f"[CARE DEBUG] org={org}, org_id={org.id if org else None}")
-
-    # Check if insight exists at all (without org filter)
-    all_count = VolunteerInsight.objects.filter(pk=pk).count()
-    logger.warning(f"[CARE DEBUG] Insight pk={pk} exists globally: {all_count > 0}")
-
-    if all_count > 0:
-        insight_check = VolunteerInsight.objects.get(pk=pk)
-        logger.warning(f"[CARE DEBUG] Insight org_id={insight_check.organization_id}")
 
     queryset = VolunteerInsight.objects.all()
     if org:
         queryset = queryset.filter(organization=org)
-
-    filtered_count = queryset.filter(pk=pk).count()
-    logger.warning(f"[CARE DEBUG] After org filter, insight found: {filtered_count > 0}")
 
     insight = get_object_or_404(queryset, pk=pk)
 
