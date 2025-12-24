@@ -2397,7 +2397,7 @@ class Project(models.Model):
 
 class Task(models.Model):
     """
-    Tasks within a project with assignments and due dates.
+    Tasks that can be standalone or within a project.
     """
     STATUS_CHOICES = [
         ('todo', 'To Do'),
@@ -2414,10 +2414,22 @@ class Task(models.Model):
         ('urgent', 'Urgent'),
     ]
 
+    # Organization for standalone tasks (required if no project)
+    organization = models.ForeignKey(
+        'Organization',
+        on_delete=models.CASCADE,
+        related_name='tasks',
+        null=True,
+        blank=True
+    )
+
+    # Project is now optional for standalone tasks
     project = models.ForeignKey(
         Project,
         on_delete=models.CASCADE,
-        related_name='tasks'
+        related_name='tasks',
+        null=True,
+        blank=True
     )
 
     title = models.CharField(max_length=200)
@@ -2464,7 +2476,9 @@ class Task(models.Model):
         verbose_name_plural = 'Tasks'
 
     def __str__(self):
-        return f"{self.title} ({self.project.name})"
+        if self.project:
+            return f"{self.title} ({self.project.name})"
+        return self.title
 
     @property
     def is_overdue(self):
@@ -2472,6 +2486,20 @@ class Task(models.Model):
         if self.due_date and self.status not in ['completed', 'cancelled']:
             return timezone.now().date() > self.due_date
         return False
+
+    @property
+    def get_organization(self):
+        """Get organization from project or directly."""
+        if self.project:
+            return self.project.organization
+        return self.organization
+
+    def save(self, *args, **kwargs):
+        """Ensure organization consistency."""
+        # If task has a project, sync organization from project
+        if self.project and not self.organization:
+            self.organization = self.project.organization
+        super().save(*args, **kwargs)
 
     def assign_to(self, user, notify=True):
         """Assign task to a user and optionally send notification."""

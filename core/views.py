@@ -1598,22 +1598,15 @@ def comms_hub(request):
                 'unread': not dm.is_read and dm.recipient == request.user
             }
 
-    # Get user's tasks (assigned to them, not completed)
-    today = timezone.now().date()
-    my_tasks = Task.objects.filter(
-        assignees=request.user
-    ).exclude(
-        status__in=['completed', 'cancelled']
-    ).select_related('project').order_by('due_date', '-priority', 'created_at')
+    # Get users in organization for assignee selection
+    from accounts.models import User
     if org:
-        my_tasks = my_tasks.filter(project__organization=org)
-    my_tasks = my_tasks[:10]
-
-    # Count overdue tasks
-    overdue_task_count = Task.objects.filter(
-        assignees=request.user,
-        due_date__lt=today
-    ).exclude(status__in=['completed', 'cancelled']).count()
+        org_users = User.objects.filter(
+            organization_memberships__organization=org,
+            organization_memberships__is_active=True
+        ).distinct().order_by('first_name', 'last_name', 'username')
+    else:
+        org_users = User.objects.filter(is_active=True).order_by('first_name', 'last_name', 'username')
 
     context = {
         'announcements': announcements,
@@ -1621,8 +1614,8 @@ def comms_hub(request):
         'projects': projects,
         'conversations': list(conversations.values())[:10],
         'unread_dm_count': unread_dm_count,
-        'my_tasks': my_tasks,
-        'overdue_task_count': overdue_task_count,
+        'org_users': org_users,
+        'priority_choices': Task.PRIORITY_CHOICES,
     }
     return render(request, 'core/comms/hub.html', context)
 
@@ -2384,16 +2377,75 @@ def task_create(request, project_pk):
 
 @login_required
 @require_POST
+def task_create_standalone(request):
+    """Create a standalone task (not attached to a project)."""
+    from .models import Task
+    from accounts.models import User
+
+    org = get_org(request)
+
+    title = request.POST.get('title', '').strip()
+    description = request.POST.get('description', '').strip()
+    priority = request.POST.get('priority', 'medium')
+    due_date_str = request.POST.get('due_date', '')
+    assignee_ids = request.POST.getlist('assignees')
+
+    if title:
+        # Parse due date
+        due_date = None
+        if due_date_str:
+            try:
+                from datetime import datetime
+                due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        task = Task.objects.create(
+            organization=org,
+            project=None,
+            title=title,
+            description=description,
+            priority=priority,
+            due_date=due_date,
+            created_by=request.user
+        )
+
+        # Assign users and notify them
+        if assignee_ids:
+            for assignee_id in assignee_ids:
+                try:
+                    user = User.objects.get(pk=int(assignee_id))
+                    task.assign_to(user, notify=True)
+                except (ValueError, User.DoesNotExist):
+                    pass
+
+        if request.headers.get('HX-Request'):
+            # Return success message for HTMX
+            return HttpResponse(
+                f'<div class="bg-green-600/20 text-green-400 p-3 rounded text-sm">'
+                f'Task "{task.title}" created successfully!</div>'
+            )
+
+    return redirect('comms_hub')
+
+
+@login_required
+@require_POST
 def task_update_status(request, pk):
     """Update task status."""
     from .models import Task
 
     task = get_object_or_404(Task, pk=pk)
 
-    # Check access
-    project = task.project
-    if project.owner != request.user and request.user not in project.members.all():
-        return HttpResponse('Access denied', status=403)
+    # Check access - allow if assigned, created, or project member
+    if task.project:
+        project = task.project
+        if project.owner != request.user and request.user not in project.members.all():
+            return HttpResponse('Access denied', status=403)
+    else:
+        # Standalone task - check if user is assignee or creator
+        if request.user not in task.assignees.all() and task.created_by != request.user:
+            return HttpResponse('Access denied', status=403)
 
     status = request.POST.get('status')
     if status in dict(Task.STATUS_CHOICES):
@@ -2505,6 +2557,34 @@ def task_detail(request, project_pk, pk):
     return render(request, 'core/comms/task_detail.html', context)
 
 
+@login_required
+def standalone_task_detail(request, pk):
+    """View a standalone task's details (not attached to a project)."""
+    from .models import Task
+
+    org = get_org(request)
+    task = get_object_or_404(Task, pk=pk, project__isnull=True)
+
+    # Check access - must be assignee, creator, or in same org
+    if org and task.organization != org:
+        return redirect('my_tasks')
+    if request.user not in task.assignees.all() and task.created_by != request.user:
+        return redirect('my_tasks')
+
+    comments = task.comments.select_related('author').prefetch_related('mentioned_users')
+    checklists = task.checklists.all()
+    completed_count = checklists.filter(is_completed=True).count()
+
+    context = {
+        'project': None,
+        'task': task,
+        'comments': comments,
+        'checklists': checklists,
+        'completed_count': completed_count,
+    }
+    return render(request, 'core/comms/task_detail.html', context)
+
+
 # ============================================================================
 # My Tasks Dashboard
 # ============================================================================
@@ -2527,13 +2607,17 @@ def my_tasks(request):
     project_id = request.GET.get('project')
 
     # Base queryset - tasks assigned to current user (scoped to organization)
+    # Include both project tasks and standalone tasks
     tasks = Task.objects.filter(
         assignees=request.user
     ).exclude(
         status__in=['completed', 'cancelled']
     )
     if org:
-        tasks = tasks.filter(project__organization=org)
+        # Include tasks from projects in this org OR standalone tasks in this org
+        tasks = tasks.filter(
+            models.Q(project__organization=org) | models.Q(organization=org, project__isnull=True)
+        )
     tasks = tasks.select_related('project', 'created_by').prefetch_related('assignees')
 
     # Apply filters

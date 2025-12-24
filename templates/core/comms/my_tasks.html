@@ -105,7 +105,7 @@
                 {% if tasks %}
                 <div class="divide-y divide-gray-800">
                     {% for task in tasks %}
-                    <a href="{% url 'task_detail' task.project.pk task.pk %}"
+                    <a href="{% if task.project %}{% url 'task_detail' task.project.pk task.pk %}{% else %}{% url 'standalone_task_detail' task.pk %}{% endif %}"
                        class="block p-4 hover:bg-ch-gray transition group">
                         <div class="flex items-start gap-4">
                             <!-- Status indicator -->
@@ -134,7 +134,7 @@
                                 </div>
 
                                 <div class="flex items-center gap-4 text-sm text-gray-500">
-                                    <span>{{ task.project.name }}</span>
+                                    <span>{% if task.project %}{{ task.project.name }}{% else %}Personal Task{% endif %}</span>
 
                                     {% if task.due_date %}
                                     <span class="{% if task.is_overdue %}text-red-400{% elif task.due_date == today %}text-ch-gold{% endif %}">

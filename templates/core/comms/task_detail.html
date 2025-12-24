@@ -6,9 +6,13 @@
 <div class="max-w-3xl mx-auto">
     <!-- Breadcrumb -->
     <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+        {% if project %}
         <a href="{% url 'project_list' %}" class="hover:text-white">Projects</a>
         <span>/</span>
         <a href="{% url 'project_detail' project.pk %}" class="hover:text-white">{{ project.name }}</a>
+        {% else %}
+        <a href="{% url 'my_tasks' %}" class="hover:text-white">My Tasks</a>
+        {% endif %}
         <span>/</span>
         <span class="text-white">{{ task.title }}</span>
     </div>
