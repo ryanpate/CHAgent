@@ -5,7 +5,12 @@
 {% block content %}
 <div class="max-w-6xl mx-auto">
     <div class="flex justify-between items-center mb-6">
-        <h2 class="font-display text-2xl">Interactions</h2>
+        <div>
+            <h2 class="font-display text-2xl">Interactions</h2>
+            {% if total_interactions %}
+            <p class="text-sm text-gray-400 mt-1">{{ total_interactions }} interaction{{ total_interactions|pluralize }} logged</p>
+            {% endif %}
+        </div>
         <a href="{% url 'interaction_create' %}" class="px-4 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
             + New Interaction
         </a>
@@ -25,32 +30,72 @@
         </div>
     </form>
 
-    <!-- Interaction List -->
-    {% if interactions %}
+    {% if grouped_interactions or unassigned_interactions %}
     <div class="space-y-4">
-        {% for interaction in interactions %}
-        <a href="{% url 'interaction_detail' interaction.pk %}" class="block bg-ch-dark rounded-lg p-6 hover:bg-ch-gray transition">
-            <div class="flex justify-between items-start mb-3">
-                <div>
-                    <span class="text-gray-400">{{ interaction.user.display_name|default:interaction.user.username }}</span>
-                    {% if interaction.volunteers.exists %}
-                    <span class="text-gray-600 mx-2">with</span>
-                    {% for volunteer in interaction.volunteers.all|slice:":3" %}
-                    <span class="text-ch-gold">{{ volunteer.name }}{% if not forloop.last %}, {% endif %}</span>
-                    {% endfor %}
-                    {% if interaction.volunteers.count > 3 %}
-                    <span class="text-gray-500">+{{ interaction.volunteers.count|add:"-3" }} more</span>
-                    {% endif %}
-                    {% endif %}
+        <!-- Grouped by Volunteer -->
+        {% for volunteer, interactions in grouped_interactions %}
+        <details class="bg-ch-dark rounded-lg overflow-hidden group" open>
+            <summary class="flex items-center justify-between p-4 cursor-pointer hover:bg-ch-gray transition">
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-gray-400 transform transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                    <a href="{% url 'volunteer_detail' volunteer.pk %}" class="text-ch-gold font-medium hover:underline" onclick="event.stopPropagation();">
+                        {{ volunteer.name }}
+                    </a>
+                    <span class="text-sm text-gray-500">{{ interactions|length }} interaction{{ interactions|length|pluralize }}</span>
                 </div>
-                <span class="text-sm text-gray-500">{{ interaction.created_at|date:"M j, Y" }}</span>
+                {% if volunteer.team %}
+                <span class="text-xs bg-ch-gray px-2 py-1 rounded text-gray-400">{{ volunteer.team }}</span>
+                {% endif %}
+            </summary>
+            <div class="border-t border-gray-700">
+                {% for interaction in interactions %}
+                <a href="{% url 'interaction_detail' interaction.pk %}"
+                   class="block p-4 hover:bg-ch-gray transition border-b border-gray-700/50 last:border-b-0">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-sm text-gray-400">{{ interaction.user.display_name|default:interaction.user.username }}</span>
+                        <span class="text-sm text-gray-500">{{ interaction.created_at|date:"M j, Y" }}</span>
+                    </div>
+                    <p class="text-gray-300 text-sm">{{ interaction.content|truncatewords:30 }}</p>
+                    {% if interaction.ai_summary %}
+                    <p class="text-xs text-gray-500 italic mt-2">{{ interaction.ai_summary }}</p>
+                    {% endif %}
+                </a>
+                {% endfor %}
             </div>
-            <p class="text-gray-300 mb-3">{{ interaction.content|truncatewords:40 }}</p>
-            {% if interaction.ai_summary %}
-            <p class="text-sm text-gray-500 italic">{{ interaction.ai_summary }}</p>
-            {% endif %}
-        </a>
+        </details>
         {% endfor %}
+
+        <!-- Unassigned Interactions -->
+        {% if unassigned_interactions %}
+        <details class="bg-ch-dark rounded-lg overflow-hidden group">
+            <summary class="flex items-center justify-between p-4 cursor-pointer hover:bg-ch-gray transition">
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-gray-400 transform transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                    <span class="text-gray-400 font-medium">Unassigned</span>
+                    <span class="text-sm text-gray-500">{{ unassigned_interactions|length }} interaction{{ unassigned_interactions|length|pluralize }}</span>
+                </div>
+            </summary>
+            <div class="border-t border-gray-700">
+                {% for interaction in unassigned_interactions %}
+                <a href="{% url 'interaction_detail' interaction.pk %}"
+                   class="block p-4 hover:bg-ch-gray transition border-b border-gray-700/50 last:border-b-0">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-sm text-gray-400">{{ interaction.user.display_name|default:interaction.user.username }}</span>
+                        <span class="text-sm text-gray-500">{{ interaction.created_at|date:"M j, Y" }}</span>
+                    </div>
+                    <p class="text-gray-300 text-sm">{{ interaction.content|truncatewords:30 }}</p>
+                    {% if interaction.ai_summary %}
+                    <p class="text-xs text-gray-500 italic mt-2">{{ interaction.ai_summary }}</p>
+                    {% endif %}
+                </a>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
     </div>
     {% else %}
     <div class="bg-ch-dark rounded-lg p-12 text-center">

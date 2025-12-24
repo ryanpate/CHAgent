@@ -519,7 +519,9 @@ def feedback_resolve(request, pk):
 
 @login_required
 def interaction_list(request):
-    """List all interactions with pagination."""
+    """List all interactions grouped by volunteer."""
+    from collections import defaultdict
+
     org = get_org(request)
 
     interactions = Interaction.objects.select_related('user').prefetch_related('volunteers')
@@ -531,9 +533,31 @@ def interaction_list(request):
     if search_query:
         interactions = interactions.filter(content__icontains=search_query)
 
+    interactions = interactions.order_by('-created_at')[:100]  # Limit for performance
+
+    # Group interactions by volunteer
+    volunteer_interactions = defaultdict(list)
+    unassigned_interactions = []
+
+    for interaction in interactions:
+        volunteers = list(interaction.volunteers.all())
+        if volunteers:
+            for volunteer in volunteers:
+                volunteer_interactions[volunteer].append(interaction)
+        else:
+            unassigned_interactions.append(interaction)
+
+    # Sort volunteers by name and convert to list of tuples
+    grouped_interactions = sorted(
+        volunteer_interactions.items(),
+        key=lambda x: x[0].name.lower()
+    )
+
     context = {
-        'interactions': interactions[:50],  # Limit for performance
+        'grouped_interactions': grouped_interactions,
+        'unassigned_interactions': unassigned_interactions,
         'search_query': search_query,
+        'total_interactions': len(interactions),
     }
     return render(request, 'core/interaction_list.html', context)
 
