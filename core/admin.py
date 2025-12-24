@@ -4,9 +4,234 @@ from django.utils.html import format_html
 from .models import (
     Volunteer, Interaction, ChatMessage, ResponseFeedback, ReportCache, SongBPMCache,
     Announcement, AnnouncementRead, Channel, ChannelMessage, DirectMessage,
-    Project, Task, TaskComment, TaskChecklist, TaskTemplate
+    Project, Task, TaskComment, TaskChecklist, TaskTemplate,
+    Organization, OrganizationMembership, OrganizationInvitation, SubscriptionPlan
 )
 
+
+# =============================================================================
+# Organization and Multi-Tenant Admin
+# =============================================================================
+
+class OrganizationMembershipInline(admin.TabularInline):
+    """Inline admin for managing organization memberships."""
+    model = OrganizationMembership
+    extra = 1
+    fields = ('user', 'role', 'team', 'can_manage_users', 'can_manage_settings', 'can_view_analytics', 'can_manage_billing', 'is_active')
+    autocomplete_fields = ['user']
+
+
+class OrganizationInvitationInline(admin.TabularInline):
+    """Inline admin for managing pending invitations."""
+    model = OrganizationInvitation
+    extra = 0
+    fields = ('email', 'role', 'team', 'status', 'created_at', 'expires_at')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(SubscriptionPlan)
+class SubscriptionPlanAdmin(admin.ModelAdmin):
+    """Admin configuration for SubscriptionPlan model."""
+    list_display = ('name', 'tier', 'price_monthly_display', 'price_yearly_display', 'max_users', 'max_volunteers', 'is_active')
+    list_filter = ('tier', 'is_active', 'is_public')
+    search_fields = ('name', 'description')
+    ordering = ('sort_order', 'price_monthly_cents')
+    fieldsets = (
+        ('Plan Info', {
+            'fields': ('name', 'slug', 'tier', 'description', 'is_active', 'is_public', 'sort_order')
+        }),
+        ('Pricing', {
+            'fields': ('price_monthly_cents', 'price_yearly_cents')
+        }),
+        ('Limits', {
+            'fields': ('max_users', 'max_volunteers', 'max_ai_queries_monthly')
+        }),
+        ('Features', {
+            'fields': ('has_pco_integration', 'has_push_notifications', 'has_analytics', 'has_care_insights', 'has_api_access', 'has_custom_branding', 'has_priority_support')
+        }),
+    )
+
+    def price_monthly_display(self, obj):
+        """Display monthly price in dollars."""
+        return f"${obj.price_monthly_cents / 100:.2f}"
+    price_monthly_display.short_description = 'Monthly'
+    price_monthly_display.admin_order_field = 'price_monthly_cents'
+
+    def price_yearly_display(self, obj):
+        """Display yearly price in dollars."""
+        return f"${obj.price_yearly_cents / 100:.2f}"
+    price_yearly_display.short_description = 'Yearly'
+    price_yearly_display.admin_order_field = 'price_yearly_cents'
+
+
+@admin.register(Organization)
+class OrganizationAdmin(admin.ModelAdmin):
+    """Admin configuration for Organization model."""
+    list_display = ('name', 'status_badge', 'subscription_plan', 'user_count', 'volunteer_count', 'pco_status', 'created_at')
+    list_filter = ('subscription_status', 'subscription_plan', 'is_active', 'created_at')
+    search_fields = ('name', 'slug', 'email')
+    ordering = ('name',)
+    readonly_fields = ('created_at', 'updated_at', 'api_key')
+    prepopulated_fields = {'slug': ('name',)}
+    inlines = [OrganizationMembershipInline, OrganizationInvitationInline]
+    fieldsets = (
+        ('Basic Info', {
+            'fields': ('name', 'slug', 'logo', 'is_active')
+        }),
+        ('Contact', {
+            'fields': ('email', 'phone', 'website', 'address', 'timezone')
+        }),
+        ('Subscription', {
+            'fields': ('subscription_plan', 'subscription_status', 'trial_ends_at', 'subscription_started_at', 'subscription_ends_at')
+        }),
+        ('Billing (Stripe)', {
+            'fields': ('stripe_customer_id', 'stripe_subscription_id'),
+            'classes': ('collapse',),
+        }),
+        ('Planning Center', {
+            'fields': ('planning_center_app_id', 'planning_center_secret', 'planning_center_connected_at'),
+            'classes': ('collapse',),
+        }),
+        ('API Access', {
+            'fields': ('api_key', 'api_enabled'),
+            'classes': ('collapse',),
+        }),
+        ('Usage', {
+            'fields': ('ai_queries_this_month', 'ai_queries_reset_at'),
+            'classes': ('collapse',),
+        }),
+        ('Customization', {
+            'fields': ('ai_assistant_name', 'primary_color'),
+            'classes': ('collapse',),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def status_badge(self, obj):
+        """Display subscription status with color badge."""
+        colors = {
+            'trial': '#8b5cf6',
+            'active': '#22c55e',
+            'past_due': '#f59e0b',
+            'cancelled': '#ef4444',
+            'suspended': '#6b7280',
+        }
+        color = colors.get(obj.subscription_status, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; '
+            'border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_subscription_status_display()
+        )
+    status_badge.short_description = 'Status'
+    status_badge.admin_order_field = 'subscription_status'
+
+    def user_count(self, obj):
+        """Display user count."""
+        return obj.get_user_count()
+    user_count.short_description = 'Users'
+
+    def volunteer_count(self, obj):
+        """Display volunteer count."""
+        return obj.get_volunteer_count()
+    volunteer_count.short_description = 'Volunteers'
+
+    def pco_status(self, obj):
+        """Display Planning Center connection status."""
+        if obj.has_pco_credentials():
+            return format_html('<span style="color: #22c55e;">Connected</span>')
+        return format_html('<span style="color: #6b7280;">Not connected</span>')
+    pco_status.short_description = 'PCO'
+
+
+@admin.register(OrganizationMembership)
+class OrganizationMembershipAdmin(admin.ModelAdmin):
+    """Admin configuration for OrganizationMembership model."""
+    list_display = ('user', 'organization', 'role_badge', 'team', 'is_active', 'joined_at')
+    list_filter = ('role', 'organization', 'is_active', 'team')
+    search_fields = ('user__username', 'user__email', 'organization__name')
+    ordering = ('organization', 'user')
+    autocomplete_fields = ['user', 'organization']
+    fieldsets = (
+        ('Membership', {
+            'fields': ('user', 'organization', 'role', 'team', 'is_active')
+        }),
+        ('Permissions', {
+            'fields': ('can_manage_users', 'can_manage_settings', 'can_view_analytics', 'can_manage_billing')
+        }),
+        ('Invitation Details', {
+            'fields': ('invited_by', 'invited_at', 'joined_at'),
+            'classes': ('collapse',),
+        }),
+    )
+    readonly_fields = ('invited_at',)
+
+    def role_badge(self, obj):
+        """Display role with color badge."""
+        colors = {
+            'owner': '#ef4444',
+            'admin': '#f59e0b',
+            'leader': '#3b82f6',
+            'member': '#22c55e',
+            'viewer': '#6b7280',
+        }
+        color = colors.get(obj.role, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; '
+            'border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_role_display()
+        )
+    role_badge.short_description = 'Role'
+    role_badge.admin_order_field = 'role'
+
+
+@admin.register(OrganizationInvitation)
+class OrganizationInvitationAdmin(admin.ModelAdmin):
+    """Admin configuration for OrganizationInvitation model."""
+    list_display = ('email', 'organization', 'role', 'status_badge', 'invited_by', 'created_at', 'expires_at')
+    list_filter = ('status', 'role', 'organization', 'created_at')
+    search_fields = ('email', 'organization__name')
+    ordering = ('-created_at',)
+    readonly_fields = ('token', 'created_at', 'accepted_at')
+    fieldsets = (
+        ('Invitation', {
+            'fields': ('organization', 'email', 'role', 'team', 'message')
+        }),
+        ('Status', {
+            'fields': ('status', 'token', 'expires_at', 'accepted_at')
+        }),
+        ('Metadata', {
+            'fields': ('invited_by', 'created_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def status_badge(self, obj):
+        """Display status with color badge."""
+        colors = {
+            'pending': '#f59e0b',
+            'accepted': '#22c55e',
+            'declined': '#ef4444',
+            'expired': '#6b7280',
+        }
+        color = colors.get(obj.status, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; '
+            'border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_status_display()
+        )
+    status_badge.short_description = 'Status'
+    status_badge.admin_order_field = 'status'
+
+
+# =============================================================================
+# Core Models Admin
+# =============================================================================
 
 @admin.register(Volunteer)
 class VolunteerAdmin(admin.ModelAdmin):
