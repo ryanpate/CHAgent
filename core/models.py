@@ -1562,9 +1562,13 @@ class ExtractedKnowledge(models.Model):
                 'source_interaction': source_interaction,
                 'extracted_by': user,
                 'is_current': True,
-                'last_confirmed': timezone.now() if not created else None
             }
         )
+
+        # Update last_confirmed only when updating existing knowledge (not creating)
+        if not created:
+            obj.last_confirmed = timezone.now()
+            obj.save(update_fields=['last_confirmed'])
 
         return obj, created
 
