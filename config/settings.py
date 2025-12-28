@@ -28,14 +28,16 @@ RAILWAY_PUBLIC_DOMAIN = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
 if RAILWAY_PUBLIC_DOMAIN:
     ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
 
-# Allow all .railway.app domains in production
+# Allow all .railway.app domains and custom domain in production
 if not DEBUG:
-    ALLOWED_HOSTS.extend(['.railway.app', '.up.railway.app'])
+    ALLOWED_HOSTS.extend(['.railway.app', '.up.railway.app', 'aria.church', '.aria.church'])
 
-# CSRF trusted origins for Railway
+# CSRF trusted origins for Railway and custom domains
 CSRF_TRUSTED_ORIGINS = [
     'https://*.railway.app',
     'https://*.up.railway.app',
+    'https://aria.church',
+    'https://*.aria.church',
 ]
 if RAILWAY_PUBLIC_DOMAIN:
     CSRF_TRUSTED_ORIGINS.append(f'https://{RAILWAY_PUBLIC_DOMAIN}')

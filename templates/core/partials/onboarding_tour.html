@@ -1,7 +1,8 @@
 <!-- Onboarding Tour Component -->
 <!-- Usage: {% include 'core/partials/onboarding_tour.html' %} -->
 
-{% if not user.has_completed_onboarding %}
+{% with show_tour=user.has_completed_onboarding|default:True %}
+{% if not show_tour %}
 <div x-data="onboardingTour()" x-show="showTour" x-cloak
      class="fixed inset-0 z-50">
 
@@ -232,3 +233,4 @@ function onboardingTour() {
 [x-cloak] { display: none !important; }
 </style>
 {% endif %}
+{% endwith %}
