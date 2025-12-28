@@ -130,6 +130,12 @@ def dashboard(request):
         volunteer_qs = volunteer_qs.filter(organization=org)
         interaction_qs = interaction_qs.filter(organization=org)
 
+    # Check if user needs onboarding tour (safely handle missing field)
+    try:
+        show_onboarding = not request.user.has_completed_onboarding
+    except AttributeError:
+        show_onboarding = False  # Field doesn't exist yet, don't show tour
+
     context = {
         'total_volunteers': volunteer_qs.count(),
         'total_interactions': interaction_qs.count(),
@@ -139,6 +145,7 @@ def dashboard(request):
         ).order_by('-interaction_count')[:5],
         'chat_messages': chat_messages,
         'session_id': session_id,
+        'show_onboarding': show_onboarding,
     }
 
     response = render(request, 'core/dashboard.html', context)
