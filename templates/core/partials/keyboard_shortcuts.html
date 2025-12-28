@@ -104,7 +104,7 @@
 <script>
 // Detect Mac for displaying correct modifier key
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-document.querySelectorAll('.shortcut-meta').forEach(el => {
+document.querySelectorAll('.shortcut-meta, .shortcut-hint-meta').forEach(el => {
     el.textContent = isMac ? '⌘' : 'Ctrl';
 });
 
