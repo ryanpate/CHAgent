@@ -130,6 +130,24 @@ def dashboard(request):
         volunteer_qs = volunteer_qs.filter(organization=org)
         interaction_qs = interaction_qs.filter(organization=org)
 
+    # Check if onboarding tour should be shown
+    # Safely checks if the database field exists before accessing it
+    show_onboarding = False
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'accounts_user' AND column_name = 'has_completed_onboarding'"
+            )
+            field_exists = cursor.fetchone() is not None
+
+        if field_exists and not request.user.has_completed_onboarding:
+            show_onboarding = True
+    except Exception:
+        # If anything goes wrong, don't show the tour
+        pass
+
     context = {
         'total_volunteers': volunteer_qs.count(),
         'total_interactions': interaction_qs.count(),
@@ -139,6 +157,7 @@ def dashboard(request):
         ).order_by('-interaction_count')[:5],
         'chat_messages': chat_messages,
         'session_id': session_id,
+        'show_onboarding': show_onboarding,
     }
 
     response = render(request, 'core/dashboard.html', context)
