@@ -626,6 +626,15 @@ def chat_feedback_submit(request):
 
 
 @login_required
+@require_POST
+def complete_onboarding_tutorial(request):
+    """Mark the user's onboarding tutorial as completed."""
+    request.user.has_completed_onboarding = True
+    request.user.save(update_fields=['has_completed_onboarding'])
+    return HttpResponse(status=204)
+
+
+@login_required
 def feedback_dashboard(request):
     """
     Dashboard for admins to review feedback and reported issues.

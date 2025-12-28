@@ -15,6 +15,8 @@ urlpatterns = [
     path('chat/load/<str:session_id>/', views.chat_load_session, name='chat_load_session'),
     path('chat/feedback/', views.chat_feedback, name='chat_feedback'),
     path('chat/feedback/submit/', views.chat_feedback_submit, name='chat_feedback_submit'),
+    # Onboarding Tutorial
+    path('onboarding/complete-tutorial/', views.complete_onboarding_tutorial, name='complete_onboarding_tutorial'),
     # Feedback dashboard
     path('feedback/', views.feedback_dashboard, name='feedback_dashboard'),
     path('feedback/<int:pk>/resolve/', views.feedback_resolve, name='feedback_resolve'),

@@ -1,0 +1,234 @@
+<!-- Onboarding Tour Component -->
+<!-- Usage: {% include 'core/partials/onboarding_tour.html' %} -->
+
+{% if not user.has_completed_onboarding %}
+<div x-data="onboardingTour()" x-show="showTour" x-cloak
+     class="fixed inset-0 z-50">
+
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-black/80" @click="skipTour()"></div>
+
+    <!-- Tour Steps -->
+    <div class="relative h-full flex items-center justify-center p-4">
+
+        <!-- Step 1: Welcome -->
+        <div x-show="step === 1" x-transition
+             class="bg-ch-dark rounded-xl p-8 max-w-md w-full shadow-2xl border border-ch-gold/20 text-center">
+            <div class="w-16 h-16 bg-ch-gold/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold text-ch-gold mb-2">Welcome to Aria!</h2>
+            <p class="text-gray-300 mb-6">
+                I'm your AI assistant for managing volunteer relationships, accessing schedules, and tracking follow-ups.
+            </p>
+            <p class="text-gray-400 text-sm mb-6">
+                Let me show you around in 30 seconds.
+            </p>
+            <div class="flex gap-3 justify-center">
+                <button @click="skipTour()" class="px-4 py-2 text-gray-400 hover:text-white transition">
+                    Skip tour
+                </button>
+                <button @click="nextStep()" class="px-6 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                    Let's go!
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 2: Chat Interface -->
+        <div x-show="step === 2" x-transition
+             class="absolute top-[280px] left-1/2 -translate-x-1/2 max-w-md w-full mx-4">
+            <div class="bg-ch-dark rounded-xl p-6 shadow-2xl border border-ch-gold/20">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg mb-1">Ask Me Anything</h3>
+                        <p class="text-gray-300 text-sm">
+                            Type your questions in the chat box. I can help with:
+                        </p>
+                        <ul class="text-gray-400 text-sm mt-2 space-y-1">
+                            <li>- "Who's serving this Sunday?"</li>
+                            <li>- "What's Sarah's email?"</li>
+                            <li>- "Log interaction: Met with John..."</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Step 2 of 5</span>
+                    <div class="flex gap-2">
+                        <button @click="prevStep()" class="px-3 py-1.5 text-gray-400 hover:text-white transition text-sm">
+                            Back
+                        </button>
+                        <button @click="nextStep()" class="px-4 py-1.5 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition text-sm">
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- Arrow pointing up -->
+            <div class="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-ch-dark border-l border-t border-ch-gold/20 transform rotate-45"></div>
+        </div>
+
+        <!-- Step 3: Quick Actions -->
+        <div x-show="step === 3" x-transition
+             class="absolute bottom-[160px] left-1/2 -translate-x-1/2 max-w-md w-full mx-4">
+            <div class="bg-ch-dark rounded-xl p-6 shadow-2xl border border-ch-gold/20">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg mb-1">Quick Actions</h3>
+                        <p class="text-gray-300 text-sm">
+                            Use these buttons to quickly start common tasks. Each one pre-fills a helpful prompt for you.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Step 3 of 5</span>
+                    <div class="flex gap-2">
+                        <button @click="prevStep()" class="px-3 py-1.5 text-gray-400 hover:text-white transition text-sm">
+                            Back
+                        </button>
+                        <button @click="nextStep()" class="px-4 py-1.5 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition text-sm">
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- Arrow pointing down -->
+            <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-ch-dark border-r border-b border-ch-gold/20 transform rotate-45"></div>
+        </div>
+
+        <!-- Step 4: History & Tools -->
+        <div x-show="step === 4" x-transition
+             class="absolute top-[100px] right-[100px] max-w-sm w-full mx-4">
+            <div class="bg-ch-dark rounded-xl p-6 shadow-2xl border border-ch-gold/20">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg mb-1">Conversation Tools</h3>
+                        <p class="text-gray-300 text-sm">
+                            <strong>History</strong> - Search past conversations<br>
+                            <strong>Copy</strong> - Copy chat to clipboard<br>
+                            <strong>New</strong> - Start fresh conversation
+                        </p>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Step 4 of 5</span>
+                    <div class="flex gap-2">
+                        <button @click="prevStep()" class="px-3 py-1.5 text-gray-400 hover:text-white transition text-sm">
+                            Back
+                        </button>
+                        <button @click="nextStep()" class="px-4 py-1.5 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition text-sm">
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- Arrow pointing to the right -->
+            <div class="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 bg-ch-dark border-r border-t border-ch-gold/20 transform rotate-45"></div>
+        </div>
+
+        <!-- Step 5: Explore More -->
+        <div x-show="step === 5" x-transition
+             class="bg-ch-dark rounded-xl p-8 max-w-md w-full shadow-2xl border border-ch-gold/20 text-center">
+            <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold text-white mb-2">You're All Set!</h2>
+            <p class="text-gray-300 mb-4">
+                Explore the sidebar to discover more features:
+            </p>
+            <div class="grid grid-cols-2 gap-3 text-left mb-6">
+                <div class="bg-ch-gray/50 rounded-lg p-3">
+                    <p class="text-ch-gold text-sm font-medium">Interactions</p>
+                    <p class="text-gray-400 text-xs">View logged notes</p>
+                </div>
+                <div class="bg-ch-gray/50 rounded-lg p-3">
+                    <p class="text-ch-gold text-sm font-medium">Volunteers</p>
+                    <p class="text-gray-400 text-xs">Browse team profiles</p>
+                </div>
+                <div class="bg-ch-gray/50 rounded-lg p-3">
+                    <p class="text-ch-gold text-sm font-medium">Follow-ups</p>
+                    <p class="text-gray-400 text-xs">Track action items</p>
+                </div>
+                <div class="bg-ch-gray/50 rounded-lg p-3">
+                    <p class="text-ch-gold text-sm font-medium">Team Hub</p>
+                    <p class="text-gray-400 text-xs">Messages & tasks</p>
+                </div>
+            </div>
+            <button @click="completeTour()" class="w-full px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                Start Using Aria
+            </button>
+        </div>
+    </div>
+
+    <!-- Progress Dots -->
+    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2">
+        <template x-for="i in 5">
+            <button @click="step = i"
+                    :class="step === i ? 'bg-ch-gold' : 'bg-gray-600 hover:bg-gray-500'"
+                    class="w-2 h-2 rounded-full transition"></button>
+        </template>
+    </div>
+</div>
+
+<script>
+function onboardingTour() {
+    return {
+        showTour: true,
+        step: 1,
+
+        nextStep() {
+            if (this.step < 5) {
+                this.step++;
+            }
+        },
+
+        prevStep() {
+            if (this.step > 1) {
+                this.step--;
+            }
+        },
+
+        skipTour() {
+            this.completeTour();
+        },
+
+        completeTour() {
+            // Send request to mark onboarding as complete
+            fetch('{% url "complete_onboarding_tutorial" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                }
+            }).then(() => {
+                this.showTour = false;
+            }).catch(() => {
+                // Still hide the tour even if request fails
+                this.showTour = false;
+            });
+        }
+    }
+}
+</script>
+
+<style>
+[x-cloak] { display: none !important; }
+</style>
+{% endif %}

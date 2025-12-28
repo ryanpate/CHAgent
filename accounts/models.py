@@ -12,6 +12,12 @@ class User(AbstractUser):
         help_text="Platform administrator with access to all organizations"
     )
 
+    # Onboarding
+    has_completed_onboarding = models.BooleanField(
+        default=False,
+        help_text="Whether the user has completed the onboarding tutorial"
+    )
+
     # Default organization for users with multiple orgs
     default_organization = models.ForeignKey(
         'core.Organization',
