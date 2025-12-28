@@ -9,6 +9,14 @@
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-2xl font-bold">Ask Aria</h2>
             <div class="flex gap-2">
+                <button onclick="openHistoryModal()"
+                        class="px-4 py-2 bg-ch-gray hover:bg-gray-600 rounded-lg transition text-sm flex items-center gap-2"
+                        title="View conversation history">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    History
+                </button>
                 <button onclick="copyConversation()"
                         id="copy-btn"
                         class="px-4 py-2 bg-ch-gray hover:bg-gray-600 rounded-lg transition text-sm flex items-center gap-2"
@@ -32,6 +40,19 @@
 
         <!-- Chat Messages -->
         <div id="chat-messages" class="bg-ch-dark rounded-lg p-6 h-[400px] overflow-y-auto mb-4 space-y-4">
+            <!-- Aria Thinking Indicator (hidden by default) -->
+            <div id="aria-thinking" class="mr-12 hidden">
+                <div class="bg-ch-gray rounded-lg p-4">
+                    <div class="flex items-center gap-3">
+                        <div class="flex space-x-1">
+                            <div class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 0ms;"></div>
+                            <div class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 150ms;"></div>
+                            <div class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 300ms;"></div>
+                        </div>
+                        <span class="text-sm text-gray-400">Aria is thinking...</span>
+                    </div>
+                </div>
+            </div>
             {% for message in chat_messages %}
             <div class="{% if message.role == 'user' %}ml-12{% else %}mr-12{% endif %}">
                 <div class="{% if message.role == 'user' %}bg-ch-gold text-black{% else %}bg-ch-gray markdown-content{% endif %} rounded-lg p-4">
@@ -103,7 +124,9 @@
         <form hx-post="{% url 'chat_send' %}"
               hx-target="#chat-messages"
               hx-swap="beforeend"
-              hx-on::after-request="this.reset(); document.getElementById('chat-welcome')?.remove(); document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;"
+              hx-indicator="#aria-thinking"
+              hx-on::before-request="showThinking()"
+              hx-on::after-request="hideThinking(); this.reset(); document.getElementById('chat-welcome')?.remove(); document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;"
               class="flex gap-4">
             {% csrf_token %}
             <input type="text"
@@ -162,6 +185,45 @@
                 </svg>
                 Prayer Requests
             </button>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-ch-dark rounded-xl max-w-lg w-full max-h-[80vh] flex flex-col shadow-2xl">
+            <!-- Modal Header -->
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-bold">Conversation History</h3>
+                <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-white transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <!-- Search Bar -->
+            <div class="p-4 border-b border-gray-700">
+                <div class="relative">
+                    <input type="text"
+                           id="history-search"
+                           placeholder="Search conversations..."
+                           hx-get="{% url 'chat_history_search' %}"
+                           hx-trigger="keyup changed delay:300ms"
+                           hx-target="#history-list"
+                           hx-include="this"
+                           name="q"
+                           class="w-full bg-ch-gray border border-gray-600 rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-ch-gold transition text-sm">
+                    <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+            </div>
+            <!-- Conversation List -->
+            <div id="history-list" class="flex-1 overflow-y-auto p-4">
+                <!-- Skeleton loader while loading -->
+                <div id="history-skeleton" class="space-y-2">
+                    {% include 'core/partials/skeleton_loaders.html' with type='conversation-preview' count=4 %}
+                </div>
+            </div>
         </div>
     </div>
 
@@ -245,6 +307,57 @@
 </div>
 
 <script>
+// Thinking Indicator Functions
+function showThinking() {
+    const indicator = document.getElementById('aria-thinking');
+    const chatMessages = document.getElementById('chat-messages');
+    indicator.classList.remove('hidden');
+    // Scroll to show the thinking indicator
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function hideThinking() {
+    const indicator = document.getElementById('aria-thinking');
+    indicator.classList.add('hidden');
+}
+
+// History Modal Functions
+function openHistoryModal() {
+    const modal = document.getElementById('history-modal');
+    const historyList = document.getElementById('history-list');
+    const searchInput = document.getElementById('history-search');
+
+    // Show modal
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+    // Clear search input
+    searchInput.value = '';
+
+    // Load history via HTMX
+    htmx.ajax('GET', '{% url "chat_history" %}', {target: '#history-list', swap: 'innerHTML'});
+}
+
+function closeHistoryModal() {
+    const modal = document.getElementById('history-modal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeHistoryModal();
+    }
+});
+
+// Close modal when clicking backdrop
+document.getElementById('history-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeHistoryModal();
+    }
+});
+
 function setMessage(text) {
     const input = document.querySelector('input[name="message"]');
     input.value = text;

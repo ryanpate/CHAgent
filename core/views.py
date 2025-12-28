@@ -353,6 +353,156 @@ def chat_new_session(request):
 
 
 @login_required
+def chat_history(request):
+    """
+    Return list of past conversation sessions for the history modal.
+    Groups messages by session_id and returns the first user message as preview.
+    """
+    from django.db.models import Min, Max, Count
+    org = get_org(request)
+
+    # Get all unique sessions with their message counts and date range
+    sessions_qs = ChatMessage.objects.filter(user=request.user)
+    if org:
+        sessions_qs = sessions_qs.filter(organization=org)
+
+    sessions = sessions_qs.values('session_id').annotate(
+        first_message=Min('created_at'),
+        last_message=Max('created_at'),
+        message_count=Count('id')
+    ).order_by('-last_message')[:50]  # Last 50 conversations
+
+    # Get the first user message for each session as preview
+    session_previews = []
+    for session in sessions:
+        first_user_msg = ChatMessage.objects.filter(
+            session_id=session['session_id'],
+            role='user'
+        ).order_by('created_at').first()
+
+        preview_text = first_user_msg.content[:100] if first_user_msg else "Empty conversation"
+        if len(first_user_msg.content if first_user_msg else "") > 100:
+            preview_text += "..."
+
+        session_previews.append({
+            'session_id': session['session_id'],
+            'preview': preview_text,
+            'first_message': session['first_message'],
+            'last_message': session['last_message'],
+            'message_count': session['message_count'],
+        })
+
+    return render(request, 'core/partials/chat_history.html', {
+        'sessions': session_previews,
+    })
+
+
+@login_required
+def chat_history_search(request):
+    """
+    Search through past conversations via HTMX.
+    Returns filtered list of conversation sessions.
+    """
+    from django.db.models import Min, Max, Count, Q
+    org = get_org(request)
+    query = request.GET.get('q', '').strip()
+
+    if not query:
+        return chat_history(request)
+
+    # Find sessions containing the search query
+    sessions_with_query = ChatMessage.objects.filter(
+        user=request.user,
+        content__icontains=query
+    )
+    if org:
+        sessions_with_query = sessions_with_query.filter(organization=org)
+
+    matching_session_ids = sessions_with_query.values_list('session_id', flat=True).distinct()
+
+    # Get session details for matching sessions
+    sessions_qs = ChatMessage.objects.filter(
+        user=request.user,
+        session_id__in=matching_session_ids
+    )
+    if org:
+        sessions_qs = sessions_qs.filter(organization=org)
+
+    sessions = sessions_qs.values('session_id').annotate(
+        first_message=Min('created_at'),
+        last_message=Max('created_at'),
+        message_count=Count('id')
+    ).order_by('-last_message')[:30]
+
+    # Get previews with highlighted search terms
+    session_previews = []
+    for session in sessions:
+        # Get the message containing the search term
+        matching_msg = ChatMessage.objects.filter(
+            session_id=session['session_id'],
+            content__icontains=query
+        ).order_by('created_at').first()
+
+        if matching_msg:
+            # Get context around the match
+            content = matching_msg.content
+            lower_content = content.lower()
+            match_pos = lower_content.find(query.lower())
+            start = max(0, match_pos - 30)
+            end = min(len(content), match_pos + len(query) + 50)
+            preview_text = content[start:end]
+            if start > 0:
+                preview_text = "..." + preview_text
+            if end < len(content):
+                preview_text = preview_text + "..."
+        else:
+            preview_text = "Matching conversation"
+
+        session_previews.append({
+            'session_id': session['session_id'],
+            'preview': preview_text,
+            'first_message': session['first_message'],
+            'last_message': session['last_message'],
+            'message_count': session['message_count'],
+            'search_query': query,
+        })
+
+    return render(request, 'core/partials/chat_history.html', {
+        'sessions': session_previews,
+        'search_query': query,
+    })
+
+
+@login_required
+def chat_load_session(request, session_id):
+    """
+    Load a specific conversation session into the chat window.
+    Returns the messages for HTMX to swap into the chat container.
+    """
+    org = get_org(request)
+
+    # Get messages for this session
+    messages = ChatMessage.objects.filter(
+        user=request.user,
+        session_id=session_id
+    )
+    if org:
+        messages = messages.filter(organization=org)
+    messages = messages.order_by('created_at')
+
+    if not messages.exists():
+        return HttpResponse('<p class="text-gray-500 text-center py-4">Conversation not found</p>')
+
+    # Set this session as the current session
+    response = render(request, 'core/partials/chat_messages_loaded.html', {
+        'chat_messages': messages,
+    })
+    response.set_cookie('chat_session_id', session_id, max_age=86400 * 7)
+
+    return response
+
+
+@login_required
 @require_POST
 def chat_feedback(request):
     """

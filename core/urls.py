@@ -10,6 +10,9 @@ urlpatterns = [
     path('chat/', views.chat, name='chat'),
     path('chat/send/', views.chat_send, name='chat_send'),
     path('chat/new/', views.chat_new_session, name='chat_new_session'),
+    path('chat/history/', views.chat_history, name='chat_history'),
+    path('chat/history/search/', views.chat_history_search, name='chat_history_search'),
+    path('chat/load/<str:session_id>/', views.chat_load_session, name='chat_load_session'),
     path('chat/feedback/', views.chat_feedback, name='chat_feedback'),
     path('chat/feedback/submit/', views.chat_feedback_submit, name='chat_feedback_submit'),
     # Feedback dashboard
