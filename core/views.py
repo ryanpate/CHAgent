@@ -131,21 +131,12 @@ def dashboard(request):
         interaction_qs = interaction_qs.filter(organization=org)
 
     # Check if onboarding tour should be shown
-    # Safely checks if the database field exists before accessing it
     show_onboarding = False
     try:
-        from django.db import connection
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'accounts_user' AND column_name = 'has_completed_onboarding'"
-            )
-            field_exists = cursor.fetchone() is not None
-
-        if field_exists and not request.user.has_completed_onboarding:
+        if not request.user.has_completed_onboarding:
             show_onboarding = True
-    except Exception:
-        # If anything goes wrong, don't show the tour
+    except (AttributeError, Exception):
+        # Field doesn't exist or other error - don't show tour
         pass
 
     context = {
