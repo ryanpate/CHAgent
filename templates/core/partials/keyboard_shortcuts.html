@@ -1,0 +1,214 @@
+<!-- Keyboard Shortcuts Help Modal -->
+<div id="shortcuts-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-ch-dark rounded-xl max-w-md w-full shadow-2xl border border-gray-700">
+        <!-- Modal Header -->
+        <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+            <h3 class="text-lg font-bold flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"></path>
+                </svg>
+                Keyboard Shortcuts
+            </h3>
+            <button onclick="closeShortcutsModal()" class="text-gray-400 hover:text-white transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Shortcuts List -->
+        <div class="p-4 space-y-4">
+            <!-- Navigation -->
+            <div>
+                <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Navigation</h4>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300">Focus chat input</span>
+                        <div class="flex gap-1">
+                            <kbd class="px-2 py-1 bg-ch-gray rounded text-xs font-mono">
+                                <span class="shortcut-meta">Ctrl</span>
+                            </kbd>
+                            <span class="text-gray-500">+</span>
+                            <kbd class="px-2 py-1 bg-ch-gray rounded text-xs font-mono">K</kbd>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300">Open conversation history</span>
+                        <div class="flex gap-1">
+                            <kbd class="px-2 py-1 bg-ch-gray rounded text-xs font-mono">
+                                <span class="shortcut-meta">Ctrl</span>
+                            </kbd>
+                            <span class="text-gray-500">+</span>
+                            <kbd class="px-2 py-1 bg-ch-gray rounded text-xs font-mono">H</kbd>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300">New conversation</span>
+                        <div class="flex gap-1">
+                            <kbd class="px-2 py-1 bg-ch-gray rounded text-xs font-mono">
+                                <span class="shortcut-meta">Ctrl</span>
+                            </kbd>
+                            <span class="text-gray-500">+</span>
+                            <kbd class="px-2 py-1 bg-ch-gray rounded text-xs font-mono">N</kbd>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div>
+                <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Actions</h4>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300">Send message</span>
+                        <kbd class="px-2 py-1 bg-ch-gray rounded text-xs font-mono">Enter</kbd>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300">Copy conversation</span>
+                        <div class="flex gap-1">
+                            <kbd class="px-2 py-1 bg-ch-gray rounded text-xs font-mono">
+                                <span class="shortcut-meta">Ctrl</span>
+                            </kbd>
+                            <span class="text-gray-500">+</span>
+                            <kbd class="px-2 py-1 bg-ch-gray rounded text-xs font-mono">C</kbd>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- General -->
+            <div>
+                <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">General</h4>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300">Show this help</span>
+                        <kbd class="px-2 py-1 bg-ch-gray rounded text-xs font-mono">?</kbd>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300">Close modal / Clear focus</span>
+                        <kbd class="px-2 py-1 bg-ch-gray rounded text-xs font-mono">Esc</kbd>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-4 border-t border-gray-700 bg-ch-gray/30 rounded-b-xl">
+            <p class="text-xs text-gray-500 text-center">
+                Press <kbd class="px-1.5 py-0.5 bg-ch-gray rounded text-xs font-mono">?</kbd> anytime to show this help
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+// Detect Mac for displaying correct modifier key
+const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+document.querySelectorAll('.shortcut-meta').forEach(el => {
+    el.textContent = isMac ? '⌘' : 'Ctrl';
+});
+
+// Keyboard Shortcuts Handler
+document.addEventListener('keydown', function(e) {
+    const activeElement = document.activeElement;
+    const isTyping = activeElement.tagName === 'INPUT' ||
+                     activeElement.tagName === 'TEXTAREA' ||
+                     activeElement.isContentEditable;
+
+    // Check for modifier key (Cmd on Mac, Ctrl on others)
+    const modKey = isMac ? e.metaKey : e.ctrlKey;
+
+    // Shortcuts that work even when typing
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        // Close any open modal
+        closeShortcutsModal();
+        closeHistoryModal();
+        // Also blur input
+        if (isTyping) {
+            activeElement.blur();
+        }
+        return;
+    }
+
+    // Ctrl/Cmd + K - Focus chat input (works everywhere)
+    if (modKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const chatInput = document.querySelector('input[name="message"]');
+        if (chatInput) {
+            chatInput.focus();
+            chatInput.select();
+        }
+        return;
+    }
+
+    // Shortcuts that only work when NOT typing
+    if (!isTyping) {
+        // ? - Show shortcuts help
+        if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+            e.preventDefault();
+            openShortcutsModal();
+            return;
+        }
+
+        // Ctrl/Cmd + H - Open history modal
+        if (modKey && e.key.toLowerCase() === 'h') {
+            e.preventDefault();
+            openHistoryModal();
+            return;
+        }
+
+        // Ctrl/Cmd + N - New conversation
+        if (modKey && e.key.toLowerCase() === 'n') {
+            e.preventDefault();
+            triggerNewConversation();
+            return;
+        }
+    }
+
+    // Shortcuts that work only when typing in chat input
+    if (isTyping && activeElement.name === 'message') {
+        // Ctrl/Cmd + C when chat input is focused and text is selected - copy conversation
+        if (modKey && e.key.toLowerCase() === 'c' && !window.getSelection().toString()) {
+            // Only if no text is selected (otherwise, let default copy work)
+            // This is handled by the copy button
+        }
+    }
+});
+
+// Modal functions
+function openShortcutsModal() {
+    const modal = document.getElementById('shortcuts-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeShortcutsModal() {
+    const modal = document.getElementById('shortcuts-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        // Only restore body overflow if no other modal is open
+        const historyModal = document.getElementById('history-modal');
+        if (historyModal?.classList.contains('hidden')) {
+            document.body.style.overflow = '';
+        }
+    }
+}
+
+// Trigger new conversation via HTMX
+function triggerNewConversation() {
+    const newConvoBtn = document.querySelector('[hx-post*="chat_new_session"]');
+    if (newConvoBtn) {
+        htmx.trigger(newConvoBtn, 'click');
+    }
+}
+
+// Close modal when clicking backdrop
+document.getElementById('shortcuts-modal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeShortcutsModal();
+    }
+});
+</script>

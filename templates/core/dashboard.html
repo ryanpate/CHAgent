@@ -129,12 +129,21 @@
               hx-on::after-request="hideThinking(); this.reset(); document.getElementById('chat-welcome')?.remove(); document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;"
               class="flex gap-4">
             {% csrf_token %}
-            <input type="text"
-                   name="message"
-                   placeholder="Log an interaction or ask a question..."
-                   class="flex-1 bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold transition"
-                   autocomplete="off"
-                   required>
+            <div class="flex-1 relative">
+                <input type="text"
+                       name="message"
+                       id="chat-input"
+                       placeholder="Log an interaction or ask a question..."
+                       class="w-full bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 pr-20 focus:outline-none focus:border-ch-gold transition"
+                       autocomplete="off"
+                       required>
+                <!-- Keyboard shortcut hint -->
+                <div class="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-gray-500 pointer-events-none">
+                    <kbd class="px-1.5 py-0.5 bg-ch-gray rounded text-xs font-mono shortcut-hint-meta">Ctrl</kbd>
+                    <span class="text-xs">+</span>
+                    <kbd class="px-1.5 py-0.5 bg-ch-gray rounded text-xs font-mono">K</kbd>
+                </div>
+            </div>
             <button type="submit"
                     class="bg-ch-gold text-black px-6 py-3 rounded-lg font-medium hover:bg-yellow-500 transition flex items-center gap-2">
                 <span>Send</span>
@@ -473,6 +482,4 @@ function fallbackCopy(text) {
 }
 </script>
 
-<!-- Onboarding Tour for First-Time Users -->
-{% include 'core/partials/onboarding_tour.html' %}
 {% endblock %}
