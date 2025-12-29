@@ -1486,11 +1486,9 @@ def format_first_name_matches(first_name: str, matches: list, query_type: str = 
     parts.append(f"Multiple people found with the first name '{first_name}':")
     parts.append("")
 
-    for i, match in enumerate(matches[:10], 1):
+    # Show all matches - don't truncate
+    for i, match in enumerate(matches, 1):
         parts.append(f"  {i}. {match.get('name', 'Unknown')}")
-
-    if len(matches) > 10:
-        parts.append(f"  ... and {len(matches) - 10} more")
 
     parts.append("")
 
