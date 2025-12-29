@@ -527,7 +527,7 @@ class PlanningCenterAPI:
 
         return result
 
-    def search_by_first_name(self, first_name: str, limit: int = 10) -> dict:
+    def search_by_first_name(self, first_name: str, limit: int = 25) -> dict:
         """
         Search for people by first name only, returning all matches.
 
@@ -555,6 +555,52 @@ class PlanningCenterAPI:
 
         first_name_lower = first_name.lower().strip()
 
+        # Build list of name variants to match (e.g., Sara/Sarah, Mike/Michael)
+        name_variants = {first_name_lower}
+        common_variants = {
+            'sara': {'sarah', 'sara'},
+            'sarah': {'sara', 'sarah'},
+            'mike': {'michael', 'mike'},
+            'michael': {'mike', 'michael'},
+            'matt': {'matthew', 'matt'},
+            'matthew': {'matt', 'matthew'},
+            'dan': {'daniel', 'dan', 'danny'},
+            'daniel': {'dan', 'danny', 'daniel'},
+            'danny': {'dan', 'daniel', 'danny'},
+            'chris': {'christopher', 'chris'},
+            'christopher': {'chris', 'christopher'},
+            'jon': {'jonathan', 'jon', 'john'},
+            'john': {'jonathan', 'jon', 'john'},
+            'jonathan': {'jon', 'john', 'jonathan'},
+            'kate': {'katherine', 'kathryn', 'kate', 'katie'},
+            'katie': {'katherine', 'kathryn', 'kate', 'katie'},
+            'katherine': {'kate', 'katie', 'katherine', 'kathryn'},
+            'kathryn': {'kate', 'katie', 'katherine', 'kathryn'},
+            'jen': {'jennifer', 'jen', 'jenny'},
+            'jenny': {'jennifer', 'jen', 'jenny'},
+            'jennifer': {'jen', 'jenny', 'jennifer'},
+            'beth': {'elizabeth', 'beth', 'betsy', 'liz'},
+            'liz': {'elizabeth', 'beth', 'betsy', 'liz'},
+            'elizabeth': {'beth', 'betsy', 'liz', 'elizabeth'},
+            'bob': {'robert', 'bob', 'rob'},
+            'rob': {'robert', 'bob', 'rob'},
+            'robert': {'bob', 'rob', 'robert'},
+            'bill': {'william', 'bill', 'will'},
+            'will': {'william', 'bill', 'will'},
+            'william': {'bill', 'will', 'william'},
+            'jim': {'james', 'jim', 'jimmy'},
+            'jimmy': {'james', 'jim', 'jimmy'},
+            'james': {'jim', 'jimmy', 'james'},
+            'tom': {'thomas', 'tom', 'tommy'},
+            'tommy': {'thomas', 'tom', 'tommy'},
+            'thomas': {'tom', 'tommy', 'thomas'},
+            'steve': {'steven', 'stephen', 'steve'},
+            'steven': {'steve', 'stephen', 'steven'},
+            'stephen': {'steve', 'steven', 'stephen'},
+        }
+        if first_name_lower in common_variants:
+            name_variants.update(common_variants[first_name_lower])
+
         # Get all people and filter by first name
         all_people = self.get_people(use_cache=True)
 
@@ -563,8 +609,12 @@ class PlanningCenterAPI:
             attrs = person.get('attributes', {})
             pco_first = (attrs.get('first_name') or '').lower().strip()
 
-            # Check for exact first name match or close match
-            if pco_first == first_name_lower or pco_first.startswith(first_name_lower):
+            # Check for exact first name match, variant match, or prefix match
+            is_match = (
+                pco_first in name_variants or
+                any(pco_first.startswith(variant) for variant in name_variants)
+            )
+            if is_match:
                 full_name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
                 matches.append({
                     'name': full_name,
@@ -809,7 +859,7 @@ def clear_pco_cache():
 class PlanningCenterServicesAPI(PlanningCenterAPI):
     """Extended API client with Services-specific methods for songs and plans."""
 
-    def search_services_by_first_name(self, first_name: str, limit: int = 15) -> dict:
+    def search_services_by_first_name(self, first_name: str, limit: int = 25) -> dict:
         """
         Search for services people by first name only, returning all matches.
 
@@ -837,28 +887,78 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         first_name_lower = first_name.lower().strip()
 
-        # First try the PCO first_name search (more efficient)
-        search_result = self._get("/services/v2/people", params={
-            'where[first_name]': first_name,
-            'per_page': 100
-        })
+        # Build list of name variants to search (e.g., Sara/Sarah, Mike/Michael)
+        search_names = {first_name}
+        common_variants = {
+            'sara': {'Sarah', 'Sara'},
+            'sarah': {'Sara', 'Sarah'},
+            'mike': {'Michael', 'Mike'},
+            'michael': {'Mike', 'Michael'},
+            'matt': {'Matthew', 'Matt'},
+            'matthew': {'Matt', 'Matthew'},
+            'dan': {'Daniel', 'Dan', 'Danny'},
+            'daniel': {'Dan', 'Danny', 'Daniel'},
+            'danny': {'Dan', 'Daniel', 'Danny'},
+            'chris': {'Christopher', 'Chris'},
+            'christopher': {'Chris', 'Christopher'},
+            'jon': {'Jonathan', 'Jon', 'John'},
+            'john': {'Jonathan', 'Jon', 'John'},
+            'jonathan': {'Jon', 'John', 'Jonathan'},
+            'kate': {'Katherine', 'Kathryn', 'Kate', 'Katie'},
+            'katie': {'Katherine', 'Kathryn', 'Kate', 'Katie'},
+            'katherine': {'Kate', 'Katie', 'Katherine', 'Kathryn'},
+            'kathryn': {'Kate', 'Katie', 'Katherine', 'Kathryn'},
+            'jen': {'Jennifer', 'Jen', 'Jenny'},
+            'jenny': {'Jennifer', 'Jen', 'Jenny'},
+            'jennifer': {'Jen', 'Jenny', 'Jennifer'},
+            'beth': {'Elizabeth', 'Beth', 'Betsy', 'Liz'},
+            'liz': {'Elizabeth', 'Beth', 'Betsy', 'Liz'},
+            'elizabeth': {'Beth', 'Betsy', 'Liz', 'Elizabeth'},
+            'bob': {'Robert', 'Bob', 'Rob'},
+            'rob': {'Robert', 'Bob', 'Rob'},
+            'robert': {'Bob', 'Rob', 'Robert'},
+            'bill': {'William', 'Bill', 'Will'},
+            'will': {'William', 'Bill', 'Will'},
+            'william': {'Bill', 'Will', 'William'},
+            'jim': {'James', 'Jim', 'Jimmy'},
+            'jimmy': {'James', 'Jim', 'Jimmy'},
+            'james': {'Jim', 'Jimmy', 'James'},
+            'tom': {'Thomas', 'Tom', 'Tommy'},
+            'tommy': {'Thomas', 'Tom', 'Tommy'},
+            'thomas': {'Tom', 'Tommy', 'Thomas'},
+            'steve': {'Steven', 'Stephen', 'Steve'},
+            'steven': {'Steve', 'Stephen', 'Steven'},
+            'stephen': {'Steve', 'Steven', 'Stephen'},
+        }
+        if first_name_lower in common_variants:
+            search_names.update(common_variants[first_name_lower])
 
-        candidates = search_result.get('data', [])
-        logger.info(f"Services first_name search for disambiguation returned {len(candidates)} candidates for '{first_name}'")
-
+        # Search for each name variant
+        seen_ids = set()
         matches = []
-        for person in candidates:
-            attrs = person.get('attributes', {})
-            pco_first = (attrs.get('first_name') or '').lower().strip()
 
-            # Check for exact first name match or close match
-            if pco_first == first_name_lower or pco_first.startswith(first_name_lower):
+        for search_name in search_names:
+            search_result = self._get("/services/v2/people", params={
+                'where[first_name]': search_name,
+                'per_page': 100
+            })
+
+            candidates = search_result.get('data', [])
+            logger.info(f"Services first_name search for '{search_name}' returned {len(candidates)} candidates")
+
+            for person in candidates:
+                pco_id = person.get('id')
+                if pco_id in seen_ids:
+                    continue  # Skip duplicates
+                seen_ids.add(pco_id)
+
+                attrs = person.get('attributes', {})
                 full_name = f"{attrs.get('first_name', '')} {attrs.get('last_name', '')}".strip()
                 matches.append({
                     'name': full_name,
                     'first_name': attrs.get('first_name', ''),
                     'last_name': attrs.get('last_name', ''),
-                    'pco_id': person.get('id')
+                    'pco_id': pco_id
                 })
 
         # Sort by last name for consistent ordering
@@ -867,7 +967,7 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         result['matches'] = matches[:limit]
         result['count'] = len(matches)
 
-        logger.info(f"Services first name search for '{first_name}': found {len(matches)} matches")
+        logger.info(f"Services first name search for '{first_name}': found {len(matches)} matches across {len(search_names)} variants")
         return result
 
     def get_service_types(self) -> list:
