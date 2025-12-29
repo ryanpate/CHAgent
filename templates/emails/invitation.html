@@ -3,26 +3,139 @@
 {% block title %}You're Invited to {{ organization_name }}{% endblock %}
 
 {% block content %}
-<h2>You're invited!</h2>
+<!-- Heading -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+        <td align="center">
+            <h1 style="margin: 0 0 8px 0; font-size: 28px; font-weight: bold; color: #ffffff;">You're Invited!</h1>
+            <p style="margin: 0 0 24px 0; font-size: 16px; color: #9ca3af;">Join your team on Aria</p>
+        </td>
+    </tr>
+</table>
 
-<p>
-    <strong>{{ inviter_name }}</strong> has invited you to join
-    <strong>{{ organization_name }}</strong> on Aria as a <strong>{{ role }}</strong>.
-</p>
+<!-- Invitation Details Box -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #252525; border-radius: 12px; margin-bottom: 24px;">
+    <tr>
+        <td style="padding: 24px;">
+            <p style="margin: 0; font-size: 16px; color: #e5e7eb; line-height: 1.6;">
+                <strong style="color: #ffffff;">{{ inviter_name }}</strong> has invited you to join
+                <strong style="color: #c9a227;">{{ organization_name }}</strong> as a <strong style="color: #ffffff;">{{ role }}</strong>.
+            </p>
+        </td>
+    </tr>
+</table>
 
-<p>
-    Aria is an AI-powered assistant that helps worship arts teams care for
-    volunteers, access Planning Center data, and stay organized.
-</p>
+<!-- What is Aria Section -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+    <tr>
+        <td>
+            <h2 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600; color: #ffffff;">What is Aria?</h2>
+            <p style="margin: 0 0 20px 0; font-size: 15px; color: #9ca3af; line-height: 1.6;">
+                Aria is an AI-powered assistant designed for worship arts teams. It connects with Planning Center to help your team stay organized and care for volunteers better.
+            </p>
+        </td>
+    </tr>
+</table>
 
-<p style="text-align: center;">
-    <a href="{{ invite_url }}" class="button">Accept Invitation</a>
-</p>
+<!-- Features Grid -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 32px;">
+    <!-- Feature 1 -->
+    <tr>
+        <td style="padding: 12px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td width="48" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: rgba(201, 162, 39, 0.2); border-radius: 8px; text-align: center; line-height: 40px;">
+                            <span style="font-size: 18px;">💬</span>
+                        </div>
+                    </td>
+                    <td style="padding-left: 12px;">
+                        <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #ffffff;">AI Chat Assistant</p>
+                        <p style="margin: 0; font-size: 14px; color: #9ca3af;">Ask about schedules, volunteers, songs, and chord charts instantly</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <!-- Feature 2 -->
+    <tr>
+        <td style="padding: 12px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td width="48" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: rgba(201, 162, 39, 0.2); border-radius: 8px; text-align: center; line-height: 40px;">
+                            <span style="font-size: 18px;">❤️</span>
+                        </div>
+                    </td>
+                    <td style="padding-left: 12px;">
+                        <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #ffffff;">Volunteer Care</p>
+                        <p style="margin: 0; font-size: 14px; color: #9ca3af;">Track interactions, prayer requests, and personal details</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <!-- Feature 3 -->
+    <tr>
+        <td style="padding: 12px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td width="48" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: rgba(201, 162, 39, 0.2); border-radius: 8px; text-align: center; line-height: 40px;">
+                            <span style="font-size: 18px;">📋</span>
+                        </div>
+                    </td>
+                    <td style="padding-left: 12px;">
+                        <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #ffffff;">Task Management</p>
+                        <p style="margin: 0; font-size: 14px; color: #9ca3af;">Projects, follow-ups, and team collaboration tools</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <!-- Feature 4 -->
+    <tr>
+        <td style="padding: 12px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td width="48" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: rgba(201, 162, 39, 0.2); border-radius: 8px; text-align: center; line-height: 40px;">
+                            <span style="font-size: 18px;">📊</span>
+                        </div>
+                    </td>
+                    <td style="padding-left: 12px;">
+                        <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #ffffff;">Team Analytics</p>
+                        <p style="margin: 0; font-size: 14px; color: #9ca3af;">Insights on engagement, care metrics, and AI performance</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 
-<p class="muted">
-    {% if expires_at %}
-    This invitation expires on {{ expires_at|date:"F j, Y" }}.<br>
-    {% endif %}
-    If you weren't expecting this invitation, you can safely ignore this email.
-</p>
+<!-- CTA Button -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+        <td align="center" style="padding: 8px 0 24px 0;">
+            <a href="{{ invite_url }}"
+               style="display: inline-block; background-color: #c9a227; color: #0f0f0f; font-size: 16px; font-weight: 600; text-decoration: none; padding: 16px 32px; border-radius: 8px;">
+                Accept Invitation
+            </a>
+        </td>
+    </tr>
+</table>
+
+<!-- Expiration Note -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+        <td align="center">
+            <p style="margin: 0; font-size: 13px; color: #6b7280;">
+                {% if expires_at %}This invitation expires on {{ expires_at|date:"F j, Y" }}.{% endif %}
+            </p>
+            <p style="margin: 8px 0 0 0; font-size: 13px; color: #6b7280;">
+                If you weren't expecting this invitation, you can safely ignore this email.
+            </p>
+        </td>
+    </tr>
+</table>
 {% endblock %}

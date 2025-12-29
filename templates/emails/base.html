@@ -4,97 +4,52 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{% endblock %}</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            color: #e2e8f0;
-            background-color: #0f172a;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
-        .card {
-            background-color: #1e293b;
-            border-radius: 12px;
-            padding: 32px;
-            border: 1px solid #334155;
-        }
-        .logo {
-            text-align: center;
-            margin-bottom: 24px;
-        }
-        .logo h1 {
-            color: #818cf8;
-            font-size: 28px;
-            margin: 0;
-        }
-        h2 {
-            color: #f1f5f9;
-            margin-top: 0;
-        }
-        p {
-            margin: 16px 0;
-        }
-        ul {
-            margin: 16px 0;
-            padding-left: 24px;
-        }
-        li {
-            margin: 8px 0;
-        }
-        .button {
-            display: inline-block;
-            background-color: #6366f1;
-            color: #ffffff !important;
-            text-decoration: none;
-            padding: 14px 28px;
-            border-radius: 8px;
-            font-weight: 600;
-            margin: 24px 0;
-        }
-        .button:hover {
-            background-color: #4f46e5;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 32px;
-            color: #64748b;
-            font-size: 14px;
-        }
-        .footer a {
-            color: #818cf8;
-        }
-        .muted {
-            color: #94a3b8;
-            font-size: 14px;
-        }
-        .highlight-box {
-            background: #0f172a;
-            padding: 16px;
-            border-radius: 8px;
-            margin: 16px 0;
-        }
+    <!--[if mso]>
+    <style type="text/css">
+        body, table, td {font-family: Arial, Helvetica, sans-serif !important;}
     </style>
+    <![endif]-->
 </head>
-<body>
-    <div class="container">
-        <div class="card">
-            <div class="logo">
-                <h1>Aria</h1>
-            </div>
-            {% block content %}{% endblock %}
-        </div>
-        <div class="footer">
-            <p>
-                Sent by <a href="{{ site_url }}">Aria</a><br>
-                Questions? Contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>
-            </p>
-        </div>
-    </div>
+<body style="margin: 0; padding: 0; background-color: #0f0f0f; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <!-- Wrapper Table -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #0f0f0f;">
+        <tr>
+            <td align="center" style="padding: 40px 20px;">
+                <!-- Main Card -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #1a1a1a; border-radius: 16px; border: 1px solid #252525;">
+                    <tr>
+                        <td style="padding: 40px;">
+                            <!-- Logo -->
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td align="center" style="padding-bottom: 32px;">
+                                        <span style="font-size: 32px; font-weight: bold; color: #c9a227; letter-spacing: 2px;">ARIA</span>
+                                        <p style="margin: 8px 0 0 0; font-size: 14px; color: #6b7280;">Worship Arts Team Portal</p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Content -->
+                            {% block content %}{% endblock %}
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Footer -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px;">
+                    <tr>
+                        <td align="center" style="padding: 32px 20px;">
+                            <p style="margin: 0; font-size: 14px; color: #6b7280;">
+                                Sent by <a href="{{ site_url }}" style="color: #c9a227; text-decoration: none;">Aria</a>
+                            </p>
+                            <p style="margin: 8px 0 0 0; font-size: 14px; color: #6b7280;">
+                                Questions? <a href="mailto:{{ support_email }}" style="color: #c9a227; text-decoration: none;">{{ support_email }}</a>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>

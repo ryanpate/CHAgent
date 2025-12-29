@@ -3,23 +3,103 @@
 {% block title %}Welcome to {{ organization_name }}{% endblock %}
 
 {% block content %}
-<h2>Welcome to {{ organization_name }}!</h2>
+<!-- Heading -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+        <td align="center">
+            <h1 style="margin: 0 0 8px 0; font-size: 28px; font-weight: bold; color: #ffffff;">Welcome to {{ organization_name }}!</h1>
+            <p style="margin: 0 0 24px 0; font-size: 16px; color: #9ca3af;">You're all set up and ready to go</p>
+        </td>
+    </tr>
+</table>
 
-<p>Hi {{ user_name }},</p>
+<!-- Welcome Message Box -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #252525; border-radius: 12px; margin-bottom: 24px;">
+    <tr>
+        <td style="padding: 24px;">
+            <p style="margin: 0; font-size: 16px; color: #e5e7eb; line-height: 1.6;">
+                Hi <strong style="color: #ffffff;">{{ user_name }}</strong>,
+            </p>
+            <p style="margin: 16px 0 0 0; font-size: 16px; color: #e5e7eb; line-height: 1.6;">
+                You now have access to Aria for <strong style="color: #c9a227;">{{ organization_name }}</strong>. Start exploring everything Aria has to offer!
+            </p>
+        </td>
+    </tr>
+</table>
 
-<p>
-    You're all set! You now have access to Aria for {{ organization_name }}.
-</p>
+<!-- Quick Start Section -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+    <tr>
+        <td>
+            <h2 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600; color: #ffffff;">Quick Start</h2>
+        </td>
+    </tr>
+</table>
 
-<p>Here's what you can do:</p>
-<ul>
-    <li><strong>Chat with Aria</strong> - Ask about volunteers, schedules, and songs</li>
-    <li><strong>Log interactions</strong> - Track conversations and care notes</li>
-    <li><strong>Manage follow-ups</strong> - Never forget a prayer request</li>
-    <li><strong>Stay connected</strong> - Team announcements and messages</li>
-</ul>
+<!-- Features List -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 32px;">
+    <tr>
+        <td style="padding: 12px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td width="48" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: rgba(201, 162, 39, 0.2); border-radius: 8px; text-align: center; line-height: 40px;">
+                            <span style="font-size: 18px;">💬</span>
+                        </div>
+                    </td>
+                    <td style="padding-left: 12px;">
+                        <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #ffffff;">Chat with Aria</p>
+                        <p style="margin: 0; font-size: 14px; color: #9ca3af;">Ask about schedules, songs, and team members</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding: 12px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td width="48" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: rgba(201, 162, 39, 0.2); border-radius: 8px; text-align: center; line-height: 40px;">
+                            <span style="font-size: 18px;">📝</span>
+                        </div>
+                    </td>
+                    <td style="padding-left: 12px;">
+                        <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #ffffff;">Log Interactions</p>
+                        <p style="margin: 0; font-size: 14px; color: #9ca3af;">Record conversations and notes about team members</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding: 12px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td width="48" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: rgba(201, 162, 39, 0.2); border-radius: 8px; text-align: center; line-height: 40px;">
+                            <span style="font-size: 18px;">✅</span>
+                        </div>
+                    </td>
+                    <td style="padding-left: 12px;">
+                        <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #ffffff;">Manage Follow-ups</p>
+                        <p style="margin: 0; font-size: 14px; color: #9ca3af;">Never miss a prayer request or action item</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 
-<p style="text-align: center;">
-    <a href="{{ dashboard_url }}" class="button">Go to Dashboard</a>
-</p>
+<!-- CTA Button -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+        <td align="center" style="padding: 8px 0 24px 0;">
+            <a href="{{ dashboard_url }}"
+               style="display: inline-block; background-color: #c9a227; color: #0f0f0f; font-size: 16px; font-weight: 600; text-decoration: none; padding: 16px 32px; border-radius: 8px;">
+                Go to Dashboard
+            </a>
+        </td>
+    </tr>
+</table>
 {% endblock %}
