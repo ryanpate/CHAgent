@@ -3222,6 +3222,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             # Save the user's selection to chat history
             ChatMessage.objects.create(
                 user=user,
+                organization=organization,
                 session_id=session_id,
                 role='user',
                 content=question
@@ -3250,6 +3251,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             # Save assistant response to chat history
             ChatMessage.objects.create(
                 user=user,
+                organization=organization,
                 session_id=session_id,
                 role='assistant',
                 content=answer
@@ -3276,6 +3278,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         # Save the user's confirmation to chat history
         ChatMessage.objects.create(
             user=user,
+            organization=organization,
             session_id=session_id,
             role='user',
             content=question
@@ -3305,6 +3308,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         # Save assistant response to chat history
         ChatMessage.objects.create(
             user=user,
+            organization=organization,
             session_id=session_id,
             role='assistant',
             content=answer
@@ -3334,6 +3338,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             # Save the user's message to chat history
             ChatMessage.objects.create(
                 user=user,
+                organization=organization,
                 session_id=session_id,
                 role='user',
                 content=question
@@ -3345,6 +3350,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             # Save assistant response to chat history
             ChatMessage.objects.create(
                 user=user,
+                organization=organization,
                 session_id=session_id,
                 role='assistant',
                 content=answer
@@ -3372,6 +3378,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             # Save the user's response to chat history
             ChatMessage.objects.create(
                 user=user,
+                organization=organization,
                 session_id=session_id,
                 role='user',
                 content=question
@@ -3453,6 +3460,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             # Save assistant response to chat history
             ChatMessage.objects.create(
                 user=user,
+                organization=organization,
                 session_id=session_id,
                 role='assistant',
                 content=answer
@@ -3479,6 +3487,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         # Save the user's question to chat history
         ChatMessage.objects.create(
             user=user,
+            organization=organization,
             session_id=session_id,
             role='user',
             content=question
@@ -3505,6 +3514,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         # Save assistant response to chat history
         ChatMessage.objects.create(
             user=user,
+            organization=organization,
             session_id=session_id,
             role='assistant',
             content=answer
@@ -3524,6 +3534,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         # Save the user's question to chat history
         ChatMessage.objects.create(
             user=user,
+            organization=organization,
             session_id=session_id,
             role='user',
             content=question
@@ -3539,6 +3550,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         # Save assistant response to chat history
         ChatMessage.objects.create(
             user=user,
+            organization=organization,
             session_id=session_id,
             role='assistant',
             content=answer
@@ -4075,12 +4087,14 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
     # Step 5: Save to chat history
     ChatMessage.objects.create(
         user=user,
+        organization=organization,
         session_id=session_id,
         role='user',
         content=question
     )
     ChatMessage.objects.create(
         user=user,
+        organization=organization,
         session_id=session_id,
         role='assistant',
         content=answer
