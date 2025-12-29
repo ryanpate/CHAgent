@@ -1,0 +1,28 @@
+{% extends "emails/base.html" %}
+
+{% block title %}You're Invited to {{ organization_name }}{% endblock %}
+
+{% block content %}
+<h2>You're invited!</h2>
+
+<p>
+    <strong>{{ inviter_name }}</strong> has invited you to join
+    <strong>{{ organization_name }}</strong> on Aria as a <strong>{{ role }}</strong>.
+</p>
+
+<p>
+    Aria is an AI-powered assistant that helps worship arts teams care for
+    volunteers, access Planning Center data, and stay organized.
+</p>
+
+<p style="text-align: center;">
+    <a href="{{ invite_url }}" class="button">Accept Invitation</a>
+</p>
+
+<p class="muted">
+    {% if expires_at %}
+    This invitation expires on {{ expires_at|date:"F j, Y" }}.<br>
+    {% endif %}
+    If you weren't expecting this invitation, you can safely ignore this email.
+</p>
+{% endblock %}

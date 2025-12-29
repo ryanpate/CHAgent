@@ -1,0 +1,25 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Welcome to {{ organization_name }}{% endblock %}
+
+{% block content %}
+<h2>Welcome to {{ organization_name }}!</h2>
+
+<p>Hi {{ user_name }},</p>
+
+<p>
+    You're all set! You now have access to Aria for {{ organization_name }}.
+</p>
+
+<p>Here's what you can do:</p>
+<ul>
+    <li><strong>Chat with Aria</strong> - Ask about volunteers, schedules, and songs</li>
+    <li><strong>Log interactions</strong> - Track conversations and care notes</li>
+    <li><strong>Manage follow-ups</strong> - Never forget a prayer request</li>
+    <li><strong>Stay connected</strong> - Team announcements and messages</li>
+</ul>
+
+<p style="text-align: center;">
+    <a href="{{ dashboard_url }}" class="button">Go to Dashboard</a>
+</p>
+{% endblock %}

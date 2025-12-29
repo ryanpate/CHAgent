@@ -1,0 +1,23 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Follow-up Reminder: {{ followup.title }}{% endblock %}
+
+{% block content %}
+<h2>Follow-up Reminder</h2>
+
+<p>You have a follow-up due today:</p>
+
+<div class="highlight-box">
+    <p style="margin: 0;"><strong>{{ followup.title }}</strong></p>
+    {% if volunteer_name %}
+    <p class="muted" style="margin: 8px 0 0 0;">For: {{ volunteer_name }}</p>
+    {% endif %}
+    {% if followup.description %}
+    <p style="margin: 8px 0 0 0;">{{ followup.description }}</p>
+    {% endif %}
+</div>
+
+<p style="text-align: center;">
+    <a href="{{ followup_url }}" class="button">View Follow-up</a>
+</p>
+{% endblock %}

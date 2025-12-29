@@ -4098,7 +4098,7 @@ def onboarding_invite_team(request):
                         continue
 
                     # Create invitation
-                    OrganizationInvitation.objects.create(
+                    invitation = OrganizationInvitation.objects.create(
                         organization=org,
                         email=email,
                         role=role,
@@ -4107,7 +4107,9 @@ def onboarding_invite_team(request):
                         expires_at=timezone.now() + timedelta(days=7),
                     )
 
-                # TODO: Send invitation emails when email integration is set up
+                    # Send invitation email
+                    from .emails import send_invitation_email
+                    send_invitation_email(invitation)
 
     # Get existing invitations
     pending_invitations = OrganizationInvitation.objects.filter(
@@ -4356,6 +4358,10 @@ def stripe_webhook(request):
             org.subscription_status = 'past_due'
             org.save()
 
+            # Notify organization owner(s) of failed payment
+            from .emails import send_payment_failed_email
+            send_payment_failed_email(org)
+
     elif event_type == 'invoice.paid':
         customer_id = data.get('customer')
 
@@ -4528,14 +4534,19 @@ def org_invite_member(request):
         invited_by=request.user,
     )
 
-    # TODO: Send invitation email
-    # For now, just show the invite link
-    invite_url = request.build_absolute_uri(f'/invite/{invitation.token}/')
+    # Send invitation email
+    from .emails import send_invitation_email
+    email_sent = send_invitation_email(invitation)
 
-    messages.success(
-        request,
-        f"Invitation sent to {email}. Share this link: {invite_url}"
-    )
+    if email_sent:
+        messages.success(request, f"Invitation sent to {email}.")
+    else:
+        # Fallback: show the link if email fails
+        invite_url = request.build_absolute_uri(f'/invite/{invitation.token}/')
+        messages.warning(
+            request,
+            f"Couldn't send email to {email}. Share this link manually: {invite_url}"
+        )
     return redirect('org_settings_members')
 
 

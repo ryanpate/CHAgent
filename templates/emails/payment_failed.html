@@ -1,0 +1,23 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Payment Failed{% endblock %}
+
+{% block content %}
+<h2>Payment Issue</h2>
+
+<p>
+    We weren't able to process your payment for <strong>{{ organization_name }}</strong>.
+</p>
+
+<p>
+    Please update your payment method to continue using Aria without interruption.
+</p>
+
+<p style="text-align: center;">
+    <a href="{{ billing_url }}" class="button">Update Payment Method</a>
+</p>
+
+<p class="muted">
+    If you believe this is an error, please contact us at {{ support_email }}.
+</p>
+{% endblock %}

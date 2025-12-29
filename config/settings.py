@@ -275,3 +275,23 @@ APP_DOMAIN = os.environ.get('APP_DOMAIN', 'localhost:8000')
 
 # Whether to use subdomain-based tenant routing
 USE_SUBDOMAIN_ROUTING = os.environ.get('USE_SUBDOMAIN_ROUTING', 'false').lower() == 'true'
+
+# =============================================================================
+# Email Configuration
+# =============================================================================
+# Use console backend for development, SMTP for production
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'smtp.resend.com'
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+    EMAIL_HOST_USER = 'resend'
+    EMAIL_HOST_PASSWORD = os.environ.get('RESEND_API_KEY', '')
+
+DEFAULT_FROM_EMAIL = 'Aria <notifications@aria.church>'
+EMAIL_REPLY_TO = 'support@aria.church'
+
+# Site URL for building absolute URLs in emails
+SITE_URL = os.environ.get('SITE_URL', 'https://aria.church')
