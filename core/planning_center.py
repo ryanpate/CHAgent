@@ -265,9 +265,12 @@ class PlanningCenterAPI:
         addresses_result = self._get(f"/people/v2/people/{person_id}/addresses")
         for addr in addresses_result.get('data', []):
             addr_attrs = addr.get('attributes', {})
-            logger.info(f"Address attributes from PCO: {addr_attrs}")
+            # PCO uses street_line_1 and street_line_2 for street address
+            street_line_1 = addr_attrs.get('street_line_1') or ''
+            street_line_2 = addr_attrs.get('street_line_2') or ''
+            street = ', '.join(line for line in [street_line_1, street_line_2] if line)
             details['addresses'].append({
-                'street': addr_attrs.get('street'),
+                'street': street,
                 'city': addr_attrs.get('city'),
                 'state': addr_attrs.get('state'),
                 'zip': addr_attrs.get('zip'),
