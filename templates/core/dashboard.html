@@ -40,19 +40,6 @@
 
         <!-- Chat Messages -->
         <div id="chat-messages" class="bg-ch-dark rounded-lg p-6 h-[400px] overflow-y-auto mb-4 space-y-4">
-            <!-- Aria Thinking Indicator (hidden by default) -->
-            <div id="aria-thinking" class="mr-12 hidden">
-                <div class="bg-ch-gray rounded-lg p-4">
-                    <div class="flex items-center gap-3">
-                        <div class="flex space-x-1">
-                            <div class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 0ms;"></div>
-                            <div class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 150ms;"></div>
-                            <div class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 300ms;"></div>
-                        </div>
-                        <span class="text-sm text-gray-400">Aria is thinking...</span>
-                    </div>
-                </div>
-            </div>
             {% for message in chat_messages %}
             <div class="{% if message.role == 'user' %}ml-12{% else %}mr-12{% endif %}">
                 <div class="{% if message.role == 'user' %}bg-ch-gold text-black{% else %}bg-ch-gray markdown-content{% endif %} rounded-lg p-4">
@@ -121,12 +108,10 @@
         </div>
 
         <!-- Input Form -->
-        <form hx-post="{% url 'chat_send' %}"
+        <form id="chat-form"
+              hx-post="{% url 'chat_send' %}"
               hx-target="#chat-messages"
               hx-swap="beforeend"
-              hx-indicator="#aria-thinking"
-              hx-on::before-request="showThinking()"
-              hx-on::after-request="hideThinking(); this.reset(); document.getElementById('chat-welcome')?.remove(); document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;"
               class="flex gap-4">
             {% csrf_token %}
             <div class="flex-1 relative">
@@ -317,18 +302,128 @@
 
 <script>
 // Thinking Indicator Functions
-function showThinking() {
-    const indicator = document.getElementById('aria-thinking');
+let thinkingTimeout = null;
+let extendedThinkingTimeout = null;
+
+function showThinking(form) {
     const chatMessages = document.getElementById('chat-messages');
-    indicator.classList.remove('hidden');
+    const messageInput = form ? form.querySelector('input[name="message"]') : document.getElementById('chat-input');
+    const message = messageInput ? messageInput.value : '';
+    const messageLower = message.toLowerCase();
+
+    // Remove welcome message if present
+    document.getElementById('chat-welcome')?.remove();
+
+    // Immediately show user's message in the chat
+    const userMessageDiv = document.createElement('div');
+    userMessageDiv.id = 'pending-user-message';
+    userMessageDiv.className = 'ml-12';
+    userMessageDiv.innerHTML = `
+        <div class="bg-ch-gold text-black rounded-lg p-4">
+            ${message.replace(/\n/g, '<br>').replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+        </div>
+        <p class="text-xs text-gray-500 text-right mt-1">Just now</p>
+    `;
+    chatMessages.appendChild(userMessageDiv);
+
+    // Determine the appropriate thinking message based on query type
+    let baseText = 'Aria is thinking...';
+    let detailText = '';
+
+    if (messageLower.includes('blocked out') || messageLower.includes('blockout') ||
+        messageLower.includes('availability') || messageLower.includes('available')) {
+        baseText = 'Checking availability...';
+        detailText = 'This may take a moment while checking across the team.';
+    } else if (messageLower.includes('team') || messageLower.includes('serving') ||
+               messageLower.includes('schedule') || messageLower.includes('sunday')) {
+        baseText = 'Checking the schedule...';
+        detailText = 'Fetching team information from Planning Center.';
+    } else if (messageLower.includes('song') || messageLower.includes('setlist') ||
+               messageLower.includes('played') || messageLower.includes('lyrics')) {
+        baseText = 'Looking up song info...';
+    } else if (messageLower.includes('email') || messageLower.includes('phone') ||
+               messageLower.includes('address') || messageLower.includes('contact')) {
+        baseText = 'Looking up contact info...';
+    }
+
+    // Create and show thinking indicator
+    const thinkingDiv = document.createElement('div');
+    thinkingDiv.id = 'pending-thinking';
+    thinkingDiv.className = 'mr-12';
+    thinkingDiv.innerHTML = `
+        <div class="bg-ch-gray rounded-lg p-4">
+            <div class="flex items-center gap-3">
+                <div class="flex gap-1">
+                    <span class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 0ms;"></span>
+                    <span class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 150ms;"></span>
+                    <span class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 300ms;"></span>
+                </div>
+                <span id="aria-thinking-text" class="text-gray-300">${baseText}</span>
+            </div>
+            <p id="aria-thinking-detail" class="text-xs text-gray-500 mt-2 ${detailText ? '' : 'hidden'}">${detailText}</p>
+        </div>
+    `;
+    chatMessages.appendChild(thinkingDiv);
+
     // Scroll to show the thinking indicator
     chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    // After 5 seconds, update message for longer queries
+    thinkingTimeout = setTimeout(() => {
+        const text = document.getElementById('aria-thinking-text');
+        const detail = document.getElementById('aria-thinking-detail');
+        if (text) text.textContent = 'Still working on this...';
+        if (detail) {
+            detail.textContent = 'Almost there! Complex queries may take a bit longer.';
+            detail.classList.remove('hidden');
+        }
+    }, 5000);
+
+    // After 15 seconds, show additional reassurance
+    extendedThinkingTimeout = setTimeout(() => {
+        const text = document.getElementById('aria-thinking-text');
+        const detail = document.getElementById('aria-thinking-detail');
+        if (text) text.textContent = 'Gathering all the information...';
+        if (detail) detail.textContent = 'Thank you for your patience.';
+    }, 15000);
 }
 
 function hideThinking() {
-    const indicator = document.getElementById('aria-thinking');
-    indicator.classList.add('hidden');
+    // Remove pending elements
+    document.getElementById('pending-user-message')?.remove();
+    document.getElementById('pending-thinking')?.remove();
+
+    // Clear timeouts
+    if (thinkingTimeout) {
+        clearTimeout(thinkingTimeout);
+        thinkingTimeout = null;
+    }
+    if (extendedThinkingTimeout) {
+        clearTimeout(extendedThinkingTimeout);
+        extendedThinkingTimeout = null;
+    }
+
+    // Reset form and scroll
+    const form = document.getElementById('chat-form');
+    if (form) form.reset();
+    const chatMessages = document.getElementById('chat-messages');
+    if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
 }
+
+// Set up event listeners for HTMX
+document.body.addEventListener('htmx:beforeRequest', function(event) {
+    const form = document.getElementById('chat-form');
+    if (event.target === form || event.target.closest('#chat-form')) {
+        showThinking(form);
+    }
+});
+
+document.body.addEventListener('htmx:afterRequest', function(event) {
+    const form = document.getElementById('chat-form');
+    if (event.target === form || event.target.closest('#chat-form')) {
+        hideThinking();
+    }
+});
 
 // History Modal Functions
 function openHistoryModal() {
