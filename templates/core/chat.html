@@ -152,11 +152,10 @@
     </div>
 
     <!-- Input Form -->
-    <form hx-post="{% url 'chat_send' %}"
+    <form id="chat-form"
+          hx-post="{% url 'chat_send' %}"
           hx-target="#chat-messages"
           hx-swap="beforeend"
-          hx-on::before-request="showThinkingIndicator(this)"
-          hx-on::after-request="hideThinkingIndicator(); this.reset(); document.getElementById('chat-welcome')?.remove(); document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;"
           class="flex gap-4">
         {% csrf_token %}
         <input type="text"
@@ -408,7 +407,7 @@ function hideThinkingIndicator() {
     // Move thinking indicator back outside chat-messages to prevent it from being
     // destroyed when "New Conversation" replaces innerHTML
     const chatContainer = document.querySelector('.max-w-4xl');
-    const inputForm = document.querySelector('form[hx-post*="chat_send"]');
+    const inputForm = document.getElementById('chat-form');
     if (chatContainer && inputForm) {
         chatContainer.insertBefore(thinking, inputForm);
     }
@@ -422,6 +421,34 @@ function hideThinkingIndicator() {
         clearTimeout(extendedThinkingTimeout);
         extendedThinkingTimeout = null;
     }
+
+    // Reset form and scroll
+    const form = document.getElementById('chat-form');
+    if (form) form.reset();
+    document.getElementById('chat-welcome')?.remove();
+    const chatMessages = document.getElementById('chat-messages');
+    if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
 }
+
+// Set up event listeners when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('chat-form');
+    if (form) {
+        // Show thinking indicator when form submits
+        form.addEventListener('htmx:beforeRequest', function(event) {
+            showThinkingIndicator(form);
+        });
+
+        // Hide thinking indicator when response arrives
+        form.addEventListener('htmx:afterRequest', function(event) {
+            hideThinkingIndicator();
+        });
+
+        // Also listen for submit as backup
+        form.addEventListener('submit', function(event) {
+            showThinkingIndicator(form);
+        });
+    }
+});
 </script>
 {% endblock %}
