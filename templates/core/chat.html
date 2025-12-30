@@ -408,25 +408,36 @@ function hideThinkingIndicator() {
     if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Set up event listeners when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
+// Set up event listeners - use document level for HTMX events (more reliable)
+console.log('Chat JS loaded - version 2');
+
+// Listen at document level for HTMX events (bubbles up from form)
+document.body.addEventListener('htmx:beforeRequest', function(event) {
     const form = document.getElementById('chat-form');
-    if (form) {
-        // Show thinking indicator when form submits
-        form.addEventListener('htmx:beforeRequest', function(event) {
-            showThinkingIndicator(form);
-        });
-
-        // Hide thinking indicator when response arrives
-        form.addEventListener('htmx:afterRequest', function(event) {
-            hideThinkingIndicator();
-        });
-
-        // Also listen for submit as backup
-        form.addEventListener('submit', function(event) {
-            showThinkingIndicator(form);
-        });
+    if (event.target === form || event.target.closest('#chat-form')) {
+        console.log('htmx:beforeRequest triggered');
+        showThinkingIndicator(form);
     }
 });
+
+document.body.addEventListener('htmx:afterRequest', function(event) {
+    const form = document.getElementById('chat-form');
+    if (event.target === form || event.target.closest('#chat-form')) {
+        console.log('htmx:afterRequest triggered');
+        hideThinkingIndicator();
+    }
+});
+
+// Backup: Listen for form submit directly
+const chatForm = document.getElementById('chat-form');
+if (chatForm) {
+    console.log('Form found, adding submit listener');
+    chatForm.addEventListener('submit', function(event) {
+        console.log('Form submit triggered');
+        showThinkingIndicator(chatForm);
+    });
+} else {
+    console.log('Form NOT found');
+}
 </script>
 {% endblock %}
