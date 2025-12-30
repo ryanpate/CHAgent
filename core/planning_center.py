@@ -265,6 +265,7 @@ class PlanningCenterAPI:
         addresses_result = self._get(f"/people/v2/people/{person_id}/addresses")
         for addr in addresses_result.get('data', []):
             addr_attrs = addr.get('attributes', {})
+            logger.info(f"Address attributes from PCO: {addr_attrs}")
             details['addresses'].append({
                 'street': addr_attrs.get('street'),
                 'city': addr_attrs.get('city'),
