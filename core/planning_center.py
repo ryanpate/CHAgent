@@ -283,9 +283,16 @@ class PlanningCenterAPI:
             logger.info(f"Found Services person ID: {services_person_id}")
 
             # Get team positions (what teams they're on)
-            # Note: This endpoint may return empty if person has no team assignments
-            team_positions = self._get(f"/services/v2/people/{services_person_id}/team_positions")
-            logger.info(f"Team positions response: {len(team_positions.get('data', []))} positions found")
+            # Note: This endpoint may return 404 if person exists in People but not in Services
+            try:
+                team_positions = self._get(f"/services/v2/people/{services_person_id}/team_positions")
+                logger.info(f"Team positions response: {len(team_positions.get('data', []))} positions found")
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 404:
+                    logger.info(f"No team positions found for Services person {services_person_id} (404)")
+                    team_positions = {'data': []}
+                else:
+                    raise
 
             for position in team_positions.get('data', []):
                 pos_attrs = position.get('attributes', {})
@@ -300,12 +307,19 @@ class PlanningCenterAPI:
                 })
 
             # Get recent schedules (when they served)
-            # Use plan_person endpoint which is more reliable
-            schedules_result = self._get(
-                f"/services/v2/people/{services_person_id}/schedules",
-                params={'order': '-sort_date', 'per_page': 20}
-            )
-            logger.info(f"Schedules response: {len(schedules_result.get('data', []))} schedules found")
+            # Note: This endpoint may return 404 if person exists in People but not in Services
+            try:
+                schedules_result = self._get(
+                    f"/services/v2/people/{services_person_id}/schedules",
+                    params={'order': '-sort_date', 'per_page': 20}
+                )
+                logger.info(f"Schedules response: {len(schedules_result.get('data', []))} schedules found")
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 404:
+                    logger.info(f"No schedules found for Services person {services_person_id} (404)")
+                    schedules_result = {'data': []}
+                else:
+                    raise
 
             # Get today's date for filtering past schedules
             from datetime import datetime
