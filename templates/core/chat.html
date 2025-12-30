@@ -320,10 +320,31 @@ let thinkingTimeout = null;
 let extendedThinkingTimeout = null;
 
 function showThinkingIndicator(form) {
-    const thinking = document.getElementById('aria-thinking');
-    const thinkingText = document.getElementById('aria-thinking-text');
-    const thinkingDetail = document.getElementById('aria-thinking-detail');
+    let thinking = document.getElementById('aria-thinking');
     const chatMessages = document.getElementById('chat-messages');
+
+    // Recreate thinking indicator if it was destroyed (e.g., by New Conversation)
+    if (!thinking) {
+        thinking = document.createElement('div');
+        thinking.id = 'aria-thinking';
+        thinking.className = 'hidden mr-12';
+        thinking.innerHTML = `
+            <div class="bg-ch-gray rounded-lg p-4">
+                <div class="flex items-center gap-3">
+                    <div class="flex gap-1">
+                        <span class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 0ms;"></span>
+                        <span class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 150ms;"></span>
+                        <span class="w-2 h-2 bg-ch-gold rounded-full animate-bounce" style="animation-delay: 300ms;"></span>
+                    </div>
+                    <span id="aria-thinking-text" class="text-gray-300">Aria is thinking...</span>
+                </div>
+                <p id="aria-thinking-detail" class="text-xs text-gray-500 mt-2 hidden"></p>
+            </div>
+        `;
+    }
+
+    const thinkingText = document.getElementById('aria-thinking-text') || thinking.querySelector('#aria-thinking-text');
+    const thinkingDetail = document.getElementById('aria-thinking-detail') || thinking.querySelector('#aria-thinking-detail');
     const messageInput = form.querySelector('input[name="message"]');
     const message = messageInput ? messageInput.value.toLowerCase() : '';
 
@@ -380,7 +401,17 @@ function showThinkingIndicator(form) {
 
 function hideThinkingIndicator() {
     const thinking = document.getElementById('aria-thinking');
+    if (!thinking) return;
+
     thinking.classList.add('hidden');
+
+    // Move thinking indicator back outside chat-messages to prevent it from being
+    // destroyed when "New Conversation" replaces innerHTML
+    const chatContainer = document.querySelector('.max-w-4xl');
+    const inputForm = document.querySelector('form[hx-post*="chat_send"]');
+    if (chatContainer && inputForm) {
+        chatContainer.insertBefore(thinking, inputForm);
+    }
 
     // Clear the timeouts
     if (thinkingTimeout) {
