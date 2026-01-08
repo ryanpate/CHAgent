@@ -2,19 +2,19 @@
 
 ## Project Status
 
-**🎯 Overall Completion: ~88%** | **📊 Production-Ready Core Features** | **🚀 Active Development**
+**🎯 Overall Completion: ~90%** | **📊 Production-Ready Core Features** | **🚀 Active Development**
 
-Last Updated: December 28, 2025
+Last Updated: January 8, 2026
 
 ### Quick Stats
 - **30+ Database Models** across all domains
 - **102 View Functions** with full CRUD operations
 - **75+ Templates** for complete user journeys
-- **6 Test Files** with 182 test cases
+- **6 Test Files** with 190 test cases
 - **25+ Migrations** tracking schema evolution
-- **Recent Focus**: Team Hub features, standalone tasks, platform admin dashboard
+- **Recent Focus**: Compound queries, API optimization, team contact lookups
 
-### Current Sprint (December 2025)
+### Current Sprint (January 2026)
 - ✅ Improved PCO API rate limiting with caching
 - ✅ Added thinking indicator for chat responses
 - ✅ Enhanced blockout query patterns with date range support
@@ -24,6 +24,8 @@ Last Updated: December 28, 2025
 - ✅ Standalone task creation (tasks without projects)
 - ✅ Fix "this coming Sunday" date parsing
 - ✅ Email notification system (invitations, welcome, payment failed)
+- ✅ Compound team contact queries ("phone numbers of people serving this Sunday")
+- ✅ Lightweight contact info API (reduced API calls from 150+ to ~35)
 - 📋 Proactive care AI insight generation (planned)
 
 ---
@@ -214,6 +216,7 @@ Aria is the AI assistant that powers the chat interface. She can handle many typ
 
 ### Planning Center Schedule Queries
 - **Team Schedules**: "Who's on the team this Sunday?" / "Who served on Easter?"
+- **Team Contact Info**: "Phone numbers of people serving this weekend" / "Email addresses of the team this Sunday"
 - **Blockouts**: "Who's blocked out on December 14th?" / "What are Sarah's blockout dates?"
 - **Service Types**: Defaults to "Cherry Hills Morning Main", supports HSM/MSM with keywords
 
@@ -1069,10 +1072,20 @@ The following features have been implemented:
 
 ---
 
-## Recent Improvements (December 2025)
+## Recent Improvements (January 2026)
+
+### Compound Query Detection (New!)
+- **Team Contact Queries**: Ask for phone numbers/emails of people serving on a date
+  - "What are the phone numbers of the people serving this weekend?"
+  - "Email addresses of volunteers scheduled this Sunday"
+  - "Contact info for everyone on the team January 15th"
+- **Smart Detection**: Distinguishes between individual contact queries ("John's phone") and team queries
+- **Generic Name Rejection**: Won't mistake "the people serving" as a person name
 
 ### Performance & Optimization
-- **PCO API Rate Limiting**: Implemented intelligent caching and rate limiting to prevent 429 errors
+- **Lightweight Contact API**: New `get_person_contact_info_only()` reduces API calls from 10+ to 2 per person
+- **Compound Query Optimization**: Team contact queries now use ~35 API calls instead of 150+
+- **PCO API Rate Limiting**: Intelligent caching and rate limiting to prevent 429 errors
 - **Blockout Query Optimization**: Added caching for team member lookups, reducing API calls by 80%
 - **Status Detection**: Smart detection of active vs. inactive team members to minimize API requests
 - **BPM Cache**: Database-backed caching for song BPM lookups with negative cache to avoid repeated API calls
@@ -1091,7 +1104,8 @@ The following features have been implemented:
 - **Revenue Analytics**: Churn rate, plan distribution, and subscription metrics
 
 ### Quality & Testing
-- **Automated Tests**: Comprehensive query detection tests with 182 test cases across 6 files
+- **Automated Tests**: Comprehensive query detection tests with 190 test cases across 6 files
+- **Compound Query Tests**: 24 new tests for team contact queries and generic name rejection
 - **Response Formatting**: Phase 2 tests for verifying AI response quality
 - **RAG Test Prompts**: Documented test scenarios for retrieval-augmented generation
 - **Multi-tenant Isolation Tests**: Verify data isolation between organizations
