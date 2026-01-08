@@ -457,3 +457,88 @@ class TestQueryPrioritization:
         is_song, query_type, _ = is_song_or_setlist_query(query)
         assert is_song is True
         assert query_type == "lyrics", f"Expected 'lyrics', got '{query_type}'"
+
+
+class TestCompoundTeamContactQueries:
+    """Test detection of compound queries for team contact information."""
+
+    @pytest.mark.parametrize("query,expected_contact_type", [
+        # Phone queries for team
+        ("What are the phone numbers of the people serving this weekend?", "phone"),
+        ("Get me the phone numbers for everyone on the team this Sunday", "phone"),
+        ("Phone numbers of volunteers scheduled this week", "phone"),
+        ("Contact info for the team serving Sunday", "contact"),
+        ("Email addresses of people playing this weekend", "email"),
+        ("Show me phone numbers for team members serving this Sunday", "phone"),
+        ("Get phone numbers for the volunteers on the schedule this weekend", "phone"),
+    ])
+    def test_compound_query_detection(self, query, expected_contact_type):
+        """Verify compound team contact queries are correctly detected."""
+        from core.agent import is_compound_team_contact_query
+        is_compound, contact_type, date_ref = is_compound_team_contact_query(query)
+        assert is_compound is True, f"Query '{query}' should be detected as compound query"
+        assert contact_type == expected_contact_type, f"Expected contact type '{expected_contact_type}', got '{contact_type}'"
+
+    @pytest.mark.parametrize("query,expected_date_contains", [
+        ("What are the phone numbers of the people serving this weekend?", "weekend"),
+        ("Phone numbers of volunteers scheduled this Sunday", "sunday"),
+        ("Contact info for team serving next Sunday", "next sunday"),
+        ("Get phone numbers for people on team January 15th", "january 15"),
+    ])
+    def test_compound_query_date_extraction(self, query, expected_date_contains):
+        """Verify date references are extracted from compound queries."""
+        from core.agent import is_compound_team_contact_query
+        is_compound, contact_type, date_ref = is_compound_team_contact_query(query)
+        assert is_compound is True, f"Query '{query}' should be detected as compound query"
+        assert date_ref is not None, f"Should extract date from '{query}'"
+        assert expected_date_contains.lower() in date_ref.lower(), \
+            f"Date '{date_ref}' should contain '{expected_date_contains}'"
+
+    @pytest.mark.parametrize("query", [
+        # These should NOT be detected as compound queries
+        "What's John Smith's phone number?",  # Specific person
+        "Phone number for Sarah",  # Specific person
+        "Who's serving this Sunday?",  # Team schedule only, no contact
+        "Contact info for Mike",  # Specific person
+        "Get me the setlist for this Sunday",  # Setlist query
+    ])
+    def test_non_compound_queries_not_matched(self, query):
+        """Verify non-compound queries are not detected as compound queries."""
+        from core.agent import is_compound_team_contact_query
+        is_compound, _, _ = is_compound_team_contact_query(query)
+        assert not is_compound, f"Query '{query}' should NOT be detected as compound query"
+
+
+class TestGenericNameRejection:
+    """Test that generic terms are not extracted as person names."""
+
+    @pytest.mark.parametrize("query", [
+        "Phone numbers of the people serving this weekend",
+        "Contact info for the team this Sunday",
+        "Email addresses of volunteers scheduled",
+        "How can I reach everyone on the team?",
+        "Phone numbers for folks serving",
+    ])
+    def test_generic_terms_not_extracted_as_names(self, query):
+        """Verify generic group terms are not extracted as person names."""
+        is_pco, query_type, person_name = is_pco_data_query(query)
+        # If detected as PCO query, person_name should be None (not a generic term)
+        if is_pco:
+            assert person_name is None or person_name.lower() not in [
+                'the people', 'people', 'team', 'volunteers', 'everyone',
+                'folks', 'members', 'the people serving', 'the team',
+            ], f"Generic term '{person_name}' should not be extracted as name from '{query}'"
+
+    @pytest.mark.parametrize("query,expected_name", [
+        # Real person names should still be extracted
+        ("What's John Smith's phone number?", "John Smith"),
+        ("Contact info for Sarah Johnson", "Sarah Johnson"),
+        ("Email for Mike", "Mike"),
+    ])
+    def test_real_names_still_extracted(self, query, expected_name):
+        """Verify real person names are still extracted correctly."""
+        is_pco, query_type, person_name = is_pco_data_query(query)
+        assert is_pco is True, f"Query '{query}' should be detected as PCO query"
+        assert person_name is not None, f"Should extract name from '{query}'"
+        assert person_name.lower() == expected_name.lower(), \
+            f"Expected '{expected_name}', got '{person_name}' from '{query}'"

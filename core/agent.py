@@ -450,16 +450,116 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
                 person_name = extracted.title()  # Title-case the name
                 # Filter out common false positives
                 false_positives = ['I', 'What', 'Where', 'When', 'How', 'Can', 'Do', 'Does', 'Is', 'Are',
-                                   'The', 'Info', 'Information', 'Details', 'Contact', 'Their', 'My', 'Your']
-                if person_name not in false_positives and len(person_name) > 1:
-                    logger.info(f"Name extraction successful: '{person_name}'")
-                    break
+                                   'The', 'Info', 'Information', 'Details', 'Contact', 'Their', 'My', 'Your',
+                                   # Generic group terms that shouldn't be treated as person names
+                                   'People', 'Team', 'Volunteers', 'Members', 'Everyone', 'Folks', 'All',
+                                   'Those', 'Them', 'They', 'Staff', 'Crew', 'Group']
+
+                # Also reject names that contain scheduling/serving keywords
+                scheduling_keywords = ['serving', 'scheduled', 'playing', 'singing', 'weekend', 'sunday',
+                                      'saturday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+                name_lower = person_name.lower()
+                has_scheduling_keyword = any(kw in name_lower for kw in scheduling_keywords)
+
+                if person_name not in false_positives and len(person_name) > 1 and not has_scheduling_keyword:
+                    # Also check if the name starts with a generic group term
+                    starts_with_generic = any(name_lower.startswith(fp.lower()) for fp in
+                                             ['the people', 'the team', 'the volunteers', 'people serving',
+                                              'team members', 'volunteers serving', 'everyone'])
+                    if not starts_with_generic:
+                        logger.info(f"Name extraction successful: '{person_name}'")
+                        break
+                    else:
+                        logger.info(f"Name '{person_name}' rejected - starts with generic group term")
+                        person_name = None
                 else:
-                    logger.info(f"Name '{person_name}' rejected as false positive")
+                    logger.info(f"Name '{person_name}' rejected as false positive or contains scheduling keyword")
                     person_name = None
 
     logger.info(f"is_pco_data_query result: pco_query={is_pco_query}, type={query_type}, name={person_name}")
     return is_pco_query, query_type, person_name
+
+
+def is_compound_team_contact_query(message: str) -> Tuple[bool, str, Optional[str]]:
+    """
+    Detect if a question is asking for contact info (phone, email) of people
+    serving/scheduled on a specific date.
+
+    This handles compound queries like:
+    - "What are the phone numbers of the people serving this weekend?"
+    - "Get me the contact info for everyone on the team Sunday"
+    - "Email addresses of volunteers scheduled this week"
+
+    Args:
+        message: The user's question.
+
+    Returns:
+        Tuple of (is_compound_query, contact_type, date_reference) where:
+        - is_compound_query: True if asking for team contact info
+        - contact_type: Type of contact info (phone, email, contact)
+        - date_reference: Extracted date reference if found
+    """
+    message_lower = message.lower().strip()
+
+    # Patterns that indicate compound team contact queries
+    # These patterns look for contact info keywords + team/serving/scheduled keywords
+    compound_patterns = [
+        # "phone numbers of (the) people/team/volunteers serving/scheduled"
+        r'(?:phone\s*(?:numbers?)?|call|cell|mobile|contact\s*(?:info|numbers?)?|email\s*(?:address(?:es)?)?)\s+(?:of|for)\s+(?:the\s+)?(?:people|team|volunteers?|members?|everyone|folks?)\s+(?:serving|scheduled|playing|singing|on\s+(?:the\s+)?(?:team|schedule))',
+        # "contact info for everyone serving/scheduled"
+        r'(?:contact|phone|email)\s+(?:info|information|details?|numbers?|address(?:es)?)?\s*(?:of|for)\s+(?:everyone|all|the\s+team|those)\s+(?:serving|scheduled|playing|singing)',
+        # "people serving this sunday phone numbers" / "team members' phone numbers"
+        r'(?:people|volunteers?|team\s+members?|folks?)\s+(?:serving|scheduled|playing|singing)\s+.{0,30}(?:phone|email|contact)',
+        # "who's serving...and their phone numbers" (conversational)
+        r'(?:who\'?s?|who\s+is)\s+(?:serving|scheduled|on\s+the\s+team).{0,50}(?:phone|contact|email|reach)',
+        # "get/give me phone numbers for the team"
+        r'(?:get|give|send|show)\s+(?:me\s+)?(?:the\s+)?(?:phone|contact|email)\s+.{0,20}(?:team|people\s+serving|volunteers?\s+(?:on|scheduled))',
+        # "email addresses of people/volunteers serving/playing"
+        r'email\s+address(?:es)?\s+(?:of|for)\s+(?:the\s+)?(?:people|volunteers?|team|members?|everyone)\s+(?:serving|scheduled|playing|singing)',
+    ]
+
+    is_compound = False
+    contact_type = None
+    date_reference = None
+
+    for pattern in compound_patterns:
+        if re.search(pattern, message_lower):
+            is_compound = True
+            break
+
+    if is_compound:
+        # Determine contact type
+        if re.search(r'phone|call|cell|mobile', message_lower):
+            contact_type = 'phone'
+        elif re.search(r'email|e-mail', message_lower):
+            contact_type = 'email'
+        else:
+            contact_type = 'contact'
+
+        # Extract date reference using existing patterns
+        date_patterns = [
+            r'(this\s+(?:coming\s+)?(?:sunday|weekend|week))',
+            r'(next\s+(?:sunday|weekend|week))',
+            r'(last\s+(?:sunday|weekend|week))',
+            r'((?:on\s+)?(?:sunday|saturday|tomorrow|today))',
+            r'((?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)',
+            r'(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',
+            r'(christmas(?:\s+eve)?|easter|thanksgiving)',
+        ]
+
+        for pattern in date_patterns:
+            match = re.search(pattern, message_lower)
+            if match:
+                date_reference = match.group(1)
+                break
+
+        # Default to "this sunday" if no date found but weekend mentioned
+        if not date_reference and 'weekend' in message_lower:
+            date_reference = 'this sunday'
+
+        logger.info(f"Compound team contact query detected: type={contact_type}, date={date_reference}")
+
+    return is_compound, contact_type, date_reference
 
 
 def is_blockout_query(message: str) -> Tuple[bool, str, Optional[str], Optional[str]]:
@@ -910,6 +1010,112 @@ def format_team_schedule(plan: dict) -> str:
             parts.append(song_line)
 
     parts.append("[END SERVICE TEAM SCHEDULE]\n")
+    return '\n'.join(parts)
+
+
+def handle_compound_team_contact_query(date_reference: str, contact_type: str, organization=None) -> str:
+    """
+    Handle compound queries that ask for contact info of people serving on a date.
+
+    This function:
+    1. Gets the team schedule for the specified date
+    2. Retrieves contact info for each team member
+    3. Formats the combined result
+
+    Args:
+        date_reference: The date to look up (e.g., "this sunday", "January 11")
+        contact_type: Type of contact info to retrieve (phone, email, contact)
+        organization: Optional organization for multi-tenant support
+
+    Returns:
+        Formatted string with team members and their contact info.
+    """
+    from .planning_center import PlanningCenterAPI, PlanningCenterServicesAPI
+
+    services_api = PlanningCenterServicesAPI()
+    people_api = PlanningCenterAPI()
+
+    if not services_api.is_configured:
+        return "\n[PLANNING CENTER: The Planning Center integration is not configured. Unable to look up team schedules.]\n"
+
+    # Get the team schedule for the date
+    plan = services_api.get_plan_with_team(date_reference)
+    if not plan:
+        return f"\n[SERVICE SCHEDULE: No service plan found for '{date_reference}'. Please try a different date or check the service schedule.]\n"
+
+    team_members = plan.get('team_members', [])
+    if not team_members:
+        return f"\n[SERVICE SCHEDULE: Found a service plan for {plan.get('dates', date_reference)} but no team members are assigned yet.]\n"
+
+    # Build the context with team members and their contact info
+    parts = ["\n[TEAM CONTACT INFORMATION]"]
+    parts.append(f"Service: {plan.get('service_type_name', 'Unknown')} - {plan.get('dates', date_reference)}")
+    if plan.get('title'):
+        parts.append(f"Service Title: {plan.get('title')}")
+    parts.append(f"\nTeam Members ({len(team_members)} people):")
+
+    # Group by team for better organization
+    teams = {}
+    for member in team_members:
+        team_name = member.get('team_name', 'Other')
+        if team_name not in teams:
+            teams[team_name] = []
+        teams[team_name].append(member)
+
+    # Process each team member and get their contact info
+    contact_info_cache = {}  # Cache to avoid duplicate lookups
+
+    for team_name in sorted(teams.keys()):
+        parts.append(f"\n  {team_name}:")
+        for member in teams[team_name]:
+            name = member.get('name', 'Unknown')
+            position = member.get('position', '')
+            status = member.get('status', 'Unknown')
+            person_id = member.get('person_id')
+
+            member_line = f"    - {name}"
+            if position:
+                member_line += f" ({position})"
+            member_line += f" - {status}"
+
+            # Get contact info if we have a person_id and PCO People API is configured
+            contact_info = None
+            if person_id and people_api.is_configured:
+                if person_id in contact_info_cache:
+                    contact_info = contact_info_cache[person_id]
+                else:
+                    details = people_api.get_person_details(person_id)
+                    if details:
+                        contact_info = {}
+                        if contact_type in ['phone', 'contact'] and details.get('phone_numbers'):
+                            phones = []
+                            for phone in details['phone_numbers']:
+                                phone_str = phone.get('number', '')
+                                if phone.get('location'):
+                                    phone_str += f" ({phone['location']})"
+                                phones.append(phone_str)
+                            contact_info['phones'] = phones
+                        if contact_type in ['email', 'contact'] and details.get('emails'):
+                            emails = [e.get('address', '') for e in details['emails'] if e.get('address')]
+                            contact_info['emails'] = emails
+                        contact_info_cache[person_id] = contact_info
+
+            # Add contact info to the member line
+            if contact_info:
+                if contact_info.get('phones'):
+                    member_line += f"\n        Phone: {', '.join(contact_info['phones'])}"
+                if contact_info.get('emails'):
+                    member_line += f"\n        Email: {', '.join(contact_info['emails'])}"
+            elif person_id:
+                member_line += "\n        (No contact info available)"
+
+            parts.append(member_line)
+
+    parts.append("\n[END TEAM CONTACT INFORMATION]\n")
+
+    # Add instruction for AI
+    parts.append(f"INSTRUCTION: Present this contact information to the user in a clear, organized format. Focus on {contact_type} information as requested.")
+
     return '\n'.join(parts)
 
 
@@ -3544,6 +3750,66 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         except Exception as e:
             logger.error(f"Error generating analytics response: {e}")
             answer = "I encountered an error generating the analytics report. Please try visiting the [Analytics Dashboard](/analytics/) directly."
+
+        # Save assistant response to chat history
+        ChatMessage.objects.create(
+            user=user,
+            organization=organization,
+            session_id=session_id,
+            role='assistant',
+            content=answer
+        )
+
+        # Update conversation context
+        conversation_context.increment_message_count(2)
+        conversation_context.save()
+
+        return answer
+
+    # Check if this is a compound team contact query (e.g., "phone numbers of people serving this weekend")
+    # This must be checked BEFORE regular PCO queries to handle multi-step queries
+    compound_query, compound_contact_type, compound_date = is_compound_team_contact_query(question)
+    compound_data_context = ""
+
+    if compound_query:
+        logger.info(f"Compound team contact query detected: {compound_contact_type} for date '{compound_date}'")
+
+        if compound_date:
+            compound_data_context = handle_compound_team_contact_query(
+                compound_date, compound_contact_type, organization
+            )
+        else:
+            # No date found - ask for clarification
+            compound_data_context = "\n[TEAM CONTACT QUERY: I'd like to help you get contact information for the team, but I need to know which date you're asking about. Could you specify a date like 'this Sunday', 'January 11', or 'next weekend'?]\n"
+
+        # Save the user's question to chat history
+        ChatMessage.objects.create(
+            user=user,
+            organization=organization,
+            session_id=session_id,
+            role='user',
+            content=question
+        )
+
+        # Query Claude with the compound query data
+        user_name = user.display_name if user.display_name else user.username
+        compound_messages = [{"role": "user", "content": question}]
+
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=2000,
+                system=SYSTEM_PROMPT.format(
+                    context=compound_data_context,
+                    current_date=datetime.now().strftime('%Y-%m-%d'),
+                    user_name=user_name
+                ),
+                messages=compound_messages
+            )
+            answer = response.content[0].text
+        except Exception as e:
+            logger.error(f"Error querying Claude for compound query: {e}")
+            answer = "I encountered an error retrieving the team contact information. Please try again."
 
         # Save assistant response to chat history
         ChatMessage.objects.create(
