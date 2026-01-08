@@ -358,6 +358,54 @@ class PlanningCenterAPI:
 
         return details
 
+    def get_person_contact_info_only(self, person_id: str) -> Optional[dict]:
+        """
+        Get only contact info (phone and email) for a person - lightweight version.
+
+        This is a minimal function that only fetches phone numbers and emails,
+        avoiding the expensive Services API lookups. Use this when you only need
+        contact info and already have the person_id.
+
+        Args:
+            person_id: Planning Center person ID.
+
+        Returns:
+            Dict with phones and emails only, or None if not found.
+        """
+        if not self.is_configured:
+            return None
+
+        contact_info = {
+            'phones': [],
+            'emails': []
+        }
+
+        try:
+            # Get phone numbers (1 API call)
+            phones_result = self._get(f"/people/v2/people/{person_id}/phone_numbers")
+            for phone in phones_result.get('data', []):
+                phone_attrs = phone.get('attributes', {})
+                phone_str = phone_attrs.get('number', '')
+                if phone_str:
+                    location = phone_attrs.get('location', '')
+                    if location:
+                        phone_str += f" ({location})"
+                    contact_info['phones'].append(phone_str)
+
+            # Get emails (1 API call)
+            emails_result = self._get(f"/people/v2/people/{person_id}/emails")
+            for email in emails_result.get('data', []):
+                email_attrs = email.get('attributes', {})
+                address = email_attrs.get('address', '')
+                if address:
+                    contact_info['emails'].append(address)
+
+        except Exception as e:
+            logger.warning(f"Error getting contact info for person {person_id}: {e}")
+            return None
+
+        return contact_info
+
     def _find_services_person(self, people_person_id: str) -> Optional[dict]:
         """
         Find the Services person record that matches a People person ID.

@@ -1063,6 +1063,7 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
         teams[team_name].append(member)
 
     # Process each team member and get their contact info
+    # Using lightweight get_person_contact_info_only to minimize API calls (2 per person vs 10+)
     contact_info_cache = {}  # Cache to avoid duplicate lookups
 
     for team_name in sorted(teams.keys()):
@@ -1079,25 +1080,21 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
             member_line += f" - {status}"
 
             # Get contact info if we have a person_id and PCO People API is configured
+            # Use lightweight function to minimize API calls
             contact_info = None
             if person_id and people_api.is_configured:
                 if person_id in contact_info_cache:
                     contact_info = contact_info_cache[person_id]
                 else:
-                    details = people_api.get_person_details(person_id)
-                    if details:
-                        contact_info = {}
-                        if contact_type in ['phone', 'contact'] and details.get('phone_numbers'):
-                            phones = []
-                            for phone in details['phone_numbers']:
-                                phone_str = phone.get('number', '')
-                                if phone.get('location'):
-                                    phone_str += f" ({phone['location']})"
-                                phones.append(phone_str)
-                            contact_info['phones'] = phones
-                        if contact_type in ['email', 'contact'] and details.get('emails'):
-                            emails = [e.get('address', '') for e in details['emails'] if e.get('address')]
-                            contact_info['emails'] = emails
+                    # Use lightweight function - only 2 API calls per person
+                    contact_info = people_api.get_person_contact_info_only(person_id)
+                    if contact_info:
+                        # Filter based on contact_type requested
+                        if contact_type == 'phone':
+                            contact_info = {'phones': contact_info.get('phones', [])}
+                        elif contact_type == 'email':
+                            contact_info = {'emails': contact_info.get('emails', [])}
+                        # 'contact' type keeps both
                         contact_info_cache[person_id] = contact_info
 
             # Add contact info to the member line
