@@ -516,6 +516,12 @@ def is_compound_team_contact_query(message: str) -> Tuple[bool, str, Optional[st
         r'(?:get|give|send|show)\s+(?:me\s+)?(?:the\s+)?(?:phone|contact|email)\s+.{0,20}(?:team|people\s+serving|volunteers?\s+(?:on|scheduled))',
         # "email addresses of people/volunteers serving/playing"
         r'email\s+address(?:es)?\s+(?:of|for)\s+(?:the\s+)?(?:people|volunteers?|team|members?|everyone)\s+(?:serving|scheduled|playing|singing)',
+        # "phone numbers of the [team name] team members for [date]" - handles band, vocals, tech, etc.
+        r'(?:phone\s*(?:numbers?)?|contact\s*(?:info)?|email\s*(?:address(?:es)?)?)\s+(?:of|for)\s+(?:the\s+)?(?:band|vocals?|tech|audio|av|worship|praise)\s*(?:team)?\s*(?:members?)?\s+(?:for|on|this|next)',
+        # "phone numbers for the team this sunday" - simpler pattern without serving/scheduled
+        r'(?:phone\s*(?:numbers?)?|contact\s*(?:info)?|email\s*(?:address(?:es)?)?)\s+(?:of|for)\s+(?:the\s+)?(?:team|band|volunteers?|members?)\s+(?:for\s+)?(?:this|next|on)\s+(?:sunday|weekend|week|saturday)',
+        # "phone numbers of team members for this sunday" - team members + date without serving
+        r'(?:phone\s*(?:numbers?)?|contact\s*(?:info)?|email\s*(?:address(?:es)?)?)\s+(?:of|for)\s+(?:the\s+)?(?:\w+\s+)?(?:team\s+)?members?\s+(?:for|on)\s+(?:this|next)',
     ]
 
     is_compound = False

@@ -471,6 +471,15 @@ class TestCompoundTeamContactQueries:
         ("Email addresses of people playing this weekend", "email"),
         ("Show me phone numbers for team members serving this Sunday", "phone"),
         ("Get phone numbers for the volunteers on the schedule this weekend", "phone"),
+        # Team name variations (band, vocals, tech, etc.)
+        ("What are the phone numbers of the band team members for this sunday", "phone"),
+        ("Phone numbers of the band for this sunday", "phone"),
+        ("Contact info for the vocals team for next sunday", "contact"),
+        ("Email addresses of the tech team for this weekend", "email"),
+        # Simpler patterns without "serving/scheduled"
+        ("Phone numbers for the team this sunday", "phone"),
+        ("Contact info for the band this weekend", "contact"),
+        ("Phone numbers of team members for this sunday", "phone"),
     ])
     def test_compound_query_detection(self, query, expected_contact_type):
         """Verify compound team contact queries are correctly detected."""
