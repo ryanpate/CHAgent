@@ -199,6 +199,33 @@
         .markdown-content a:hover {
             color: #e0b82a;
         }
+        /* Action links for SMS, Call, Email - styled as inline buttons */
+        .markdown-content a[href^="sms:"],
+        .markdown-content a[href^="tel:"],
+        .markdown-content a[href^="mailto:"] {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            margin: 0 0.15rem;
+            background-color: rgba(201, 162, 39, 0.15);
+            border: 1px solid rgba(201, 162, 39, 0.4);
+            border-radius: 0.25rem;
+            text-decoration: none;
+            font-size: 0.85em;
+            transition: all 0.2s ease;
+        }
+        .markdown-content a[href^="sms:"]:hover,
+        .markdown-content a[href^="tel:"]:hover,
+        .markdown-content a[href^="mailto:"]:hover {
+            background-color: rgba(201, 162, 39, 0.3);
+            border-color: #c9a227;
+            color: #e0b82a;
+        }
+        /* Group action links - larger and more prominent */
+        .markdown-content p > a[href^="sms:"],
+        .markdown-content p > a[href^="mailto:"] {
+            padding: 0.35rem 0.75rem;
+            font-size: 0.95em;
+        }
         .markdown-content blockquote {
             border-left: 3px solid #c9a227;
             padding-left: 1rem;

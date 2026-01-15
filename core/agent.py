@@ -1013,6 +1013,18 @@ def format_team_schedule(plan: dict) -> str:
     return '\n'.join(parts)
 
 
+def _clean_phone_for_link(phone: str) -> str:
+    """
+    Clean a phone number for use in tel: or sms: links.
+    Removes all non-digit characters except leading +.
+    """
+    import re
+    # Keep leading + for international numbers, remove everything else except digits
+    if phone.startswith('+'):
+        return '+' + re.sub(r'\D', '', phone[1:])
+    return re.sub(r'\D', '', phone)
+
+
 def handle_compound_team_contact_query(date_reference: str, contact_type: str, organization=None) -> str:
     """
     Handle compound queries that ask for contact info of people serving on a date.
@@ -1020,7 +1032,8 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
     This function:
     1. Gets the team schedule for the specified date
     2. Retrieves contact info for each team member
-    3. Formats the combined result
+    3. Formats the combined result with inline action links
+    4. Adds group action links for texting/emailing all team members
 
     Args:
         date_reference: The date to look up (e.g., "this sunday", "January 11")
@@ -1066,6 +1079,10 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
     # Using lightweight get_person_contact_info_only to minimize API calls (2 per person vs 10+)
     contact_info_cache = {}  # Cache to avoid duplicate lookups
 
+    # Collect all phones and emails for group action links
+    all_phones = []  # List of (name, clean_phone) tuples
+    all_emails = []  # List of (name, email) tuples
+
     for team_name in sorted(teams.keys()):
         parts.append(f"\n  {team_name}:")
         for member in teams[team_name]:
@@ -1097,21 +1114,42 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
                         # 'contact' type keeps both
                         contact_info_cache[person_id] = contact_info
 
-            # Add contact info to the member line
+            # Add contact info to the member line with inline action links
             if contact_info:
                 if contact_info.get('phones'):
-                    member_line += f"\n        Phone: {', '.join(contact_info['phones'])}"
+                    phone = contact_info['phones'][0]  # Use first phone for links
+                    clean_phone = _clean_phone_for_link(phone)
+                    member_line += f"\n        Phone: {phone}  [Text](sms:{clean_phone}) | [Call](tel:{clean_phone})"
+                    # Collect for group actions
+                    all_phones.append((name, clean_phone))
                 if contact_info.get('emails'):
-                    member_line += f"\n        Email: {', '.join(contact_info['emails'])}"
+                    email = contact_info['emails'][0]  # Use first email for links
+                    member_line += f"\n        Email: {email}  [Email](mailto:{email})"
+                    # Collect for group actions
+                    all_emails.append((name, email))
             elif person_id:
                 member_line += "\n        (No contact info available)"
 
             parts.append(member_line)
 
-    parts.append("\n[END TEAM CONTACT INFORMATION]\n")
+    parts.append("\n[END TEAM CONTACT INFORMATION]")
+
+    # Add group action links if we have contacts
+    if all_phones or all_emails:
+        parts.append("\n---\n**Quick Actions:**")
+        if all_phones:
+            # Create group SMS link (comma-separated numbers)
+            phone_numbers = ','.join([phone for _, phone in all_phones])
+            parts.append(f"📱 [Text All Team Members](sms:{phone_numbers}) ({len(all_phones)} people)")
+        if all_emails:
+            # Create group email link (comma-separated emails)
+            email_addresses = ','.join([email for _, email in all_emails])
+            parts.append(f"📧 [Email All Team Members](mailto:{email_addresses}) ({len(all_emails)} people)")
+
+    parts.append("\n[END GROUP ACTIONS]\n")
 
     # Add instruction for AI
-    parts.append(f"INSTRUCTION: Present this contact information to the user in a clear, organized format. Focus on {contact_type} information as requested.")
+    parts.append(f"INSTRUCTION: Present this contact information to the user in a clear, organized format. Focus on {contact_type} information as requested. The markdown links for Text, Call, Email, and group actions should be preserved in your response so users can click them.")
 
     return '\n'.join(parts)
 
