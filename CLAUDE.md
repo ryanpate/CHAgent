@@ -2,17 +2,17 @@
 
 ## Project Status
 
-**🎯 Overall Completion: ~90%** | **📊 Production-Ready Core Features** | **🚀 Active Development**
+**🎯 Overall Completion: ~92%** | **📊 Production-Ready Core Features** | **🚀 Active Development**
 
-Last Updated: January 8, 2026
+Last Updated: January 19, 2026
 
 ### Quick Stats
-- **30+ Database Models** across all domains
-- **102 View Functions** with full CRUD operations
-- **75+ Templates** for complete user journeys
+- **33+ Database Models** across all domains (including blog)
+- **106 View Functions** with full CRUD operations
+- **85+ Templates** for complete user journeys
 - **6 Test Files** with 190 test cases
-- **25+ Migrations** tracking schema evolution
-- **Recent Focus**: Compound queries, API optimization, team contact lookups
+- **27+ Migrations** tracking schema evolution
+- **Recent Focus**: SEO infrastructure, blog app, resource pages, meta tags
 
 ### Current Sprint (January 2026)
 - ✅ Improved PCO API rate limiting with caching
@@ -26,6 +26,24 @@ Last Updated: January 8, 2026
 - ✅ Email notification system (invitations, welcome, payment failed)
 - ✅ Compound team contact queries ("phone numbers of people serving this Sunday")
 - ✅ Lightweight contact info API (reduced API calls from 150+ to ~35)
+- ✅ **SEO Infrastructure** - Complete technical SEO foundation
+  - Meta tags (description, keywords, canonical) on all public pages
+  - Open Graph tags for social sharing (Facebook, LinkedIn)
+  - Twitter Card tags for Twitter sharing
+  - Schema.org JSON-LD structured data (Organization, SoftwareApplication, FAQPage, BreadcrumbList, HowTo)
+- ✅ **Blog App** - Full Django blog with SEO optimization
+  - BlogPost, BlogCategory, BlogTag models
+  - Admin interface for content management
+  - BlogSitemap for search engine indexing
+  - Article schema markup on posts
+- ✅ **Resource Pages** - SEO-optimized content pages
+  - `/resources/` - Resource listing
+  - `/resources/volunteer-application-template/`
+  - `/resources/worship-schedule-template/`
+  - `/resources/planning-center-setup-guide/`
+- 📋 Create og-image.png and twitter-card.png (pending design)
+- 📋 Submit sitemap to Google Search Console (manual step)
+- 📋 Write first blog posts (content creation)
 - 📋 Proactive care AI insight generation (planned)
 
 ---
@@ -429,12 +447,33 @@ worship-arts-portal/
 │   ├── models.py          # All models (see below)
 │   ├── notifications.py   # Push notification service
 │   ├── planning_center.py # Planning Center API integration
+│   ├── sitemaps.py        # SEO sitemap configuration
+│   ├── urls.py
+│   └── views.py
+├── blog/                   # SEO Blog App
+│   ├── __init__.py
+│   ├── admin.py           # Blog admin interface
+│   ├── apps.py
+│   ├── models.py          # BlogPost, BlogCategory, BlogTag
+│   ├── sitemaps.py        # BlogSitemap for SEO
 │   ├── urls.py
 │   └── views.py
 ├── templates/
 │   ├── base.html
 │   ├── accounts/
 │   │   └── login.html
+│   ├── blog/              # Blog templates
+│   │   ├── base_blog.html
+│   │   ├── post_list.html
+│   │   ├── post_detail.html
+│   │   ├── category_list.html
+│   │   └── tag_list.html
+│   ├── resources/         # SEO Resource pages
+│   │   ├── base_resource.html
+│   │   ├── list.html
+│   │   ├── volunteer_application_template.html
+│   │   ├── schedule_template.html
+│   │   └── pco_setup_guide.html
 │   └── core/
 │       ├── dashboard.html
 │       ├── chat.html
@@ -618,13 +657,22 @@ CHAgent/
 │   ├── models.py             # Database models (incl. Organization, SubscriptionPlan)
 │   ├── views.py              # View handlers
 │   ├── urls.py               # URL routing
+│   ├── sitemaps.py           # SEO sitemap for static/resource pages
 │   ├── embeddings.py         # Vector search
 │   ├── middleware.py         # TenantMiddleware, permission decorators
 │   ├── context_processors.py # Organization template context
 │   ├── notifications.py      # Push notification service
 │   └── volunteer_matching.py # Name matching logic
+├── blog/                     # SEO Blog App
+│   ├── models.py             # BlogPost, BlogCategory, BlogTag
+│   ├── views.py              # Blog list/detail views
+│   ├── urls.py               # Blog URL routing
+│   ├── sitemaps.py           # BlogSitemap for search engines
+│   └── admin.py              # Blog admin interface
 ├── templates/
 │   ├── base.html             # Layout with sidebar
+│   ├── blog/                 # Blog templates with SEO
+│   ├── resources/            # SEO resource page templates
 │   └── core/
 │       ├── dashboard.html    # Main chat interface
 │       ├── interaction_*.html
@@ -633,7 +681,7 @@ CHAgent/
 │       └── feedback_*.html
 ├── config/
 │   ├── settings.py           # Incl. Stripe & multi-tenant config
-│   └── urls.py
+│   └── urls.py               # Main URL routing incl. sitemap
 └── accounts/
     └── models.py             # Custom User with org helpers
 ```
@@ -1008,6 +1056,127 @@ The PWA service worker (`static/js/sw.js`) handles:
 
 ---
 
+## SEO Infrastructure
+
+Complete technical SEO implementation for organic search visibility.
+
+### Meta Tags (All Public Pages)
+
+All public pages include comprehensive meta tags via `templates/core/onboarding/base_public.html`:
+
+```html
+<!-- SEO Meta Tags -->
+<meta name="description" content="{% block meta_description %}...{% endblock %}">
+<meta name="keywords" content="worship team management, church volunteer software...">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://aria.church{{ request.path }}">
+
+<!-- Open Graph (Facebook, LinkedIn) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="{% block og_title %}...{% endblock %}">
+<meta property="og:description" content="{% block og_description %}...{% endblock %}">
+<meta property="og:image" content="https://aria.church/static/og-image.png">
+<meta property="og:url" content="https://aria.church{{ request.path }}">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="...">
+<meta name="twitter:description" content="...">
+<meta name="twitter:image" content="https://aria.church/static/twitter-card.png">
+```
+
+### Schema.org Structured Data
+
+JSON-LD structured data for rich search results:
+
+| Schema Type | Page | Purpose |
+|-------------|------|---------|
+| `Organization` | All pages (base) | Company info for Knowledge Graph |
+| `SoftwareApplication` | Landing page | App info with pricing, features |
+| `FAQPage` | Pricing page | 6 FAQs for rich snippets |
+| `Product` | Pricing page | Individual plan details |
+| `BreadcrumbList` | All pages | Navigation breadcrumbs |
+| `HowTo` | PCO Setup Guide | Step-by-step instructions |
+| `Article` | Blog posts | Article metadata |
+
+### Blog System
+
+Django app for SEO content marketing (`blog/`):
+
+```python
+# blog/models.py
+class BlogPost(models.Model):
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True)
+    excerpt = models.TextField(max_length=300)
+    content = models.TextField()
+    category = models.ForeignKey(BlogCategory)
+    tags = models.ManyToManyField(BlogTag)
+
+    # SEO fields
+    meta_title = models.CharField(max_length=60)      # For <title> tag
+    meta_description = models.CharField(max_length=160)  # For meta description
+    focus_keyword = models.CharField(max_length=100)  # Primary keyword
+    featured_image_url = models.URLField()
+
+    status = models.CharField(choices=[('draft','Draft'),('published','Published')])
+    published_at = models.DateTimeField()
+    author = models.ForeignKey(User)
+```
+
+### Resource Pages
+
+SEO-optimized content pages for organic traffic:
+
+| URL | Purpose | Schema |
+|-----|---------|--------|
+| `/resources/` | Resource listing | BreadcrumbList |
+| `/resources/volunteer-application-template/` | Lead magnet | BreadcrumbList |
+| `/resources/worship-schedule-template/` | Lead magnet | BreadcrumbList |
+| `/resources/planning-center-setup-guide/` | Tutorial | HowTo, BreadcrumbList |
+
+### Sitemap Configuration
+
+Dynamic sitemap generation (`core/sitemaps.py`, `blog/sitemaps.py`):
+
+```python
+# Sitemap includes:
+# - Static pages: /, /pricing/, /signup/
+# - Resource pages: /resources/*, with per-page priorities
+# - Blog posts: /blog/<slug>/ (published only)
+# - Blog categories: /blog/category/<slug>/
+
+# URL: /sitemap.xml
+```
+
+### SEO URL Routes
+
+```python
+# Blog URLs (config/urls.py)
+path('blog/', include('blog.urls', namespace='blog')),
+
+# Resource URLs (core/urls.py)
+path('resources/', views.resources_list, name='resources_list'),
+path('resources/volunteer-application-template/', views.resource_volunteer_application),
+path('resources/worship-schedule-template/', views.resource_schedule_template),
+path('resources/planning-center-setup-guide/', views.resource_pco_guide),
+
+# Sitemap
+path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='sitemap'),
+```
+
+### Pending SEO Items
+
+| Item | Status | Notes |
+|------|--------|-------|
+| `og-image.png` (1200x630) | Pending | Social sharing image |
+| `twitter-card.png` (1200x600) | Pending | Twitter card image |
+| Google Search Console | Pending | Submit sitemap manually |
+| Rich Results Test | Pending | Validate schema markup |
+| First blog posts | Pending | Content creation needed |
+
+---
+
 ## Example Usage Scenarios
 
 ### Logging an Interaction
@@ -1069,12 +1238,31 @@ The following features have been implemented:
 - [x] **Follow-up Management**: Track and manage volunteer follow-ups
 - [x] **@Mentions**: Tag team members in channels and task comments
 - [x] **Multi-Tenant Foundation**: Organization model, subscriptions, memberships
+- [x] **SEO Infrastructure**: Meta tags, Open Graph, Twitter Cards, Schema.org JSON-LD
+- [x] **Blog System**: Full Django blog with SEO optimization and admin interface
+- [x] **Resource Pages**: SEO-optimized content pages with lead magnets
 
 ---
 
 ## Recent Improvements (January 2026)
 
-### Compound Query Detection (New!)
+### SEO Infrastructure (New!)
+- **Technical SEO**: Complete meta tag implementation across all public pages
+  - Meta descriptions, keywords, canonical URLs, robots directives
+  - Open Graph tags for Facebook/LinkedIn sharing
+  - Twitter Card tags for Twitter sharing
+- **Structured Data**: JSON-LD Schema.org markup for rich search results
+  - Organization, SoftwareApplication, FAQPage, Product, BreadcrumbList, HowTo, Article
+- **Blog System**: Full Django blog app with SEO optimization
+  - BlogPost, BlogCategory, BlogTag models with SEO fields
+  - Admin interface for content management
+  - BlogSitemap for search engine indexing
+- **Resource Pages**: SEO-optimized content pages
+  - Volunteer application template, schedule template, PCO setup guide
+  - Each with appropriate schema markup and meta tags
+- **Sitemap**: Dynamic XML sitemap including all public pages, blog posts, and resources
+
+### Compound Query Detection
 - **Team Contact Queries**: Ask for phone numbers/emails of people serving on a date
   - "What are the phone numbers of the people serving this weekend?"
   - "Email addresses of volunteers scheduled this Sunday"
@@ -1215,12 +1403,18 @@ The following features have been implemented:
 ## Recommended Next Steps
 
 ### Immediate Actions (This Week)
-1. **Proactive Care AI**: Complete AI insight generation
+1. **SEO Completion**: Finish remaining SEO tasks
+   - Create `og-image.png` (1200x630) and `twitter-card.png` (1200x600)
+   - Submit sitemap to Google Search Console
+   - Validate schemas with Google Rich Results Test
+   - Write first 2 blog posts targeting long-tail keywords
+
+2. **Proactive Care AI**: Complete AI insight generation
    - Implement scheduled task (Django-Q or Celery) to analyze volunteer activity
    - Generate insights for missing/declining volunteers
    - Auto-create follow-up suggestions from interactions
 
-2. **Error Monitoring**: Set up production error tracking
+3. **Error Monitoring**: Set up production error tracking
    - Integrate Sentry or similar service
    - Add custom error pages (404, 500)
    - Implement graceful degradation for PCO API failures
