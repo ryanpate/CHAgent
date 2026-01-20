@@ -104,6 +104,30 @@ def pricing(request):
     return render(request, 'core/pricing.html', context)
 
 
+# =============================================================================
+# Resource Pages (SEO Content)
+# =============================================================================
+
+def resources_list(request):
+    """List of free resources and templates."""
+    return render(request, 'resources/list.html')
+
+
+def resource_volunteer_application(request):
+    """Free volunteer application template resource page."""
+    return render(request, 'resources/volunteer_application_template.html')
+
+
+def resource_schedule_template(request):
+    """Free worship schedule template resource page."""
+    return render(request, 'resources/schedule_template.html')
+
+
+def resource_pco_guide(request):
+    """Planning Center setup guide resource page."""
+    return render(request, 'resources/pco_setup_guide.html')
+
+
 @login_required
 def dashboard(request):
     """Dashboard view with overview statistics and AI chat interface."""

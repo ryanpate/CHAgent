@@ -9,10 +9,12 @@ from django.conf import settings
 import os
 
 from core.sitemaps import StaticViewSitemap
+from blog.sitemaps import BlogSitemap
 
 # Sitemap configuration
 sitemaps = {
     'static': StaticViewSitemap,
+    'blog': BlogSitemap,
 }
 
 
@@ -26,6 +28,7 @@ def robots_txt(request):
     lines = [
         "User-agent: *",
         "Allow: /",
+        "Allow: /blog/",
         "",
         "# Disallow authenticated areas",
         "Disallow: /dashboard/",
@@ -79,5 +82,6 @@ urlpatterns = [
     path('manifest.json', manifest, name='manifest'),  # Manifest at root
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
+    path('blog/', include('blog.urls', namespace='blog')),
     path('', include('core.urls')),
 ]

@@ -1,0 +1,165 @@
+{% extends "resources/base_resource.html" %}
+
+{% block title %}Free Volunteer Application Template for Worship Teams | Aria{% endblock %}
+{% block meta_description %}Download our free volunteer application template for worship teams. Includes sections for personal info, spiritual background, musical experience, and availability. Perfect for onboarding new worship team members.{% endblock %}
+
+{% block og_title %}Free Volunteer Application Template for Worship Teams{% endblock %}
+{% block og_description %}A comprehensive volunteer application form template for worship ministry teams. Download free and customize for your church.{% endblock %}
+
+{% block schema_markup %}
+<!-- BreadcrumbList Schema -->
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://aria.church/"
+        },
+        {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Resources",
+            "item": "https://aria.church/resources/"
+        },
+        {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "Volunteer Application Template",
+            "item": "https://aria.church/resources/volunteer-application-template/"
+        }
+    ]
+}
+</script>
+
+<!-- HowTo Schema -->
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to Create a Worship Team Volunteer Application",
+    "description": "Use this template to create an effective volunteer application form for your worship team",
+    "step": [
+        {
+            "@type": "HowToStep",
+            "name": "Gather Personal Information",
+            "text": "Collect basic contact details and emergency contact information"
+        },
+        {
+            "@type": "HowToStep",
+            "name": "Ask About Spiritual Background",
+            "text": "Understand the applicant's faith journey and church involvement"
+        },
+        {
+            "@type": "HowToStep",
+            "name": "Assess Musical Experience",
+            "text": "Document their instruments, vocal range, and experience level"
+        },
+        {
+            "@type": "HowToStep",
+            "name": "Determine Availability",
+            "text": "Understand their schedule and commitment level"
+        }
+    ]
+}
+</script>
+{% endblock %}
+
+{% block resource_title %}Volunteer Application Template{% endblock %}
+
+{% block resource_content %}
+<header class="mb-8">
+    <span class="inline-block bg-ch-gold/20 text-ch-gold text-sm font-medium px-3 py-1 rounded-full mb-4">
+        Free Template
+    </span>
+    <h1 class="text-3xl md:text-4xl font-bold text-white mb-4">Worship Team Volunteer Application Template</h1>
+    <p class="text-gray-400 text-lg">
+        A comprehensive application form to help you onboard new worship team volunteers effectively.
+    </p>
+</header>
+
+<div class="prose max-w-none">
+    <h2>Why Use a Volunteer Application?</h2>
+    <p>
+        A well-designed volunteer application helps you understand each potential team member's background, skills, and availability before they join your worship team. This saves time during the onboarding process and helps you place volunteers in the right roles.
+    </p>
+
+    <h2>What's Included in This Template</h2>
+    <ul>
+        <li><strong>Personal Information</strong> - Contact details, emergency contacts, and basic demographics</li>
+        <li><strong>Spiritual Background</strong> - Faith journey, church membership, and ministry experience</li>
+        <li><strong>Musical Experience</strong> - Instruments, vocal range, training, and performance history</li>
+        <li><strong>Technical Skills</strong> - Audio, lighting, projection, and live streaming experience</li>
+        <li><strong>Availability & Commitment</strong> - Schedule preferences and service expectations</li>
+        <li><strong>References</strong> - Contact information for character references</li>
+    </ul>
+
+    <h2>Sample Application Sections</h2>
+
+    <h3>Section 1: Personal Information</h3>
+    <div class="bg-ch-black/50 rounded-lg p-6 my-4 text-sm">
+        <p class="text-gray-300 mb-4">Full Name: _______________________</p>
+        <p class="text-gray-300 mb-4">Phone: _______________________</p>
+        <p class="text-gray-300 mb-4">Email: _______________________</p>
+        <p class="text-gray-300 mb-4">Address: _______________________</p>
+        <p class="text-gray-300 mb-4">Emergency Contact Name: _______________________</p>
+        <p class="text-gray-300">Emergency Contact Phone: _______________________</p>
+    </div>
+
+    <h3>Section 2: Spiritual Background</h3>
+    <div class="bg-ch-black/50 rounded-lg p-6 my-4 text-sm">
+        <p class="text-gray-300 mb-4">How long have you been attending this church? _______</p>
+        <p class="text-gray-300 mb-4">Are you a member? [ ] Yes [ ] No</p>
+        <p class="text-gray-300 mb-4">Briefly describe your faith journey:</p>
+        <p class="text-gray-300 mb-4">_______________________</p>
+        <p class="text-gray-300">What draws you to worship ministry?</p>
+        <p class="text-gray-300">_______________________</p>
+    </div>
+
+    <h3>Section 3: Musical Experience</h3>
+    <div class="bg-ch-black/50 rounded-lg p-6 my-4 text-sm">
+        <p class="text-gray-300 mb-4">Primary Instrument(s): _______________________</p>
+        <p class="text-gray-300 mb-4">Years of Experience: _______</p>
+        <p class="text-gray-300 mb-4">Vocal Range (if applicable): [ ] Soprano [ ] Alto [ ] Tenor [ ] Bass</p>
+        <p class="text-gray-300 mb-4">Do you read music? [ ] Yes [ ] No [ ] Chord charts only</p>
+        <p class="text-gray-300">Previous worship team experience:</p>
+        <p class="text-gray-300">_______________________</p>
+    </div>
+
+    <h3>Section 4: Availability</h3>
+    <div class="bg-ch-black/50 rounded-lg p-6 my-4 text-sm">
+        <p class="text-gray-300 mb-4">How often can you serve?</p>
+        <p class="text-gray-300 mb-4">[ ] Weekly [ ] Bi-weekly [ ] Monthly [ ] As needed</p>
+        <p class="text-gray-300 mb-4">Which services are you available for?</p>
+        <p class="text-gray-300 mb-4">[ ] Sunday AM [ ] Sunday PM [ ] Wednesday [ ] Special events</p>
+        <p class="text-gray-300">Any upcoming blockout dates in the next 3 months?</p>
+        <p class="text-gray-300">_______________________</p>
+    </div>
+
+    <h2>Tips for Using This Template</h2>
+    <ol>
+        <li><strong>Customize for your church</strong> - Add your church's specific requirements and ministry values</li>
+        <li><strong>Keep it reasonable</strong> - Don't make the application so long that people don't complete it</li>
+        <li><strong>Follow up quickly</strong> - Respond to applications within a week to maintain enthusiasm</li>
+        <li><strong>Schedule an interview</strong> - Use the application as a starting point for a personal conversation</li>
+        <li><strong>Plan an audition</strong> - For musicians, schedule a time to hear them play or sing</li>
+    </ol>
+
+    <h2>Next Steps After Receiving Applications</h2>
+    <p>
+        Once you receive a completed application, here's a suggested process:
+    </p>
+    <ol>
+        <li>Review the application within 48 hours</li>
+        <li>Send an acknowledgment email thanking them for applying</li>
+        <li>Schedule a brief interview (15-30 minutes)</li>
+        <li>For musicians, arrange an audition or sit-in during rehearsal</li>
+        <li>Check references if needed</li>
+        <li>Make a decision and communicate clearly</li>
+        <li>Begin onboarding and training for accepted volunteers</li>
+    </ol>
+</div>
+{% endblock %}

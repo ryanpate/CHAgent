@@ -1,6 +1,69 @@
 {% extends "core/onboarding/base_public.html" %}
 
-{% block title %}AI-Powered Worship Arts Team Portal{% endblock %}
+{% block title %}AI Worship Team Management Software | Planning Center Integration{% endblock %}
+
+{% block meta_description %}Aria is AI-powered worship team management software that integrates with Planning Center. Get instant answers about schedules, volunteers, and songs. Track interactions and build stronger relationships with your team. Start your free 14-day trial.{% endblock %}
+
+{% block og_title %}Aria - AI Worship Team Management Software | Planning Center Integration{% endblock %}
+{% block og_description %}AI-powered worship team management with Planning Center integration. Get instant answers about schedules, volunteers, songs, and more. Start your free trial today.{% endblock %}
+
+{% block twitter_title %}Aria - AI Worship Team Management Software{% endblock %}
+{% block twitter_description %}AI-powered worship team management with Planning Center integration. Get instant answers about schedules, volunteers, and songs.{% endblock %}
+
+{% block schema_markup %}
+<!-- SoftwareApplication Schema -->
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Aria",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "description": "AI-powered worship team management software with Planning Center integration. Manage volunteers, track interactions, access schedules, songs, and chord charts instantly.",
+    "url": "https://aria.church",
+    "offers": {
+        "@type": "AggregateOffer",
+        "lowPrice": "9.99",
+        "highPrice": "79.99",
+        "priceCurrency": "USD",
+        "offerCount": "4"
+    },
+    "featureList": [
+        "AI-powered assistant (Aria)",
+        "Planning Center integration",
+        "Volunteer relationship tracking",
+        "Follow-up management",
+        "Team communication hub",
+        "Push notifications",
+        "Analytics dashboard",
+        "Proactive care insights"
+    ],
+    "screenshot": "https://aria.church/static/og-image.png",
+    "softwareVersion": "1.0",
+    "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "5",
+        "ratingCount": "1"
+    }
+}
+</script>
+
+<!-- BreadcrumbList Schema -->
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://aria.church/"
+        }
+    ]
+}
+</script>
+{% endblock %}
 
 {% block container_class %}max-w-6xl{% endblock %}
 
@@ -23,13 +86,13 @@
 <!-- Hero Section -->
 <div class="text-center py-16 px-4">
     <h1 class="text-4xl md:text-6xl font-bold text-white mb-6">
-        Meet <span class="gradient-text">Aria</span>
+        <span class="gradient-text">AI-Powered</span> Worship Team Management Software
     </h1>
     <p class="text-xl md:text-2xl text-gray-300 mb-4 max-w-3xl mx-auto">
-        Your AI-powered assistant for worship arts teams
+        Meet Aria - Your intelligent assistant for worship arts teams with Planning Center integration
     </p>
     <p class="text-lg text-gray-400 mb-8 max-w-2xl mx-auto">
-        Connect with Planning Center, track volunteer relationships, manage follow-ups, and get instant answers about your team - all in one place.
+        Get instant answers about schedules, volunteers, and songs. Track volunteer relationships, manage follow-ups, and build stronger connections with your team - all in one place.
     </p>
     <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="{% url 'onboarding_signup' %}"

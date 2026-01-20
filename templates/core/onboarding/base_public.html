@@ -3,7 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Get Started{% endblock %} | Aria</title>
+    <title>{% block title %}Get Started{% endblock %} | Aria - AI Worship Team Management</title>
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="{% block meta_description %}Aria is AI-powered worship team management software with Planning Center integration. Manage volunteers, track interactions, and get instant answers about your team.{% endblock %}">
+    <meta name="keywords" content="worship team management, church volunteer software, Planning Center integration, AI church assistant, volunteer scheduling, worship ministry">
+    <meta name="author" content="Aria">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="{% block canonical_url %}https://aria.church{{ request.path }}{% endblock %}">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:url" content="https://aria.church{{ request.path }}">
+    <meta property="og:title" content="{% block og_title %}Aria - AI Worship Team Management Software{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}AI-powered worship team management with Planning Center integration. Manage volunteers, track interactions, and build stronger relationships.{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}https://aria.church/static/og-image.png{% endblock %}">
+    <meta property="og:site_name" content="Aria">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://aria.church{{ request.path }}">
+    <meta name="twitter:title" content="{% block twitter_title %}Aria - AI Worship Team Management Software{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}AI-powered worship team management with Planning Center integration. Manage volunteers and build stronger relationships.{% endblock %}">
+    <meta name="twitter:image" content="{% block twitter_image %}https://aria.church/static/twitter-card.png{% endblock %}">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
+
+    <!-- Organization Schema -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Aria",
+        "url": "https://aria.church",
+        "logo": "https://aria.church/static/icons/icon-512x512.png",
+        "description": "AI-powered worship team management software with Planning Center integration",
+        "email": "support@aria.church",
+        "sameAs": []
+    }
+    </script>
+
+    {% block schema_markup %}{% endblock %}
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>

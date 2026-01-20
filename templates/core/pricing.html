@@ -1,6 +1,139 @@
 {% extends "core/onboarding/base_public.html" %}
 
-{% block title %}Pricing - Aria{% endblock %}
+{% block title %}Worship Team Software Pricing - Plans for Churches | Aria{% endblock %}
+
+{% block meta_description %}Simple, transparent pricing for Aria worship team management software. Plans starting at $9.99/month. 14-day free trial. Planning Center integration included. Compare Starter, Team, Ministry, and Enterprise plans.{% endblock %}
+
+{% block og_title %}Worship Team Software Pricing - Plans for Every Church Size | Aria{% endblock %}
+{% block og_description %}Aria pricing plans for worship teams of all sizes. Starting at $9.99/month with Planning Center integration. 14-day free trial, no credit card required.{% endblock %}
+
+{% block twitter_title %}Aria Pricing - Worship Team Management Software{% endblock %}
+{% block twitter_description %}Plans starting at $9.99/month. 14-day free trial with Planning Center integration included.{% endblock %}
+
+{% block schema_markup %}
+<!-- BreadcrumbList Schema -->
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://aria.church/"
+        },
+        {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Pricing",
+            "item": "https://aria.church/pricing/"
+        }
+    ]
+}
+</script>
+
+<!-- FAQPage Schema -->
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+        {
+            "@type": "Question",
+            "name": "Can I change plans later?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes! You can upgrade or downgrade your plan at any time. Changes take effect on your next billing cycle."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What happens after my trial?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "After your 14-day trial, you'll need to choose a paid plan to continue using Aria. Your data is preserved during this process."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "Do I need a Planning Center account?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "While Aria works best with Planning Center integration, you can use many features without it. PCO integration is optional."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What payment methods do you accept?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "We accept all major credit cards through Stripe. For Enterprise plans, we can arrange invoicing."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "Is my data secure?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Absolutely. We use industry-standard encryption, and your data is completely isolated from other organizations."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "Can I cancel anytime?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes, you can cancel your subscription at any time. You'll retain access until the end of your current billing period."
+            }
+        }
+    ]
+}
+</script>
+
+<!-- Product Schema for Pricing Plans -->
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "Aria Worship Team Management Software",
+    "description": "AI-powered worship team management software with Planning Center integration",
+    "brand": {
+        "@type": "Brand",
+        "name": "Aria"
+    },
+    "offers": [
+        {
+            "@type": "Offer",
+            "name": "Starter Plan",
+            "price": "9.99",
+            "priceCurrency": "USD",
+            "priceValidUntil": "2027-12-31",
+            "availability": "https://schema.org/InStock",
+            "url": "https://aria.church/signup/?plan=starter"
+        },
+        {
+            "@type": "Offer",
+            "name": "Team Plan",
+            "price": "39.99",
+            "priceCurrency": "USD",
+            "priceValidUntil": "2027-12-31",
+            "availability": "https://schema.org/InStock",
+            "url": "https://aria.church/signup/?plan=team"
+        },
+        {
+            "@type": "Offer",
+            "name": "Ministry Plan",
+            "price": "79.99",
+            "priceCurrency": "USD",
+            "priceValidUntil": "2027-12-31",
+            "availability": "https://schema.org/InStock",
+            "url": "https://aria.church/signup/?plan=ministry"
+        }
+    ]
+}
+</script>
+{% endblock %}
 
 {% block container_class %}max-w-6xl{% endblock %}
 
@@ -8,9 +141,9 @@
 <div>
     <!-- Header -->
     <div class="text-center mb-12">
-        <h1 class="text-4xl font-bold text-white mb-4">Simple, Transparent Pricing</h1>
+        <h1 class="text-4xl font-bold text-white mb-4">Worship Team Software Pricing</h1>
         <p class="text-xl text-gray-400 max-w-2xl mx-auto">
-            Choose the plan that fits your team. All plans include a 14-day free trial.
+            Simple, transparent plans for churches of all sizes. Planning Center integration included with every plan. Start your 14-day free trial today.
         </p>
     </div>
 

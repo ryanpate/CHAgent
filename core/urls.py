@@ -5,6 +5,11 @@ urlpatterns = [
     # Public pages
     path('', views.home, name='home'),
     path('pricing/', views.pricing, name='pricing'),
+    # Resources (SEO content)
+    path('resources/', views.resources_list, name='resources_list'),
+    path('resources/volunteer-application-template/', views.resource_volunteer_application, name='resource_volunteer_application'),
+    path('resources/worship-schedule-template/', views.resource_schedule_template, name='resource_schedule_template'),
+    path('resources/planning-center-setup-guide/', views.resource_pco_guide, name='resource_pco_guide'),
     # Authenticated app
     path('dashboard/', views.dashboard, name='dashboard'),
     path('chat/', views.chat, name='chat'),

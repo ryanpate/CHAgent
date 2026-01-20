@@ -1,0 +1,113 @@
+{% extends "blog/base_blog.html" %}
+
+{% block title %}{{ category.name }} Articles | Aria Blog{% endblock %}
+{% block meta_description %}{{ meta_description }}{% endblock %}
+{% block og_title %}{{ category.name }} - Worship Team Management Articles | Aria{% endblock %}
+{% block og_description %}{{ meta_description }}{% endblock %}
+
+{% block schema_markup %}
+<!-- BreadcrumbList Schema -->
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://aria.church/"
+        },
+        {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Blog",
+            "item": "https://aria.church/blog/"
+        },
+        {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "{{ category.name }}",
+            "item": "https://aria.church{{ category.get_absolute_url }}"
+        }
+    ]
+}
+</script>
+{% endblock %}
+
+{% block blog_content %}
+<div class="mb-8">
+    <nav class="text-sm text-gray-500 mb-4">
+        <a href="{% url 'blog:list' %}" class="hover:text-ch-gold">Blog</a>
+        <span class="mx-2">/</span>
+        <span class="text-gray-300">{{ category.name }}</span>
+    </nav>
+    <h1 class="text-3xl md:text-4xl font-bold text-white mb-4">{{ category.name }}</h1>
+    {% if category.description %}
+    <p class="text-gray-400 text-lg">{{ category.description }}</p>
+    {% endif %}
+</div>
+
+{% if page_obj %}
+<div class="space-y-8">
+    {% for post in page_obj %}
+    <article class="bg-ch-dark rounded-xl border border-ch-gray p-6 hover:border-ch-gold/50 transition-colors">
+        <div class="flex flex-col md:flex-row gap-6">
+            {% if post.featured_image_url %}
+            <div class="md:w-48 flex-shrink-0">
+                <img src="{{ post.featured_image_url }}" alt="{{ post.featured_image_alt }}"
+                     class="w-full h-32 object-cover rounded-lg">
+            </div>
+            {% endif %}
+            <div class="flex-1">
+                <h2 class="text-xl font-bold text-white mb-2">
+                    <a href="{% url 'blog:post_detail' post.slug %}" class="hover:text-ch-gold transition-colors">
+                        {{ post.title }}
+                    </a>
+                </h2>
+                <p class="text-gray-400 text-sm mb-3 line-clamp-2">{{ post.excerpt }}</p>
+                <div class="flex items-center gap-4 text-sm text-gray-500">
+                    <span>{{ post.author_name }}</span>
+                    <span>&bull;</span>
+                    <span>{{ post.published_at|date:"M d, Y" }}</span>
+                    <span>&bull;</span>
+                    <span>{{ post.reading_time }}</span>
+                </div>
+            </div>
+        </div>
+    </article>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<nav class="flex justify-center gap-2 mt-12">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}"
+       class="px-4 py-2 bg-ch-gray rounded-lg text-gray-300 hover:bg-ch-gold hover:text-ch-black transition-colors">
+        Previous
+    </a>
+    {% endif %}
+
+    <span class="px-4 py-2 text-gray-400">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </span>
+
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}"
+       class="px-4 py-2 bg-ch-gray rounded-lg text-gray-300 hover:bg-ch-gold hover:text-ch-black transition-colors">
+        Next
+    </a>
+    {% endif %}
+</nav>
+{% endif %}
+
+{% else %}
+<div class="bg-ch-dark rounded-xl border border-ch-gray p-12 text-center">
+    <p class="text-gray-400">No posts in this category yet.</p>
+    <a href="{% url 'blog:list' %}" class="text-ch-gold hover:underline mt-2 inline-block">
+        View all posts
+    </a>
+</div>
+{% endif %}
+{% endblock %}

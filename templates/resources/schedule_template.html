@@ -1,0 +1,106 @@
+{% extends "resources/base_resource.html" %}
+
+{% block title %}Free Worship Schedule Template | Volunteer Rotation Planner | Aria{% endblock %}
+{% block meta_description %}Download our free worship schedule template. Organize your worship team rotation with this easy-to-use scheduling spreadsheet. Perfect for managing vocals, band, and tech teams.{% endblock %}
+
+{% block og_title %}Free Worship Team Schedule Template{% endblock %}
+{% block og_description %}A ready-to-use scheduling template for organizing your worship team rotation. Download free and start scheduling.{% endblock %}
+
+{% block schema_markup %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://aria.church/"},
+        {"@type": "ListItem", "position": 2, "name": "Resources", "item": "https://aria.church/resources/"},
+        {"@type": "ListItem", "position": 3, "name": "Schedule Template", "item": "https://aria.church/resources/worship-schedule-template/"}
+    ]
+}
+</script>
+{% endblock %}
+
+{% block resource_title %}Worship Schedule Template{% endblock %}
+
+{% block resource_content %}
+<header class="mb-8">
+    <span class="inline-block bg-ch-gold/20 text-ch-gold text-sm font-medium px-3 py-1 rounded-full mb-4">
+        Free Template
+    </span>
+    <h1 class="text-3xl md:text-4xl font-bold text-white mb-4">Worship Team Schedule Template</h1>
+    <p class="text-gray-400 text-lg">
+        A simple, effective template for scheduling your worship team rotation.
+    </p>
+</header>
+
+<div class="prose max-w-none">
+    <h2>Why Use a Scheduling Template?</h2>
+    <p>
+        A well-organized schedule helps prevent conflicts, ensures fair rotation of volunteers, and makes it easy for team members to plan ahead. This template provides a simple structure you can adapt to your team's needs.
+    </p>
+
+    <h2>What's Included</h2>
+    <ul>
+        <li><strong>Monthly Overview</strong> - See the entire month at a glance</li>
+        <li><strong>Position Columns</strong> - Worship leader, vocals, keys, guitar, bass, drums, sound, projection</li>
+        <li><strong>Rotation Tracking</strong> - Keep track of how often each volunteer serves</li>
+        <li><strong>Notes Column</strong> - Add special notes for each service</li>
+    </ul>
+
+    <h2>Sample Schedule Format</h2>
+    <div class="bg-ch-black/50 rounded-lg p-6 my-4 overflow-x-auto">
+        <table class="text-sm text-gray-300 w-full">
+            <thead>
+                <tr class="border-b border-ch-gray">
+                    <th class="text-left py-2 px-3">Date</th>
+                    <th class="text-left py-2 px-3">Worship Leader</th>
+                    <th class="text-left py-2 px-3">Vocals</th>
+                    <th class="text-left py-2 px-3">Keys</th>
+                    <th class="text-left py-2 px-3">Drums</th>
+                    <th class="text-left py-2 px-3">Sound</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="border-b border-ch-gray/50">
+                    <td class="py-2 px-3">Jan 5</td>
+                    <td class="py-2 px-3">Sarah J.</td>
+                    <td class="py-2 px-3">Mike C., Emily D.</td>
+                    <td class="py-2 px-3">David W.</td>
+                    <td class="py-2 px-3">Chris M.</td>
+                    <td class="py-2 px-3">Alex T.</td>
+                </tr>
+                <tr class="border-b border-ch-gray/50">
+                    <td class="py-2 px-3">Jan 12</td>
+                    <td class="py-2 px-3">John P.</td>
+                    <td class="py-2 px-3">Lisa R., Tom H.</td>
+                    <td class="py-2 px-3">Sarah J.</td>
+                    <td class="py-2 px-3">Mike C.</td>
+                    <td class="py-2 px-3">Beth K.</td>
+                </tr>
+                <tr>
+                    <td class="py-2 px-3">Jan 19</td>
+                    <td class="py-2 px-3">Sarah J.</td>
+                    <td class="py-2 px-3">Emily D., John P.</td>
+                    <td class="py-2 px-3">David W.</td>
+                    <td class="py-2 px-3">Chris M.</td>
+                    <td class="py-2 px-3">Alex T.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2>Tips for Effective Scheduling</h2>
+    <ol>
+        <li><strong>Plan ahead</strong> - Create schedules at least one month in advance</li>
+        <li><strong>Track availability</strong> - Know when volunteers have blockout dates</li>
+        <li><strong>Balance rotation</strong> - Don't over-schedule your most reliable volunteers</li>
+        <li><strong>Communicate early</strong> - Send schedules as soon as they're finalized</li>
+        <li><strong>Build in flexibility</strong> - Have backup options for last-minute changes</li>
+    </ol>
+
+    <h2>Ready for Something Better?</h2>
+    <p>
+        Spreadsheets work, but Aria makes scheduling easier. With Planning Center integration, you can ask questions like "Who's available next Sunday?" and get instant answers. Start your free trial to experience the difference.
+    </p>
+</div>
+{% endblock %}
