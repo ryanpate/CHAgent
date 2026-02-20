@@ -3325,3 +3325,44 @@ class SongBPMCache(models.Model):
             **lookup, defaults=defaults
         )
         return cache_entry
+
+
+class AuditLog(models.Model):
+    """Tracks admin and org management actions for security auditing."""
+    ACTION_CHOICES = [
+        ('beta_approve', 'Beta Request Approved'),
+        ('beta_reject', 'Beta Request Rejected'),
+        ('org_status_change', 'Organization Status Changed'),
+        ('org_impersonate', 'Organization Impersonated'),
+        ('user_role_change', 'User Role Changed'),
+        ('user_removed', 'User Removed'),
+        ('invitation_sent', 'Invitation Sent'),
+        ('invitation_cancelled', 'Invitation Cancelled'),
+        ('settings_updated', 'Settings Updated'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='audit_logs'
+    )
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    organization = models.ForeignKey(
+        'Organization', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='audit_logs'
+    )
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='audit_target_logs'
+    )
+    details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['action', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.user} - {self.action} at {self.timestamp}"
