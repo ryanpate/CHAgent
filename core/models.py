@@ -3366,3 +3366,54 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.action} at {self.timestamp}"
+
+
+class TOTPDevice(models.Model):
+    """TOTP two-factor authentication device for a user."""
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='totp_device'
+    )
+    secret = models.CharField(max_length=32)
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    backup_codes = models.JSONField(default=list, blank=True)
+
+    def __str__(self):
+        status = "verified" if self.is_verified else "unverified"
+        return f"TOTP for {self.user.email} ({status})"
+
+    def verify_code(self, code):
+        """Verify a TOTP code. Returns True if valid."""
+        import pyotp
+        totp = pyotp.TOTP(self.secret)
+        return totp.verify(code, valid_window=1)
+
+    def verify_backup_code(self, code):
+        """Verify and consume a backup code. Returns True if valid."""
+        from django.contrib.auth.hashers import check_password
+        for i, hashed_code in enumerate(self.backup_codes):
+            if check_password(code, hashed_code):
+                self.backup_codes.pop(i)
+                self.save(update_fields=['backup_codes'])
+                return True
+        return False
+
+    def generate_backup_codes(self):
+        """Generate 8 new backup codes. Returns plaintext codes (show to user once)."""
+        import secrets as sec
+        from django.contrib.auth.hashers import make_password
+        plaintext_codes = [sec.token_hex(4).upper() for _ in range(8)]
+        self.backup_codes = [make_password(code) for code in plaintext_codes]
+        self.save(update_fields=['backup_codes'])
+        return plaintext_codes
+
+    def get_provisioning_uri(self):
+        """Get the otpauth:// URI for QR code generation."""
+        import pyotp
+        totp = pyotp.TOTP(self.secret)
+        return totp.provisioning_uri(
+            name=self.user.email,
+            issuer_name='Aria Church',
+        )
