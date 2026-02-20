@@ -129,6 +129,11 @@ urlpatterns = [
     path('settings/members/<int:member_id>/remove/', views.org_remove_member, name='org_remove_member'),
     path('settings/invitations/<int:invitation_id>/cancel/', views.org_cancel_invitation, name='org_cancel_invitation'),
     path('settings/billing/', views.org_settings_billing, name='org_settings_billing'),
+    # Security Settings & 2FA
+    path('settings/security/', views.security_settings, name='security_settings'),
+    path('settings/security/2fa/setup/', views.totp_setup, name='totp_setup'),
+    path('settings/security/2fa/verify-setup/', views.totp_verify_setup, name='totp_verify_setup'),
+    path('settings/security/2fa/disable/', views.totp_disable, name='totp_disable'),
     # Platform Admin Dashboard
     path('platform-admin/', admin_views.admin_dashboard, name='admin_dashboard'),
     path('platform-admin/organizations/', admin_views.admin_organizations_list, name='admin_organizations_list'),

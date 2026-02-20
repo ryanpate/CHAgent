@@ -4792,3 +4792,97 @@ def org_settings_billing(request):
         'plans': plans,
         'current_plan': org.subscription_plan,
     })
+
+
+@login_required
+def security_settings(request):
+    """Security settings page showing 2FA status."""
+    from .models import TOTPDevice
+    has_2fa = TOTPDevice.objects.filter(user=request.user, is_verified=True).exists()
+    return render(request, 'core/settings/security.html', {
+        'has_2fa': has_2fa,
+    })
+
+
+@login_required
+def totp_setup(request):
+    """Set up TOTP 2FA - show QR code."""
+    import pyotp
+    import qrcode
+    import io
+    import base64
+    from .models import TOTPDevice
+
+    # Delete any unverified device and create fresh
+    TOTPDevice.objects.filter(user=request.user, is_verified=False).delete()
+
+    device, created = TOTPDevice.objects.get_or_create(
+        user=request.user,
+        defaults={'secret': pyotp.random_base32()},
+    )
+
+    if device.is_verified:
+        from django.contrib import messages
+        messages.info(request, '2FA is already enabled.')
+        return redirect('security_settings')
+
+    # Generate QR code
+    uri = device.get_provisioning_uri()
+    qr = qrcode.make(uri)
+    buffer = io.BytesIO()
+    qr.save(buffer, format='PNG')
+    qr_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+    return render(request, 'core/auth/totp_setup.html', {
+        'qr_code': qr_base64,
+        'secret': device.secret,
+    })
+
+
+@login_required
+@require_POST
+def totp_verify_setup(request):
+    """Verify TOTP code during setup."""
+    from .models import TOTPDevice
+    from django.contrib import messages
+
+    device = TOTPDevice.objects.filter(user=request.user, is_verified=False).first()
+    if not device:
+        messages.error(request, 'No 2FA setup in progress.')
+        return redirect('security_settings')
+
+    code = request.POST.get('code', '').strip()
+    if device.verify_code(code):
+        device.is_verified = True
+        device.save(update_fields=['is_verified'])
+        backup_codes = device.generate_backup_codes()
+        request.session['2fa_verified'] = True
+        return render(request, 'core/auth/totp_backup_codes.html', {
+            'backup_codes': backup_codes,
+        })
+    else:
+        messages.error(request, 'Invalid code. Please try again.')
+        return redirect('totp_setup')
+
+
+@login_required
+@require_POST
+def totp_disable(request):
+    """Disable 2FA after verifying current code."""
+    from .models import TOTPDevice
+    from django.contrib import messages
+
+    device = TOTPDevice.objects.filter(user=request.user, is_verified=True).first()
+    if not device:
+        return redirect('security_settings')
+
+    code = request.POST.get('code', '').strip()
+    if device.verify_code(code) or device.verify_backup_code(code):
+        device.delete()
+        if '2fa_verified' in request.session:
+            del request.session['2fa_verified']
+        messages.success(request, 'Two-factor authentication has been disabled.')
+    else:
+        messages.error(request, 'Invalid code. 2FA was not disabled.')
+
+    return redirect('security_settings')

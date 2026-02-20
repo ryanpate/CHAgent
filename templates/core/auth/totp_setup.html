@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Set Up Two-Factor Authentication{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto">
+    <div class="bg-ch-dark rounded-lg p-8">
+        <h1 class="text-xl font-bold text-ch-gold mb-2">Set Up Two-Factor Authentication</h1>
+        <p class="text-gray-400 text-sm mb-6">
+            Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+        </p>
+
+        <!-- QR Code -->
+        <div class="flex justify-center mb-6">
+            <div class="bg-white p-4 rounded-lg">
+                <img src="data:image/png;base64,{{ qr_code }}" alt="TOTP QR Code" class="w-48 h-48">
+            </div>
+        </div>
+
+        <!-- Manual entry key -->
+        <div class="mb-6">
+            <p class="text-sm text-gray-400 mb-1">Or enter this key manually:</p>
+            <code class="block bg-ch-gray px-4 py-2 rounded text-ch-gold text-sm font-mono select-all">{{ secret }}</code>
+        </div>
+
+        <!-- Verify -->
+        <form method="post" action="{% url 'totp_verify_setup' %}">
+            {% csrf_token %}
+            <label class="block text-sm font-medium text-gray-300 mb-2">
+                Enter the 6-digit code from your app to verify:
+            </label>
+            <div class="flex gap-3">
+                <input type="text" name="code" placeholder="000000"
+                       class="flex-1 bg-ch-gray border border-gray-700 rounded px-4 py-3 text-white text-center text-lg font-mono tracking-widest focus:outline-none focus:border-ch-gold"
+                       maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required autofocus>
+                <button type="submit"
+                        class="px-6 py-3 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition">
+                    Verify
+                </button>
+            </div>
+        </form>
+
+        <a href="{% url 'security_settings' %}" class="block text-center text-gray-500 text-sm mt-4 hover:text-gray-300">
+            Cancel
+        </a>
+    </div>
+</div>
+{% endblock %}
