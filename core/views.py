@@ -3740,100 +3740,57 @@ def subscription_success(request):
 
 def onboarding_signup(request):
     """
-    Public signup page for creating a new organization.
-
-    This is the entry point for the onboarding flow. Users create an account
-    and organization simultaneously.
+    Beta request form - replaces the original signup page.
+    Collects name, email, church name, and church size.
+    Creates a BetaRequest for admin review.
     """
-    from django.contrib.auth import login
-    from accounts.models import User
-    from .models import Organization, OrganizationMembership, SubscriptionPlan
-    from datetime import timedelta
+    from .models import BetaRequest
 
-    # Redirect logged-in users to dashboard
     if request.user.is_authenticated:
         return redirect('dashboard')
 
     if request.method == 'POST':
-        # Get form data
-        org_name = request.POST.get('organization_name', '').strip()
+        name = request.POST.get('name', '').strip()
         email = request.POST.get('email', '').strip().lower()
-        password = request.POST.get('password', '')
-        first_name = request.POST.get('first_name', '').strip()
-        last_name = request.POST.get('last_name', '').strip()
+        church_name = request.POST.get('church_name', '').strip()
+        church_size = request.POST.get('church_size', '').strip()
 
         errors = []
 
-        # Validation
-        if not org_name:
-            errors.append('Organization name is required.')
+        if not name:
+            errors.append('Your name is required.')
         if not email:
-            errors.append('Email is required.')
-        if not password or len(password) < 8:
-            errors.append('Password must be at least 8 characters.')
-        if User.objects.filter(email=email).exists():
-            errors.append('An account with this email already exists.')
+            errors.append('Email address is required.')
+        if not church_name:
+            errors.append('Church name is required.')
+        if not church_size:
+            errors.append('Church size is required.')
+        if email and BetaRequest.objects.filter(email=email).exists():
+            errors.append("A request with this email already exists. We'll be in touch soon!")
 
         if errors:
             return render(request, 'core/onboarding/signup.html', {
                 'errors': errors,
-                'org_name': org_name,
+                'name': name,
                 'email': email,
-                'first_name': first_name,
-                'last_name': last_name,
+                'church_name': church_name,
+                'church_size': church_size,
+                'is_beta': True,
             })
 
-        # Create user
-        user = User.objects.create_user(
-            username=email,
+        BetaRequest.objects.create(
+            name=name,
             email=email,
-            password=password,
-            first_name=first_name,
-            last_name=last_name,
+            church_name=church_name,
+            church_size=church_size,
         )
 
-        # Get default plan (Starter) or use first available
-        default_plan = SubscriptionPlan.objects.filter(
-            is_active=True
-        ).order_by('price_monthly_cents').first()
+        return render(request, 'core/onboarding/beta_confirmation.html', {
+            'church_name': church_name,
+            'email': email,
+        })
 
-        # Calculate trial end date
-        trial_days = getattr(settings, 'TRIAL_PERIOD_DAYS', 14)
-        trial_ends_at = timezone.now() + timedelta(days=trial_days)
-
-        # Create organization
-        org = Organization.objects.create(
-            name=org_name,
-            email=email,
-            subscription_plan=default_plan,
-            subscription_status='trial',
-            trial_ends_at=trial_ends_at,
-        )
-
-        # Create owner membership
-        OrganizationMembership.objects.create(
-            user=user,
-            organization=org,
-            role='owner',
-            can_manage_users=True,
-            can_manage_settings=True,
-            can_view_analytics=True,
-            can_manage_billing=True,
-        )
-
-        # Set user's default organization
-        user.default_organization = org
-        user.save()
-
-        # Log user in
-        login(request, user)
-
-        # Store org in session for onboarding flow
-        request.session['onboarding_org_id'] = org.id
-
-        return redirect('onboarding_select_plan')
-
-    return render(request, 'core/onboarding/signup.html')
+    return render(request, 'core/onboarding/signup.html', {'is_beta': True})
 
 
 @login_required

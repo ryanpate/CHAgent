@@ -1,12 +1,17 @@
 {% extends "core/onboarding/base_public.html" %}
 
-{% block title %}Sign Up{% endblock %}
+{% block title %}Request Beta Access{% endblock %}
+
+{% block meta_description %}Request early access to Aria, AI-powered worship team management software. Join the beta program and help shape the future of worship ministry tools.{% endblock %}
 
 {% block content %}
 <div class="max-w-md mx-auto">
     <div class="bg-ch-dark rounded-lg border border-ch-gray p-8">
-        <h1 class="text-2xl font-bold text-white mb-2">Create Your Organization</h1>
-        <p class="text-gray-400 mb-6">Start your 14-day free trial. No credit card required.</p>
+        <div class="flex items-center gap-3 mb-2">
+            <h1 class="text-2xl font-bold text-white">Request Beta Access</h1>
+            <span class="bg-ch-gold/20 text-ch-gold text-xs font-semibold px-2.5 py-1 rounded-full border border-ch-gold/30">BETA</span>
+        </div>
+        <p class="text-gray-400 mb-6">Join our beta program and be among the first to experience Aria.</p>
 
         {% if errors %}
         <div class="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6">
@@ -22,48 +27,44 @@
             {% csrf_token %}
 
             <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Organization Name</label>
-                <input type="text" name="organization_name" value="{{ org_name|default:'' }}"
+                <label class="block text-sm font-medium text-gray-300 mb-1">Your Name</label>
+                <input type="text" name="name" value="{{ name|default:'' }}"
                        required
-                       placeholder="e.g., First Baptist Church"
+                       placeholder="e.g., Sarah Johnson"
                        class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-1">First Name</label>
-                    <input type="text" name="first_name" value="{{ first_name|default:'' }}"
-                           placeholder="John"
-                           class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-1">Last Name</label>
-                    <input type="text" name="last_name" value="{{ last_name|default:'' }}"
-                           placeholder="Doe"
-                           class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
-                </div>
             </div>
 
             <div>
                 <label class="block text-sm font-medium text-gray-300 mb-1">Email Address</label>
                 <input type="email" name="email" value="{{ email|default:'' }}"
                        required
-                       placeholder="john@church.org"
+                       placeholder="sarah@church.org"
                        class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Password</label>
-                <input type="password" name="password"
+                <label class="block text-sm font-medium text-gray-300 mb-1">Church Name</label>
+                <input type="text" name="church_name" value="{{ church_name|default:'' }}"
                        required
-                       minlength="8"
-                       placeholder="At least 8 characters"
+                       placeholder="e.g., Grace Community Church"
                        class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Church Size</label>
+                <select name="church_size" required
+                        class="w-full bg-ch-gray border border-ch-gray rounded-lg px-4 py-3 text-white focus:border-ch-gold focus:ring-1 focus:ring-ch-gold outline-none">
+                    <option value="" {% if not church_size %}selected{% endif %} disabled>Select church size</option>
+                    <option value="small" {% if church_size == 'small' %}selected{% endif %}>Under 100</option>
+                    <option value="medium" {% if church_size == 'medium' %}selected{% endif %}>100 - 500</option>
+                    <option value="large" {% if church_size == 'large' %}selected{% endif %}>500 - 2,000</option>
+                    <option value="mega" {% if church_size == 'mega' %}selected{% endif %}>2,000+</option>
+                </select>
             </div>
 
             <button type="submit"
                     class="w-full bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-3 px-6 rounded-lg transition-colors">
-                Start Free Trial
+                Request Beta Access
             </button>
         </form>
 
@@ -75,31 +76,31 @@
 
     <!-- Features List -->
     <div class="mt-8 text-center">
-        <p class="text-gray-400 mb-4">Your trial includes:</p>
+        <p class="text-gray-400 mb-4">Beta includes:</p>
         <div class="grid grid-cols-2 gap-4 text-sm text-gray-300">
             <div class="flex items-center gap-2">
                 <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>
-                AI-Powered Assistant
+                Full platform access
             </div>
             <div class="flex items-center gap-2">
                 <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>
-                Planning Center Integration
+                Free during beta
             </div>
             <div class="flex items-center gap-2">
                 <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>
-                Volunteer Care Tracking
+                Direct support access
             </div>
             <div class="flex items-center gap-2">
                 <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>
-                Team Communication
+                Shape the product
             </div>
         </div>
     </div>
