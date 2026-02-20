@@ -157,3 +157,29 @@ class TestSecurityHeadersMiddleware:
         response = client.get('/')
         csp = response.get('Content-Security-Policy', '')
         assert "'self'" in csp
+
+
+@pytest.mark.django_db
+class TestSecurityPage:
+    def test_security_page_accessible(self):
+        client = Client()
+        response = client.get('/security/')
+        assert response.status_code == 200
+
+    def test_security_page_has_data_protection(self):
+        client = Client()
+        response = client.get('/security/')
+        content = response.content.decode()
+        assert 'Data Protection' in content
+
+    def test_security_page_has_technical_details(self):
+        client = Client()
+        response = client.get('/security/')
+        content = response.content.decode()
+        assert 'Technical Details' in content
+
+    def test_security_page_has_responsible_disclosure(self):
+        client = Client()
+        response = client.get('/security/')
+        content = response.content.decode()
+        assert 'security@aria.church' in content

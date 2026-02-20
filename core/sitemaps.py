@@ -16,6 +16,7 @@ class StaticViewSitemap(Sitemap):
         return [
             'home',
             'pricing',
+            'security',
             'onboarding_signup',
             'resources_list',
             'resource_volunteer_application',
@@ -34,6 +35,7 @@ class StaticViewSitemap(Sitemap):
             'pricing': 0.9,
             'onboarding_signup': 0.8,
             'resources_list': 0.7,
+            'security': 0.6,
             'resource_volunteer_application': 0.6,
             'resource_schedule_template': 0.6,
             'resource_pco_guide': 0.6,
@@ -45,6 +47,7 @@ class StaticViewSitemap(Sitemap):
         frequencies = {
             'home': 'weekly',
             'pricing': 'monthly',
+            'security': 'monthly',
             'onboarding_signup': 'monthly',
             'resources_list': 'weekly',
             'resource_volunteer_application': 'monthly',

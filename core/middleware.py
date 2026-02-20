@@ -36,6 +36,7 @@ class TenantMiddleware(MiddlewareMixin):
         '/org/create/',
         '/invitation/',
         '/pricing/',
+        '/security/',
         '/api/public/',
         # Onboarding flow
         '/signup/',

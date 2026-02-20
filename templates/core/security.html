@@ -1,0 +1,225 @@
+{% extends "core/onboarding/base_public.html" %}
+
+{% block title %}Security | Aria - Worship Team Management{% endblock %}
+
+{% block meta_description %}Learn how Aria protects your church data with enterprise-grade security, encryption, role-based access controls, and AI privacy safeguards.{% endblock %}
+
+{% block og_title %}Security | Aria - Worship Team Management{% endblock %}
+{% block og_description %}Learn how Aria protects your church data with enterprise-grade security, encryption, role-based access controls, and AI privacy safeguards.{% endblock %}
+
+{% block schema_markup %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://aria.church/"
+        },
+        {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Security",
+            "item": "https://aria.church/security/"
+        }
+    ]
+}
+</script>
+{% endblock %}
+
+{% block container_class %}max-w-4xl{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="text-center mb-12">
+    <h1 class="text-4xl font-bold text-white mb-4">Security at Aria</h1>
+    <p class="text-lg text-gray-400 max-w-2xl mx-auto">
+        Your church data is sacred. We protect it with enterprise-grade security measures so you can focus on ministry.
+    </p>
+</div>
+
+<!-- Security Cards Grid -->
+<div class="grid md:grid-cols-2 gap-6 mb-12">
+    <!-- Data Protection -->
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <div class="flex items-start gap-4">
+            <div class="bg-ch-gold/20 p-3 rounded-lg flex-shrink-0">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-2">Data Protection</h3>
+                <p class="text-gray-400 text-sm">
+                    Each organization's data is fully isolated. Your volunteer information, interactions, and conversations are completely separate from other churches using Aria.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Encryption -->
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <div class="flex items-start gap-4">
+            <div class="bg-ch-gold/20 p-3 rounded-lg flex-shrink-0">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-2">Encryption</h3>
+                <p class="text-gray-400 text-sm">
+                    All data is encrypted in transit using HTTPS/TLS. Passwords are securely hashed using industry-standard algorithms and never stored in plain text.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Access Controls -->
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <div class="flex items-start gap-4">
+            <div class="bg-ch-gold/20 p-3 rounded-lg flex-shrink-0">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-2">Access Controls</h3>
+                <p class="text-gray-400 text-sm">
+                    Role-based permissions ensure team members only access what they need. Owners, admins, leaders, members, and viewers each have appropriate access levels.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Privacy -->
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <div class="flex items-start gap-4">
+            <div class="bg-ch-gold/20 p-3 rounded-lg flex-shrink-0">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-2">AI Privacy</h3>
+                <p class="text-gray-400 text-sm">
+                    All AI conversations are scoped to your organization. Your data is never used to train AI models and conversations are not shared between organizations.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Planning Center -->
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <div class="flex items-start gap-4">
+            <div class="bg-ch-gold/20 p-3 rounded-lg flex-shrink-0">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-2">Planning Center</h3>
+                <p class="text-gray-400 text-sm">
+                    Each organization connects with their own Planning Center credentials. API keys are stored encrypted and are never shared or accessible to other organizations.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payments -->
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <div class="flex items-start gap-4">
+            <div class="bg-ch-gold/20 p-3 rounded-lg flex-shrink-0">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-2">Payments</h3>
+                <p class="text-gray-400 text-sm">
+                    All billing is handled by Stripe, a PCI-compliant payment processor. We never store credit card numbers or sensitive payment information on our servers.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Technical Details (Collapsible) -->
+<div class="bg-ch-dark border border-ch-gray rounded-xl mb-12">
+    <button onclick="document.getElementById('tech-details').classList.toggle('hidden'); this.querySelector('svg').classList.toggle('rotate-180')" class="w-full flex items-center justify-between p-6 text-left">
+        <h2 class="text-xl font-semibold text-white">Technical Details</h2>
+        <svg class="w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+    </button>
+    <div id="tech-details" class="hidden px-6 pb-6 space-y-6">
+        <!-- Transport Security -->
+        <div>
+            <h3 class="text-ch-gold font-semibold mb-2">Transport Security</h3>
+            <ul class="text-gray-400 text-sm space-y-1 list-disc list-inside">
+                <li>TLS 1.2+ enforced on all connections</li>
+                <li>HTTP Strict Transport Security (HSTS) enabled</li>
+                <li>Automatic HTTPS redirect for all requests</li>
+            </ul>
+        </div>
+
+        <!-- Security Headers -->
+        <div>
+            <h3 class="text-ch-gold font-semibold mb-2">Security Headers</h3>
+            <ul class="text-gray-400 text-sm space-y-1 list-disc list-inside">
+                <li>Content Security Policy (CSP) to prevent XSS attacks</li>
+                <li>X-Frame-Options to prevent clickjacking</li>
+                <li>X-Content-Type-Options to prevent MIME sniffing</li>
+                <li>Permissions-Policy to restrict browser features</li>
+            </ul>
+        </div>
+
+        <!-- Authentication -->
+        <div>
+            <h3 class="text-ch-gold font-semibold mb-2">Authentication</h3>
+            <ul class="text-gray-400 text-sm space-y-1 list-disc list-inside">
+                <li>PBKDF2 password hashing with SHA256</li>
+                <li>CSRF protection on all forms</li>
+                <li>Rate limiting on login attempts</li>
+                <li>Minimum password complexity requirements</li>
+            </ul>
+        </div>
+
+        <!-- Multi-Tenant Isolation -->
+        <div>
+            <h3 class="text-ch-gold font-semibold mb-2">Multi-Tenant Isolation</h3>
+            <ul class="text-gray-400 text-sm space-y-1 list-disc list-inside">
+                <li>Organization-scoped database queries on all data access</li>
+                <li>Middleware-enforced tenant context on every request</li>
+                <li>Role-based permission checks at the view layer</li>
+            </ul>
+        </div>
+
+        <!-- Infrastructure -->
+        <div>
+            <h3 class="text-ch-gold font-semibold mb-2">Infrastructure</h3>
+            <ul class="text-gray-400 text-sm space-y-1 list-disc list-inside">
+                <li>Hosted on Railway with managed infrastructure</li>
+                <li>PostgreSQL database with automated backups</li>
+                <li>Environment variables for all secrets and credentials</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Responsible Disclosure -->
+<div class="bg-ch-dark border border-ch-gray rounded-xl p-6 text-center">
+    <h2 class="text-xl font-semibold text-white mb-3">Responsible Disclosure</h2>
+    <p class="text-gray-400 text-sm mb-4 max-w-xl mx-auto">
+        If you discover a security vulnerability, we appreciate your help in disclosing it responsibly. Please contact us directly so we can address the issue promptly.
+    </p>
+    <a href="mailto:security@aria.church" class="inline-flex items-center gap-2 text-ch-gold hover:underline font-medium">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+        security@aria.church
+    </a>
+</div>
+{% endblock %}

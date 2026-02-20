@@ -104,6 +104,11 @@ def pricing(request):
     return render(request, 'core/pricing.html', context)
 
 
+def security_page(request):
+    """Public security page describing platform security measures."""
+    return render(request, 'core/security.html')
+
+
 # =============================================================================
 # Resource Pages (SEO Content)
 # =============================================================================
