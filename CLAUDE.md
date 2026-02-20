@@ -2,45 +2,47 @@
 
 ## Project Status
 
-**🎯 Overall Completion: ~92%** | **📊 Production-Ready Core Features** | **🚀 Active Development**
+**🎯 Overall Completion: ~94%** | **📊 Production-Ready Core Features** | **🔒 Closed Beta**
 
-Last Updated: January 19, 2026
+Last Updated: February 19, 2026
 
 ### Quick Stats
-- **33+ Database Models** across all domains (including blog)
-- **106 View Functions** with full CRUD operations
-- **85+ Templates** for complete user journeys
-- **6 Test Files** with 190 test cases
-- **27+ Migrations** tracking schema evolution
-- **Recent Focus**: SEO infrastructure, blog app, resource pages, meta tags
+- **34+ Database Models** across all domains (including blog, beta requests)
+- **112+ View Functions** with full CRUD operations
+- **90+ Templates** for complete user journeys
+- **7 Test Files** with 216+ test cases
+- **28+ Migrations** tracking schema evolution
+- **Recent Focus**: Beta testing system, security hardening, security page
 
-### Current Sprint (January 2026)
-- ✅ Improved PCO API rate limiting with caching
-- ✅ Added thinking indicator for chat responses
-- ✅ Enhanced blockout query patterns with date range support
-- ✅ Comprehensive Aria query detection testing
-- ✅ Platform admin dashboard (complete - revenue, usage, orgs)
-- ✅ Team Hub with My Tasks and Team Tasks sections
-- ✅ Standalone task creation (tasks without projects)
-- ✅ Fix "this coming Sunday" date parsing
-- ✅ Email notification system (invitations, welcome, payment failed)
-- ✅ Compound team contact queries ("phone numbers of people serving this Sunday")
-- ✅ Lightweight contact info API (reduced API calls from 150+ to ~35)
-- ✅ **SEO Infrastructure** - Complete technical SEO foundation
-  - Meta tags (description, keywords, canonical) on all public pages
-  - Open Graph tags for social sharing (Facebook, LinkedIn)
-  - Twitter Card tags for Twitter sharing
-  - Schema.org JSON-LD structured data (Organization, SoftwareApplication, FAQPage, BreadcrumbList, HowTo)
-- ✅ **Blog App** - Full Django blog with SEO optimization
-  - BlogPost, BlogCategory, BlogTag models
-  - Admin interface for content management
-  - BlogSitemap for search engine indexing
-  - Article schema markup on posts
-- ✅ **Resource Pages** - SEO-optimized content pages
-  - `/resources/` - Resource listing
-  - `/resources/volunteer-application-template/`
-  - `/resources/worship-schedule-template/`
-  - `/resources/planning-center-setup-guide/`
+### Current Sprint (February 2026)
+- ✅ **Closed Beta System** - Full beta request and approval workflow
+  - BetaRequest model with admin approval flow
+  - Beta request form replacing open signup at `/signup/`
+  - Beta confirmation page after request submission
+  - Platform admin beta request management (`/platform-admin/beta-requests/`)
+  - Approve/reject workflow with automatic invitation emails
+  - Beta signup flow for approved users (`/beta/signup/`)
+  - Beta organizations get free access (subscription_status='beta')
+- ✅ **Security Hardening** - Production-grade security headers and protections
+  - HSTS with 1-year max-age, subdomains, and preload
+  - Content-Security-Policy via SecurityHeadersMiddleware
+  - Permissions-Policy header (camera, microphone, geolocation, payment disabled)
+  - Login rate limiting via django-axes (5 attempts, 30-min lockout)
+  - Session timeout (24 hours, expires on browser close)
+  - Referrer policy (strict-origin-when-cross-origin)
+- ✅ **Security Page** (`/security/`) - Public security trust page
+  - Plain-language overview (6 security cards: data protection, encryption, access controls, AI privacy, PCO, payments)
+  - Collapsible technical details section
+  - Responsible disclosure with security@aria.church
+  - Added to sitemap and footer navigation
+- ✅ **Landing Page Beta Branding** - Updated for closed beta status
+  - Beta badge next to logo (gold/amber)
+  - Dismissible beta banner on all public pages (localStorage persistence)
+  - "Request Beta Access" CTAs replacing "Start Free Trial"
+  - Beta subtitle: "Currently in closed beta -- request early access"
+- ✅ **Pricing Page Beta Updates** - Free during beta messaging
+  - "Free During Beta" banner
+  - Updated button text and pricing notes
 - 📋 Create og-image.png and twitter-card.png (pending design)
 - 📋 Submit sitemap to Google Search Console (manual step)
 - 📋 Write first blog posts (content creation)
@@ -171,8 +173,9 @@ volunteers = Volunteer.objects.all()
 
 | File | Purpose |
 |------|---------|
-| `core/models.py` | Organization, SubscriptionPlan, OrganizationMembership |
-| `core/middleware.py` | TenantMiddleware, decorators, mixins |
+| `core/models.py` | Organization, SubscriptionPlan, OrganizationMembership, BetaRequest |
+| `core/middleware.py` | TenantMiddleware, SecurityHeadersMiddleware, decorators, mixins |
+| `core/admin_views.py` | Platform admin views (beta requests, orgs, revenue, usage) |
 | `core/context_processors.py` | Template context for organization |
 | `accounts/models.py` | User with organization helpers |
 
@@ -485,7 +488,17 @@ worship-arts-portal/
 │       ├── followup_list.html
 │       ├── followup_detail.html
 │       ├── care_dashboard.html
+│       ├── security.html          # Public security page
 │       ├── push_preferences.html
+│       ├── admin/
+│       │   ├── base.html
+│       │   └── beta_requests.html # Beta request admin
+│       ├── onboarding/
+│       │   ├── base_public.html   # Beta banner, badge
+│       │   ├── signup.html        # Beta request form
+│       │   ├── beta_confirmation.html  # Request received
+│       │   ├── beta_signup.html   # Approved user signup
+│       │   └── pricing.html       # Beta pricing notes
 │       ├── analytics/
 │       │   ├── dashboard.html
 │       │   ├── engagement.html
@@ -551,6 +564,7 @@ Aria understands many date formats:
 | `PushSubscription` | Push notification subscriptions |
 | `NotificationPreference` | User notification settings |
 | `NotificationLog` | Notification delivery log |
+| `BetaRequest` | Beta access requests with admin approval workflow |
 
 ---
 
@@ -654,12 +668,13 @@ CHAgent/
 ├── core/
 │   ├── agent.py              # AI agent logic, query detection, RAG
 │   ├── planning_center.py    # PCO API integration
-│   ├── models.py             # Database models (incl. Organization, SubscriptionPlan)
+│   ├── models.py             # Database models (incl. Organization, BetaRequest)
 │   ├── views.py              # View handlers
+│   ├── admin_views.py        # Platform admin views (incl. beta requests)
 │   ├── urls.py               # URL routing
 │   ├── sitemaps.py           # SEO sitemap for static/resource pages
 │   ├── embeddings.py         # Vector search
-│   ├── middleware.py         # TenantMiddleware, permission decorators
+│   ├── middleware.py         # TenantMiddleware, SecurityHeadersMiddleware
 │   ├── context_processors.py # Organization template context
 │   ├── notifications.py      # Push notification service
 │   └── volunteer_matching.py # Name matching logic
@@ -675,12 +690,21 @@ CHAgent/
 │   ├── resources/            # SEO resource page templates
 │   └── core/
 │       ├── dashboard.html    # Main chat interface
+│       ├── security.html     # Public security page
 │       ├── interaction_*.html
 │       ├── volunteer_*.html
 │       ├── followup_*.html
-│       └── feedback_*.html
+│       ├── feedback_*.html
+│       ├── admin/beta_requests.html  # Beta admin dashboard
+│       └── onboarding/
+│           ├── signup.html           # Beta request form
+│           ├── beta_confirmation.html # Request received
+│           └── beta_signup.html      # Approved user signup
+├── tests/
+│   └── test_beta_request.py  # Beta system & security tests (26 tests)
+├── docs/plans/               # Design docs & implementation plans
 ├── config/
-│   ├── settings.py           # Incl. Stripe & multi-tenant config
+│   ├── settings.py           # Incl. Stripe, security, django-axes config
 │   └── urls.py               # Main URL routing incl. sitemap
 └── accounts/
     └── models.py             # Custom User with org helpers
@@ -1056,6 +1080,128 @@ The PWA service worker (`static/js/sw.js`) handles:
 
 ---
 
+## Beta Testing System
+
+The platform is currently in closed beta. Users request access through a form, and platform admins approve requests.
+
+### BetaRequest Model
+
+```python
+class BetaRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('invited', 'Invited'),
+        ('signed_up', 'Signed Up'),
+    ]
+    CHURCH_SIZE_CHOICES = [
+        ('small', 'Under 100'),
+        ('medium', '100-500'),
+        ('large', '500-2,000'),
+        ('mega', '2,000+'),
+    ]
+
+    name = models.CharField(max_length=200)
+    email = models.EmailField(unique=True)
+    church_name = models.CharField(max_length=200)
+    church_size = models.CharField(max_length=20, choices=CHURCH_SIZE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(User, null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    invitation = models.ForeignKey(OrganizationInvitation, null=True, blank=True)
+    referral_source = models.CharField(max_length=100, blank=True)
+```
+
+### Beta Flow
+
+1. Visitor fills out beta request form at `/signup/` (name, email, church name, church size)
+2. Request saved as `pending`, confirmation page shown
+3. Platform admin sees pending requests in `/platform-admin/beta-requests/`
+4. On approval: invitation email sent with signup link to `/beta/signup/`
+5. Approved user creates account, organization created with `subscription_status='beta'`
+6. Beta orgs skip Stripe checkout, get full feature access
+
+### URL Routes
+
+```python
+# Beta request (public)
+path('signup/', views.onboarding_signup, name='onboarding_signup')  # Beta request form
+path('beta/signup/', views.beta_signup, name='beta_signup')  # Approved user account creation
+
+# Beta admin (platform admin only)
+path('platform-admin/beta-requests/', admin_views.admin_beta_requests, name='admin_beta_requests')
+path('platform-admin/beta-requests/<int:pk>/approve/', admin_views.admin_beta_approve, name='admin_beta_approve')
+path('platform-admin/beta-requests/<int:pk>/reject/', admin_views.admin_beta_reject, name='admin_beta_reject')
+```
+
+### Organization Beta Status
+
+Beta organizations have `subscription_status='beta'` which:
+- Skips Stripe checkout during onboarding
+- Grants full feature access (equivalent to Ministry plan)
+- Shows in platform admin as beta status
+
+---
+
+## Security
+
+### Security Page
+
+Public security page at `/security/` explaining the platform's security measures:
+- Plain-language overview for church leadership (6 security cards)
+- Collapsible technical details for IT staff
+- Responsible disclosure contact: security@aria.church
+
+### Security Headers (SecurityHeadersMiddleware)
+
+Custom middleware in `core/middleware.py` adds:
+- **Content-Security-Policy**: Restricts resource loading origins
+- **Permissions-Policy**: Disables camera, microphone, geolocation, payment APIs
+
+### Security Configuration (settings.py)
+
+```python
+# HSTS (production only)
+SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+
+# Session timeout
+SESSION_COOKIE_AGE = 86400  # 24 hours
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# Referrer policy
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+# Login rate limiting (django-axes)
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=30)
+AXES_LOCK_OUT_BY_COMBINATION_USER_AND_IP = True
+AXES_RESET_ON_SUCCESS = True
+```
+
+### Security Summary
+
+| Protection | Implementation |
+|-----------|---------------|
+| HTTPS/TLS | Railway auto-SSL + SECURE_SSL_REDIRECT |
+| HSTS | 1-year max-age, subdomains, preload |
+| CSRF | Django built-in with trusted origins |
+| XSS | Template auto-escaping + X-XSS-Protection |
+| Content-Type Sniffing | X-Content-Type-Options: nosniff |
+| Clickjacking | X-Frame-Options: DENY + frame-ancestors 'none' |
+| CSP | SecurityHeadersMiddleware |
+| Rate Limiting | django-axes (5 attempts, 30-min lockout) |
+| Session Security | 24-hour timeout, secure cookies |
+| Password Security | PBKDF2 + 4 validators |
+| Multi-tenant Isolation | Org-scoped queries via TenantMiddleware |
+| Invitation Security | Cryptographic tokens (secrets.token_urlsafe) |
+
+---
+
 ## SEO Infrastructure
 
 Complete technical SEO implementation for organic search visibility.
@@ -1241,6 +1387,9 @@ The following features have been implemented:
 - [x] **SEO Infrastructure**: Meta tags, Open Graph, Twitter Cards, Schema.org JSON-LD
 - [x] **Blog System**: Full Django blog with SEO optimization and admin interface
 - [x] **Resource Pages**: SEO-optimized content pages with lead magnets
+- [x] **Closed Beta System**: Beta request form, admin approval, invitation flow
+- [x] **Security Hardening**: HSTS, CSP, Permissions-Policy, django-axes rate limiting, session timeout
+- [x] **Security Page**: Public `/security/` page with plain-language and technical security details
 
 ---
 
@@ -1300,6 +1449,59 @@ The following features have been implemented:
 
 ---
 
+## Recent Improvements (February 2026)
+
+### Closed Beta System
+- **Beta Request Form**: Replaced open signup with beta request form at `/signup/`
+  - Collects name, email, church name, church size
+  - Unique email constraint prevents duplicate requests
+  - Confirmation page with request details shown after submission
+- **Admin Approval Workflow**: Platform admins manage beta requests at `/platform-admin/beta-requests/`
+  - Filter by status (pending, approved, rejected, invited, signed_up)
+  - One-click approve/reject with automatic invitation emails
+  - Approved users receive signup link via email
+- **Beta Signup Flow**: Approved users create accounts at `/beta/signup/`
+  - Pre-filled email from beta request
+  - Creates organization with `subscription_status='beta'`
+  - Skips Stripe checkout (free during beta)
+  - Routes directly to Planning Center connection
+- **Beta Branding**: All public pages updated for closed beta status
+  - Gold/amber beta badge next to logo
+  - Dismissible beta banner on all public pages (localStorage)
+  - "Request Beta Access" CTAs replacing "Start Free Trial"
+  - Pricing page shows "Free During Beta" messaging
+
+### Security Hardening
+- **HSTS**: Strict-Transport-Security with 1-year max-age, includeSubDomains, preload
+- **CSP**: Content-Security-Policy via SecurityHeadersMiddleware
+  - `default-src 'self'`, `script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com`
+  - `style-src 'self' 'unsafe-inline'`, `img-src 'self' data: https:`
+  - `font-src 'self' https://fonts.gstatic.com`, `frame-ancestors 'none'`
+- **Permissions-Policy**: camera=(), microphone=(), geolocation=(), payment=()
+- **Login Rate Limiting**: django-axes with 5 failed attempts, 30-minute lockout, IP+username tracking
+- **Session Security**: 24-hour timeout, expires on browser close
+- **Referrer Policy**: strict-origin-when-cross-origin
+
+### Security Page (`/security/`)
+- **Plain-Language Overview**: 6 security cards covering data protection, encryption, access controls, AI privacy, Planning Center security, and payments
+- **Technical Details**: Collapsible section with transport security, CSP, authentication, multi-tenant isolation, infrastructure, session security, and invitation security details
+- **Responsible Disclosure**: security@aria.church contact for reporting vulnerabilities
+- **SEO**: Added to sitemap and footer navigation
+
+### New Tests
+- **26 new tests** in `tests/test_beta_request.py` covering:
+  - BetaRequest model creation, uniqueness, and string representation
+  - Beta request form display, submission, duplicate handling, and validation
+  - Landing page beta branding (badge, CTAs, banner)
+  - Pricing page beta messaging
+  - Security headers (CSP, Permissions-Policy)
+  - Security page content sections
+  - Beta admin views (list, approve, reject, access control)
+  - Beta signup flow (page access, org creation, rejection of uninvited users)
+  - Security settings (session timeout, browser close expiry)
+
+---
+
 ## SaaS Development Roadmap
 
 ### Phase 1: Multi-Tenant Infrastructure (✅ Complete - 100%)
@@ -1331,11 +1533,12 @@ The following features have been implemented:
 - [x] Billing dashboard - Stripe portal integration (`/settings/billing/`)
 - [x] Usage analytics per organization (`/analytics/`)
 
-### Phase 6: Platform Administration (🔄 In Progress - 70%)
+### Phase 6: Platform Administration (🔄 In Progress - 80%)
 - [x] Super-admin dashboard for all organizations (`/platform-admin/`)
 - [x] Usage metrics and revenue reporting across all orgs
 - [x] Organization impersonation for support
 - [x] User management and activity metrics
+- [x] Beta request management with approve/reject workflow (`/platform-admin/beta-requests/`)
 - [ ] Customer support tools and ticketing
 - [ ] Comprehensive audit logging
 - [ ] Organization health monitoring
@@ -1446,13 +1649,15 @@ The following features have been implemented:
    - Profile slow database queries
    - Add database indexes based on slow query analysis
 
-8. **Security Hardening**: Complete security audit
-   - Add rate limiting on authentication endpoints
-   - Implement content security policy (CSP) headers
+8. **Security Hardening**: ✅ Complete
+   - ~~Add rate limiting on authentication endpoints~~ (done - django-axes)
+   - ~~Implement content security policy (CSP) headers~~ (done - SecurityHeadersMiddleware)
    - Regular dependency updates for security patches
 
 ### Long-term Vision (Q1-Q2 2026)
-9. **Beta Launch Preparation**: Prepare for public beta
+9. **Beta Launch Preparation**: ✅ Partially Complete
+    - ~~Closed beta system with admin approval~~ (done)
+    - ~~Security page and hardening~~ (done)
     - Create onboarding tutorial/walkthrough
     - Build help center with documentation
     - Set up customer support system (Intercom, Help Scout)
