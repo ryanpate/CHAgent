@@ -16,10 +16,31 @@ from django.contrib import messages
 from .models import (
     Organization, SubscriptionPlan, OrganizationMembership,
     Volunteer, Interaction, ChatMessage, FollowUp,
-    Announcement, Channel, Project, Task, BetaRequest
+    Announcement, Channel, Project, Task, BetaRequest,
+    AuditLog,
 )
 from accounts.models import User
 from .middleware import require_superadmin
+
+
+def get_client_ip(request):
+    """Extract client IP from request, handling proxies."""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
+def log_admin_action(request, action, organization=None, target_user=None, **details):
+    """Create an audit log entry for an admin action."""
+    AuditLog.objects.create(
+        user=request.user,
+        action=action,
+        ip_address=get_client_ip(request),
+        organization=organization,
+        target_user=target_user,
+        details=details,
+    )
 
 
 @login_required
@@ -227,6 +248,8 @@ def admin_organization_impersonate(request, org_id):
     request.session['organization_id'] = org_id
     request.session['admin_impersonating'] = True
 
+    log_admin_action(request, 'org_impersonate', organization=organization)
+
     messages.success(
         request,
         f"Now viewing as {organization.name}. Click 'Exit Impersonation' to return to admin panel."
@@ -262,6 +285,11 @@ def admin_organization_update_status(request, org_id):
         if new_status in dict(Organization.STATUS_CHOICES):
             organization.subscription_status = new_status
             organization.save()
+
+            log_admin_action(
+                request, 'org_status_change', organization=organization,
+                new_status=new_status,
+            )
 
             messages.success(
                 request,
@@ -500,6 +528,11 @@ def admin_beta_approve(request, pk):
 
         messages.success(request, f'Beta request from {beta_req.church_name} approved.')
 
+        log_admin_action(
+            request, 'beta_approve',
+            church_name=beta_req.church_name, email=beta_req.email,
+        )
+
     return redirect('admin_beta_requests')
 
 
@@ -516,5 +549,11 @@ def admin_beta_reject(request, pk):
         beta_req.rejection_reason = request.POST.get('reason', '')
         beta_req.save()
         messages.success(request, f'Beta request from {beta_req.church_name} rejected.')
+
+        log_admin_action(
+            request, 'beta_reject',
+            church_name=beta_req.church_name, email=beta_req.email,
+            reason=beta_req.rejection_reason,
+        )
 
     return redirect('admin_beta_requests')

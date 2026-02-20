@@ -1,7 +1,7 @@
 """Tests for the AuditLog model."""
 import pytest
-from django.test import TestCase
-from core.models import AuditLog, Organization
+from django.test import TestCase, Client
+from core.models import AuditLog, Organization, OrganizationMembership
 from accounts.models import User
 
 
@@ -48,3 +48,63 @@ class TestAuditLogModel(TestCase):
         assert log.target_user is None
         assert log.ip_address is None
         assert log.details == {}
+
+
+class TestAuditLogIntegration(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_user(
+            username='superadmin@test.com',
+            email='superadmin@test.com',
+            password='testpass123',
+            is_superadmin=True,
+        )
+        self.org = Organization.objects.create(
+            name='Test Church',
+            slug='test-church',
+            email='admin@testchurch.org',
+        )
+        OrganizationMembership.objects.create(
+            user=self.admin,
+            organization=self.org,
+            role='owner',
+            is_active=True,
+        )
+        self.admin.default_organization = self.org
+        self.admin.save()
+
+    def test_beta_approve_creates_audit_log(self):
+        from core.models import BetaRequest
+        beta_req = BetaRequest.objects.create(
+            name='Test User',
+            email='beta@test.com',
+            church_name='Test Church',
+            church_size='small',
+        )
+        self.client.force_login(self.admin)
+        self.client.post(f'/platform-admin/beta-requests/{beta_req.pk}/approve/')
+        assert AuditLog.objects.filter(action='beta_approve').exists()
+
+    def test_impersonate_creates_audit_log(self):
+        self.client.force_login(self.admin)
+        self.client.get(f'/platform-admin/organizations/{self.org.id}/impersonate/')
+        assert AuditLog.objects.filter(action='org_impersonate').exists()
+
+    def test_role_change_creates_audit_log(self):
+        member_user = User.objects.create_user(
+            username='member@test.com',
+            email='member@test.com',
+            password='testpass123',
+        )
+        membership = OrganizationMembership.objects.create(
+            user=member_user,
+            organization=self.org,
+            role='member',
+            is_active=True,
+        )
+        self.client.force_login(self.admin)
+        self.client.post(
+            f'/settings/members/{membership.id}/role/',
+            {'role': 'leader'},
+        )
+        assert AuditLog.objects.filter(action='user_role_change').exists()

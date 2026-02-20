@@ -17,7 +17,7 @@ from django.db import models
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from .models import Interaction, Volunteer, ChatMessage, ConversationContext, FollowUp, ResponseFeedback
+from .models import Interaction, Volunteer, ChatMessage, ConversationContext, FollowUp, ResponseFeedback, AuditLog
 from .middleware import require_organization
 from .agent import (
     query_agent,
@@ -4596,6 +4596,11 @@ def org_invite_member(request):
         invited_by=request.user,
     )
 
+    AuditLog.objects.create(
+        user=request.user, action='invitation_sent',
+        organization=org, details={'email': email, 'role': role},
+    )
+
     # Send invitation email
     from .emails import send_invitation_email
     email_sent = send_invitation_email(invitation)
@@ -4658,6 +4663,12 @@ def org_update_member_role(request, member_id):
     target_membership._set_role_defaults()
     target_membership.save()
 
+    AuditLog.objects.create(
+        user=request.user, action='user_role_change',
+        organization=org, target_user=target_membership.user,
+        details={'new_role': new_role},
+    )
+
     messages.success(request, f"Role updated for {target_membership.user.email}.")
     return redirect('org_settings_members')
 
@@ -4709,6 +4720,12 @@ def org_remove_member(request, member_id):
     target_membership.is_active = False
     target_membership.save()
 
+    AuditLog.objects.create(
+        user=request.user, action='user_removed',
+        organization=org, target_user=target_membership.user,
+        details={'email': user_email},
+    )
+
     messages.success(request, f"{user_email} has been removed from the organization.")
     return redirect('org_settings_members')
 
@@ -4738,6 +4755,11 @@ def org_cancel_invitation(request, invitation_id):
 
     invitation.status = 'expired'
     invitation.save()
+
+    AuditLog.objects.create(
+        user=request.user, action='invitation_cancelled',
+        organization=org, details={'email': invitation.email},
+    )
 
     messages.success(request, f"Invitation to {invitation.email} has been cancelled.")
     return redirect('org_settings_members')
