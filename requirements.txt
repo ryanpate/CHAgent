@@ -48,6 +48,16 @@ Pillow>=10.0.0
 # Login rate limiting
 django-axes>=7.0.0
 
+# Two-Factor Authentication
+pyotp>=2.9.0
+qrcode[pil]>=7.4.0
+
+# Error Monitoring
+sentry-sdk[django]>=1.40.0
+
+# Dependency Vulnerability Scanning (dev)
+pip-audit>=2.7.0
+
 # Testing
 pytest>=8.0.0
 pytest-django>=4.8.0
