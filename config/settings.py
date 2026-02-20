@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'accounts',
     'core',
     'blog',
+    'axes',
 ]
 
 MIDDLEWARE = [
@@ -69,10 +70,12 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'axes.middleware.AxesMiddleware',
     'core.middleware.TenantMiddleware',  # Multi-tenant organization middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
+    'core.middleware.SecurityHeadersMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -221,8 +224,17 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    # Exempt health check from SSL redirect (Railway makes HTTP healthcheck requests)
     SECURE_REDIRECT_EXEMPT = [r'^health/$']
+    # HSTS - enforce HTTPS for 1 year
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    # Referrer policy
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+# Session timeout (applies in all environments)
+SESSION_COOKIE_AGE = 86400  # 24 hours
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 # Logging
 LOGGING = {
@@ -297,3 +309,15 @@ EMAIL_REPLY_TO = 'support@aria.church'
 
 # Site URL for building absolute URLs in emails
 SITE_URL = os.environ.get('SITE_URL', 'https://aria.church')
+
+# =============================================================================
+# Login Rate Limiting (django-axes)
+# =============================================================================
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 0.5  # 30 minutes (in hours)
+AXES_LOCKOUT_PARAMETERS = [['username', 'ip_address']]
+AXES_RESET_ON_SUCCESS = True
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]

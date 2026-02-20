@@ -1,6 +1,6 @@
 """Tests for the BetaRequest model and beta request flow."""
 import pytest
-from django.test import Client
+from django.test import Client, override_settings
 from core.models import BetaRequest
 
 
@@ -128,3 +128,32 @@ class TestBetaPricingPage:
         response = client.get('/pricing/')
         assert response.status_code == 200
         assert b'free during beta' in response.content.lower()
+
+
+class TestSecuritySettings:
+    """Test security configuration values."""
+
+    def test_session_timeout_configured(self, settings):
+        assert settings.SESSION_COOKIE_AGE == 86400
+
+    def test_session_expires_on_close(self, settings):
+        assert settings.SESSION_EXPIRE_AT_BROWSER_CLOSE is True
+
+
+@pytest.mark.django_db
+class TestSecurityHeadersMiddleware:
+    def test_csp_header_present(self):
+        client = Client()
+        response = client.get('/')
+        assert 'Content-Security-Policy' in response
+
+    def test_permissions_policy_header_present(self):
+        client = Client()
+        response = client.get('/')
+        assert 'Permissions-Policy' in response
+
+    def test_csp_contains_self(self):
+        client = Client()
+        response = client.get('/')
+        csp = response.get('Content-Security-Policy', '')
+        assert "'self'" in csp

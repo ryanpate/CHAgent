@@ -393,3 +393,27 @@ class TenantQuerySetMixin:
         if org:
             return self.for_organization(org)
         return self.get_queryset().none()
+
+
+class SecurityHeadersMiddleware(MiddlewareMixin):
+    """
+    Adds security headers not covered by Django's SecurityMiddleware.
+    """
+
+    def process_response(self, request, response):
+        # Content Security Policy
+        csp = "; ".join([
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: https:",
+            "font-src 'self' https://fonts.gstatic.com",
+            "connect-src 'self'",
+            "frame-ancestors 'none'",
+        ])
+        response['Content-Security-Policy'] = csp
+
+        # Permissions Policy
+        response['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=(), payment=()'
+
+        return response
