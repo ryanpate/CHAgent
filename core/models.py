@@ -130,6 +130,7 @@ class Organization(models.Model):
         ('past_due', 'Past Due'),
         ('cancelled', 'Cancelled'),
         ('suspended', 'Suspended'),
+        ('beta', 'Beta'),
     ]
 
     # Basic info
@@ -546,6 +547,60 @@ class OrganizationInvitation(models.Model):
         self.save()
 
         return membership
+
+
+class BetaRequest(models.Model):
+    """
+    Tracks requests from churches to join the beta program.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('invited', 'Invited'),
+        ('signed_up', 'Signed Up'),
+    ]
+
+    CHURCH_SIZE_CHOICES = [
+        ('small', 'Under 100'),
+        ('medium', '100-500'),
+        ('large', '500-2,000'),
+        ('mega', '2,000+'),
+    ]
+
+    name = models.CharField(max_length=200)
+    email = models.EmailField(unique=True)
+    church_name = models.CharField(max_length=200)
+    church_size = models.CharField(max_length=20, choices=CHURCH_SIZE_CHOICES)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_beta_requests'
+    )
+    rejection_reason = models.TextField(blank=True)
+    invitation = models.ForeignKey(
+        OrganizationInvitation,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='beta_request'
+    )
+    referral_source = models.CharField(max_length=100, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.church_name} ({self.email})"
 
 
 # =============================================================================
