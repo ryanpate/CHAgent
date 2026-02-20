@@ -2,17 +2,17 @@
 
 ## Project Status
 
-**🎯 Overall Completion: ~94%** | **📊 Production-Ready Core Features** | **🔒 Closed Beta**
+**🎯 Overall Completion: ~95%** | **📊 Production-Ready Core Features** | **🔒 Closed Beta**
 
-Last Updated: February 19, 2026
+Last Updated: February 20, 2026
 
 ### Quick Stats
-- **34+ Database Models** across all domains (including blog, beta requests)
-- **112+ View Functions** with full CRUD operations
-- **90+ Templates** for complete user journeys
-- **7 Test Files** with 216+ test cases
-- **28+ Migrations** tracking schema evolution
-- **Recent Focus**: Beta testing system, security hardening, security page
+- **36+ Database Models** across all domains (including blog, beta requests, security)
+- **120+ View Functions** with full CRUD operations
+- **95+ Templates** for complete user journeys
+- **9 Test Files** with 238+ test cases
+- **30+ Migrations** tracking schema evolution
+- **Recent Focus**: Two-factor authentication, audit logging, Sentry error monitoring
 
 ### Current Sprint (February 2026)
 - ✅ **Closed Beta System** - Full beta request and approval workflow
@@ -43,6 +43,16 @@ Last Updated: February 19, 2026
 - ✅ **Pricing Page Beta Updates** - Free during beta messaging
   - "Free During Beta" banner
   - Updated button text and pricing notes
+- ✅ **Security Round 2** - Two-Factor Authentication, Audit Logging, Error Monitoring
+  - TOTP-based 2FA with QR code setup and backup codes (`pyotp` + `qrcode[pil]`)
+  - TOTPDevice model with OneToOneField to User, code verification, backup codes
+  - TwoFactorMiddleware enforces 2FA verification per session
+  - AuditLog model with 9 action types and admin dashboard (`/platform-admin/audit-log/`)
+  - Audit logging on all admin and organization management actions
+  - Sentry SDK integration with `send_default_pii=False` for church data protection
+  - Custom 404 and 500 error pages
+  - Dependabot configuration for weekly dependency vulnerability scanning
+  - 22 new tests (13 for 2FA, 9 for audit log)
 - 📋 Create og-image.png and twitter-card.png (pending design)
 - 📋 Submit sitemap to Google Search Console (manual step)
 - 📋 Write first blog posts (content creation)
@@ -463,6 +473,8 @@ worship-arts-portal/
 │   └── views.py
 ├── templates/
 │   ├── base.html
+│   ├── 404.html               # Custom 404 error page
+│   ├── 500.html               # Standalone 500 error page
 │   ├── accounts/
 │   │   └── login.html
 │   ├── blog/              # Blog templates
@@ -492,7 +504,12 @@ worship-arts-portal/
 │       ├── push_preferences.html
 │       ├── admin/
 │       │   ├── base.html
+│       │   ├── audit_log.html     # Admin audit log dashboard
 │       │   └── beta_requests.html # Beta request admin
+│       ├── auth/
+│       │   ├── totp_setup.html        # 2FA QR code setup
+│       │   ├── totp_backup_codes.html # Backup codes display
+│       │   └── totp_login.html        # 2FA login verification
 │       ├── onboarding/
 │       │   ├── base_public.html   # Beta banner, badge
 │       │   ├── signup.html        # Beta request form
@@ -520,9 +537,16 @@ worship-arts-portal/
 │       │   ├── project_detail.html
 │       │   ├── project_create.html
 │       │   └── task_detail.html
+│       ├── settings/
+│       │   ├── general.html       # General settings (with Security tab)
+│       │   ├── members.html       # Member settings (with Security tab)
+│       │   ├── billing.html       # Billing settings (with Security tab)
+│       │   └── security.html      # Security settings (2FA enable/disable)
 │       └── partials/
 │           ├── task_card.html
 │           └── task_comment.html
+├── .github/
+│   └── dependabot.yml     # Weekly pip dependency scanning
 ├── static/
 │   ├── css/
 │   │   └── styles.css
@@ -565,6 +589,8 @@ Aria understands many date formats:
 | `NotificationPreference` | User notification settings |
 | `NotificationLog` | Notification delivery log |
 | `BetaRequest` | Beta access requests with admin approval workflow |
+| `AuditLog` | Admin action audit trail with IP tracking and details |
+| `TOTPDevice` | TOTP 2FA devices with backup codes per user |
 
 ---
 
@@ -633,6 +659,16 @@ path('followups/<int:pk>/delete/', views.followup_delete)
 # Feedback Dashboard
 path('feedback/', views.feedback_dashboard, name='feedback_dashboard')
 path('feedback/<int:pk>/resolve/', views.feedback_resolve)
+
+# Security Settings & 2FA
+path('settings/security/', views.security_settings, name='security_settings')
+path('settings/security/2fa/setup/', views.totp_setup, name='totp_setup')
+path('settings/security/2fa/verify-setup/', views.totp_verify_setup, name='totp_verify_setup')
+path('settings/security/2fa/disable/', views.totp_disable, name='totp_disable')
+path('login/2fa/', views.totp_login_verify, name='totp_login_verify')
+
+# Platform Admin - Audit Log
+path('platform-admin/audit-log/', admin_views.admin_audit_log, name='admin_audit_log')
 ```
 
 ---
@@ -655,6 +691,9 @@ OPENAI_API_KEY=sk-...  # For embeddings
 # Planning Center
 PLANNING_CENTER_APP_ID=your-app-id
 PLANNING_CENTER_SECRET=your-secret
+
+# Error Monitoring
+SENTRY_DSN=https://your-dsn@sentry.io/project-id
 ```
 
 ---
@@ -668,13 +707,13 @@ CHAgent/
 ├── core/
 │   ├── agent.py              # AI agent logic, query detection, RAG
 │   ├── planning_center.py    # PCO API integration
-│   ├── models.py             # Database models (incl. Organization, BetaRequest)
-│   ├── views.py              # View handlers
-│   ├── admin_views.py        # Platform admin views (incl. beta requests)
+│   ├── models.py             # Database models (incl. Organization, BetaRequest, AuditLog, TOTPDevice)
+│   ├── views.py              # View handlers (incl. 2FA setup/verify/disable)
+│   ├── admin_views.py        # Platform admin views (incl. beta requests, audit log)
 │   ├── urls.py               # URL routing
 │   ├── sitemaps.py           # SEO sitemap for static/resource pages
 │   ├── embeddings.py         # Vector search
-│   ├── middleware.py         # TenantMiddleware, SecurityHeadersMiddleware
+│   ├── middleware.py         # TenantMiddleware, TwoFactorMiddleware, SecurityHeadersMiddleware
 │   ├── context_processors.py # Organization template context
 │   ├── notifications.py      # Push notification service
 │   └── volunteer_matching.py # Name matching logic
@@ -695,13 +734,22 @@ CHAgent/
 │       ├── volunteer_*.html
 │       ├── followup_*.html
 │       ├── feedback_*.html
-│       ├── admin/beta_requests.html  # Beta admin dashboard
+│       ├── admin/
+│       │   ├── audit_log.html       # Admin audit log dashboard
+│       │   └── beta_requests.html   # Beta admin dashboard
+│       ├── auth/
+│       │   ├── totp_setup.html      # 2FA QR code setup
+│       │   ├── totp_backup_codes.html # Backup codes display
+│       │   └── totp_login.html      # 2FA login verification
+│       ├── settings/security.html   # Security settings (2FA)
 │       └── onboarding/
 │           ├── signup.html           # Beta request form
 │           ├── beta_confirmation.html # Request received
 │           └── beta_signup.html      # Approved user signup
 ├── tests/
-│   └── test_beta_request.py  # Beta system & security tests (26 tests)
+│   ├── test_beta_request.py  # Beta system & security tests (26 tests)
+│   ├── test_2fa.py           # Two-factor authentication tests (13 tests)
+│   └── test_audit_log.py     # Audit log model & integration tests (9 tests)
 ├── docs/plans/               # Design docs & implementation plans
 ├── config/
 │   ├── settings.py           # Incl. Stripe, security, django-axes config
@@ -1183,6 +1231,82 @@ AXES_LOCK_OUT_BY_COMBINATION_USER_AND_IP = True
 AXES_RESET_ON_SUCCESS = True
 ```
 
+### Two-Factor Authentication (TOTP)
+
+Custom TOTP implementation using `pyotp` + `qrcode[pil]` (avoids template conflicts with HTMX+Tailwind):
+
+```python
+class TOTPDevice(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='totp_device')
+    secret = models.CharField(max_length=32)
+    is_verified = models.BooleanField(default=False)
+    backup_codes = models.JSONField(default=list, blank=True)  # Hashed with make_password
+
+    def verify_code(self, code): ...        # Validates TOTP code with 1-step tolerance
+    def verify_backup_code(self, code): ... # One-time use, removes after verification
+    def generate_backup_codes(self): ...    # Generates 10 backup codes
+    def get_provisioning_uri(self): ...     # QR code URI for authenticator apps
+```
+
+**Flow:**
+1. User enables 2FA at `/settings/security/` → redirected to `/settings/security/2fa/setup/`
+2. QR code displayed for authenticator app scanning
+3. User enters verification code at `/settings/security/2fa/verify-setup/`
+4. 10 backup codes displayed (one-time view)
+5. On subsequent logins, `TwoFactorMiddleware` redirects to `/login/2fa/` for code entry
+6. Session flag `request.session['2fa_verified'] = True` tracks verification state
+
+### Audit Logging
+
+Admin action audit trail with IP tracking:
+
+```python
+class AuditLog(models.Model):
+    ACTION_CHOICES = [
+        ('beta_approve', 'Beta Request Approved'),
+        ('beta_reject', 'Beta Request Rejected'),
+        ('org_status_change', 'Organization Status Changed'),
+        ('org_impersonate', 'Organization Impersonated'),
+        ('user_role_change', 'User Role Changed'),
+        ('user_removed', 'User Removed'),
+        ('invitation_sent', 'Invitation Sent'),
+        ('invitation_cancelled', 'Invitation Cancelled'),
+        ('settings_updated', 'Settings Updated'),
+    ]
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True)
+    organization = models.ForeignKey(Organization, on_delete=models.SET_NULL, null=True)
+    target_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    details = models.JSONField(default=dict)
+```
+
+**Admin Dashboard**: `/platform-admin/audit-log/` with action type filtering and pagination (25/page).
+
+**Instrumented Actions**:
+- Admin views: beta approve/reject, org impersonate, org status change
+- Org views: invite member, update role, remove member, cancel invitation
+
+### Error Monitoring (Sentry)
+
+```python
+# config/settings.py - production only (not in DEBUG mode)
+import sentry_sdk
+sentry_sdk.init(
+    dsn=os.environ.get('SENTRY_DSN', ''),
+    send_default_pii=False,  # Protects church member data
+    traces_sample_rate=0.1,
+    profiles_sample_rate=0.1,
+)
+```
+
+Custom error pages: `templates/404.html` (extends base.html), `templates/500.html` (standalone HTML for resilience).
+
+### Dependency Scanning (Dependabot)
+
+`.github/dependabot.yml` configured for weekly pip dependency vulnerability scanning.
+
 ### Security Summary
 
 | Protection | Implementation |
@@ -1197,6 +1321,10 @@ AXES_RESET_ON_SUCCESS = True
 | Rate Limiting | django-axes (5 attempts, 30-min lockout) |
 | Session Security | 24-hour timeout, secure cookies |
 | Password Security | PBKDF2 + 4 validators |
+| Two-Factor Auth | TOTP with backup codes via TwoFactorMiddleware |
+| Audit Logging | AuditLog model with admin dashboard |
+| Error Monitoring | Sentry SDK with PII protection |
+| Dependency Scanning | Dependabot weekly pip audits |
 | Multi-tenant Isolation | Org-scoped queries via TenantMiddleware |
 | Invitation Security | Cryptographic tokens (secrets.token_urlsafe) |
 
@@ -1390,6 +1518,10 @@ The following features have been implemented:
 - [x] **Closed Beta System**: Beta request form, admin approval, invitation flow
 - [x] **Security Hardening**: HSTS, CSP, Permissions-Policy, django-axes rate limiting, session timeout
 - [x] **Security Page**: Public `/security/` page with plain-language and technical security details
+- [x] **Two-Factor Authentication**: TOTP-based 2FA with QR setup, backup codes, login enforcement
+- [x] **Audit Logging**: Admin action audit trail with IP tracking and filterable dashboard
+- [x] **Error Monitoring**: Sentry SDK integration with PII protection and custom error pages
+- [x] **Dependency Scanning**: Dependabot configuration for weekly vulnerability scanning
 
 ---
 
@@ -1500,6 +1632,29 @@ The following features have been implemented:
   - Beta signup flow (page access, org creation, rejection of uninvited users)
   - Security settings (session timeout, browser close expiry)
 
+### Security Round 2
+- **Two-Factor Authentication (TOTP)**:
+  - TOTPDevice model with `pyotp` + `qrcode[pil]` (custom implementation for HTMX+Tailwind compatibility)
+  - QR code setup flow at `/settings/security/2fa/setup/`
+  - 10 hashed backup codes (one-time use, hashed with `make_password`)
+  - TwoFactorMiddleware enforces verification per session
+  - Login 2FA verification at `/login/2fa/`
+  - Security settings page at `/settings/security/` with enable/disable UI
+  - 13 tests in `tests/test_2fa.py` (model + setup views + login flow)
+- **Audit Logging**:
+  - AuditLog model with 9 action types tracking admin and org management actions
+  - `log_admin_action()` helper with `get_client_ip()` (handles Railway reverse proxy)
+  - Admin audit log dashboard at `/platform-admin/audit-log/` with action type filtering
+  - Instrumented 8 views: beta approve/reject, org impersonate/status change, invite/role/remove/cancel
+  - 9 tests in `tests/test_audit_log.py` (model + integration + admin views)
+- **Sentry Error Monitoring**:
+  - Sentry SDK integration in `config/settings.py` (production only, not in DEBUG)
+  - `send_default_pii=False` to protect church member data
+  - Custom 404 page (extends base.html) and 500 page (standalone HTML for resilience)
+- **Dependabot Configuration**:
+  - `.github/dependabot.yml` for weekly pip dependency vulnerability scanning
+  - `pip-audit` added to requirements.txt for local vulnerability scanning
+
 ---
 
 ## SaaS Development Roadmap
@@ -1533,14 +1688,14 @@ The following features have been implemented:
 - [x] Billing dashboard - Stripe portal integration (`/settings/billing/`)
 - [x] Usage analytics per organization (`/analytics/`)
 
-### Phase 6: Platform Administration (🔄 In Progress - 80%)
+### Phase 6: Platform Administration (🔄 In Progress - 90%)
 - [x] Super-admin dashboard for all organizations (`/platform-admin/`)
 - [x] Usage metrics and revenue reporting across all orgs
 - [x] Organization impersonation for support
 - [x] User management and activity metrics
 - [x] Beta request management with approve/reject workflow (`/platform-admin/beta-requests/`)
+- [x] Comprehensive audit logging (`/platform-admin/audit-log/`)
 - [ ] Customer support tools and ticketing
-- [ ] Comprehensive audit logging
 - [ ] Organization health monitoring
 
 ### Phase 7: Enterprise Features (📋 Planned - 0%)
@@ -1598,8 +1753,8 @@ The following features have been implemented:
 14. **White-labeling**: Full custom branding for Enterprise customers
 15. **Multi-campus**: Support for organizations with multiple campuses/locations
 16. **Advanced Analytics**: Predictive analytics for volunteer engagement trends
-17. **Two-Factor Authentication**: Enhanced security for organization owners
-18. **Audit Logging**: Comprehensive activity logs for compliance and security
+17. ~~**Two-Factor Authentication**~~: ✅ Complete - TOTP with backup codes and login enforcement
+18. ~~**Audit Logging**~~: ✅ Complete - Admin action audit trail with dashboard
 
 ---
 
@@ -1617,9 +1772,9 @@ The following features have been implemented:
    - Generate insights for missing/declining volunteers
    - Auto-create follow-up suggestions from interactions
 
-3. **Error Monitoring**: Set up production error tracking
-   - Integrate Sentry or similar service
-   - Add custom error pages (404, 500)
+3. **Error Monitoring**: ✅ Complete
+   - ~~Integrate Sentry or similar service~~ (done - Sentry SDK with PII protection)
+   - ~~Add custom error pages (404, 500)~~ (done)
    - Implement graceful degradation for PCO API failures
 
 ### Short-term Goals (Next 2 Weeks)
@@ -1671,7 +1826,7 @@ The following features have been implemented:
 
 11. **Enterprise Features**: Build enterprise tier capabilities
     - SSO integration (SAML, Google Workspace, Microsoft)
-    - Advanced audit logging
+    - ~~Advanced audit logging~~ (done - AuditLog with admin dashboard)
     - Custom domain support
     - White-label branding
     - Priority support system
@@ -1709,7 +1864,7 @@ The following features have been implemented:
 ### Code Quality
 1. **Type Hints**: Add comprehensive type hints throughout codebase
 2. **API Rate Limiting**: Add per-organization rate limiting for API endpoints
-3. **Audit Logging**: Track all data modifications for compliance
+3. **Audit Logging**: ✅ Complete - Admin action audit trail with dashboard and IP tracking
 4. **Health Checks**: Add `/health` endpoint for monitoring (database, PCO API, Anthropic API)
 
 ---
