@@ -10,9 +10,9 @@ Last Updated: February 20, 2026
 - **36+ Database Models** across all domains (including blog, beta requests, security)
 - **120+ View Functions** with full CRUD operations
 - **95+ Templates** for complete user journeys
-- **9 Test Files** with 238+ test cases
+- **9 Test Files** with 370 passing test cases (0 failures)
 - **30+ Migrations** tracking schema evolution
-- **Recent Focus**: Two-factor authentication, audit logging, Sentry error monitoring
+- **Recent Focus**: Test suite stability, two-factor authentication, audit logging, Sentry error monitoring
 
 ### Current Sprint (February 2026)
 - ✅ **Closed Beta System** - Full beta request and approval workflow
@@ -53,6 +53,12 @@ Last Updated: February 20, 2026
   - Custom 404 and 500 error pages
   - Dependabot configuration for weekly dependency vulnerability scanning
   - 22 new tests (13 for 2FA, 9 for audit log)
+- ✅ **Test Suite Fixes** - Resolved 29 pre-existing test failures (7 failures + 22 errors)
+  - Fixed TenantMiddleware references to non-existent `org_select`/`org_create` URLs
+  - Fixed django-axes compatibility (`force_login()` instead of `login()` in test clients)
+  - Fixed blockout date fixtures using past dates (2025 → 2026)
+  - Fixed analytics export test using invalid report type
+  - All 370 tests now passing with 0 failures
 - 📋 Create og-image.png and twitter-card.png (pending design)
 - 📋 Submit sitemap to Google Search Console (manual step)
 - 📋 Write first blog posts (content creation)
@@ -1631,6 +1637,11 @@ The following features have been implemented:
   - Beta admin views (list, approve, reject, access control)
   - Beta signup flow (page access, org creation, rejection of uninvited users)
   - Security settings (session timeout, browser close expiry)
+- **29 test fixes** across middleware, view isolation, and response formatting tests:
+  - Fixed django-axes compatibility in all test clients (`force_login()`)
+  - Fixed TenantMiddleware fallback paths for missing URL patterns
+  - Fixed date-sensitive fixtures and invalid report type references
+  - Full suite: **370 passed, 0 failures, 0 errors**
 
 ### Security Round 2
 - **Two-Factor Authentication (TOTP)**:
@@ -1654,6 +1665,16 @@ The following features have been implemented:
 - **Dependabot Configuration**:
   - `.github/dependabot.yml` for weekly pip dependency vulnerability scanning
   - `pip-audit` added to requirements.txt for local vulnerability scanning
+
+### Test Suite Fixes
+Resolved 29 pre-existing test failures (7 failures + 22 errors) caused by 4 distinct issues:
+- **`NoReverseMatch: 'org_select'`** (3 failures): TenantMiddleware referenced non-existent URL names `org_select` and `org_create`. Fixed by redirecting to `/onboarding/`, auto-selecting first org for multi-org users, and returning `HttpResponseForbidden` for non-members. Also added `organization__is_active=True` filter to membership queries.
+- **`AxesBackendRequestParameterRequired`** (22 errors + 2 failures): `client.login()` incompatible with django-axes (requires request object). Changed to `client.force_login()` in `conftest.py` fixtures and 3 test files.
+- **`Database access not allowed`** (1 failure): Test missing `db` fixture parameter for session save. Added `db` to `test_middleware_no_org_for_unauthenticated_user`.
+- **Blockout date assertion** (1 failure): Fixture dates in 2025 were now in the past, causing blockouts to render differently. Updated to 2026/2027 dates and matching assertions.
+- **Analytics export report type** (1 failure): Test used `'engagement'` but view expects `'volunteer_engagement'`.
+
+Result: **370 tests passing, 0 failures, 0 errors**.
 
 ---
 
