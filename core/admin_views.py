@@ -557,3 +557,27 @@ def admin_beta_reject(request, pk):
         )
 
     return redirect('admin_beta_requests')
+
+
+@login_required
+@require_superadmin
+def admin_audit_log(request):
+    """View audit log entries."""
+    logs = AuditLog.objects.select_related('user', 'organization', 'target_user').all()
+
+    # Filter by action
+    action_filter = request.GET.get('action')
+    if action_filter:
+        logs = logs.filter(action=action_filter)
+
+    # Paginate
+    from django.core.paginator import Paginator
+    paginator = Paginator(logs, 25)
+    page = request.GET.get('page')
+    logs_page = paginator.get_page(page)
+
+    return render(request, 'core/admin/audit_log.html', {
+        'logs': logs_page,
+        'action_filter': action_filter,
+        'action_choices': AuditLog.ACTION_CHOICES,
+    })

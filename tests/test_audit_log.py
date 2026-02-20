@@ -108,3 +108,42 @@ class TestAuditLogIntegration(TestCase):
             {'role': 'leader'},
         )
         assert AuditLog.objects.filter(action='user_role_change').exists()
+
+
+class TestAuditLogAdminView(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_user(
+            username='superadmin@test.com',
+            email='superadmin@test.com',
+            password='testpass123',
+            is_superadmin=True,
+        )
+
+    def test_audit_log_page_accessible(self):
+        """Superadmins can access the audit log page."""
+        self.client.force_login(self.admin)
+        response = self.client.get('/platform-admin/audit-log/')
+        assert response.status_code == 200
+
+    def test_audit_log_shows_entries(self):
+        """Audit log page displays log entries."""
+        AuditLog.objects.create(
+            user=self.admin,
+            action='beta_approve',
+            details={'church_name': 'Test Church'},
+        )
+        self.client.force_login(self.admin)
+        response = self.client.get('/platform-admin/audit-log/')
+        assert b'beta_approve' in response.content or b'Beta Request Approved' in response.content
+
+    def test_audit_log_non_admin_blocked(self):
+        """Non-superadmins cannot access the audit log."""
+        user = User.objects.create_user(
+            username='regular@test.com',
+            email='regular@test.com',
+            password='testpass123',
+        )
+        self.client.force_login(user)
+        response = self.client.get('/platform-admin/audit-log/')
+        assert response.status_code == 403

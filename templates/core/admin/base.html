@@ -53,6 +53,9 @@
                         <a href="{% url 'admin_beta_requests' %}" class="{% if 'beta-requests' in request.path %}bg-ch-gray text-white{% else %}text-gray-300 hover:bg-ch-gray hover:text-white{% endif %} px-3 py-2 rounded-md text-sm font-medium">
                             Beta Requests
                         </a>
+                        <a href="{% url 'admin_audit_log' %}" class="{% if 'audit-log' in request.path %}bg-ch-gray text-white{% else %}text-gray-300 hover:bg-ch-gray hover:text-white{% endif %} px-3 py-2 rounded-md text-sm font-medium">
+                            Audit Log
+                        </a>
                     </div>
                 </div>
                 <div class="flex items-center space-x-4">

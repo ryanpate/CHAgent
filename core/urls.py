@@ -142,4 +142,5 @@ urlpatterns = [
     path('platform-admin/beta-requests/', admin_views.admin_beta_requests, name='admin_beta_requests'),
     path('platform-admin/beta-requests/<int:pk>/approve/', admin_views.admin_beta_approve, name='admin_beta_approve'),
     path('platform-admin/beta-requests/<int:pk>/reject/', admin_views.admin_beta_reject, name='admin_beta_reject'),
+    path('platform-admin/audit-log/', admin_views.admin_audit_log, name='admin_audit_log'),
 ]
