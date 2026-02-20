@@ -4,6 +4,12 @@ Django settings for Cherry Hills Worship Arts Portal.
 import os
 from pathlib import Path
 
+try:
+    import sentry_sdk
+    HAS_SENTRY = True
+except Exception:
+    HAS_SENTRY = False
+
 # Try to import dj_database_url, fall back gracefully if not available
 try:
     import dj_database_url
@@ -232,6 +238,17 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
     # Referrer policy
     SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+    # Sentry Error Monitoring
+    sentry_dsn = os.environ.get('SENTRY_DSN', '')
+    if sentry_dsn and HAS_SENTRY:
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            traces_sample_rate=0.1,
+            profiles_sample_rate=0.1,
+            send_default_pii=False,
+            environment='production',
+        )
 
 # Session timeout (applies in all environments)
 SESSION_COOKIE_AGE = 86400  # 24 hours
