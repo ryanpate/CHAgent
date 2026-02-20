@@ -144,6 +144,40 @@
             </div>
         </div>
     </div>
+
+    <!-- Two-Factor Authentication -->
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <div class="flex items-start gap-4">
+            <div class="bg-ch-gold/20 p-3 rounded-lg flex-shrink-0">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-2">Two-Factor Authentication</h3>
+                <p class="text-gray-400 text-sm">
+                    Protect your account with TOTP-based two-factor authentication. Use any authenticator app (Google Authenticator, Authy, etc.) plus backup codes for recovery.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monitoring & Auditing -->
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <div class="flex items-start gap-4">
+            <div class="bg-ch-gold/20 p-3 rounded-lg flex-shrink-0">
+                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-2">Monitoring & Auditing</h3>
+                <p class="text-gray-400 text-sm">
+                    All administrative actions are logged in an audit trail with timestamps and IP addresses. Real-time error monitoring and automated dependency vulnerability scanning keep the platform secure.
+                </p>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Technical Details (Collapsible) -->
@@ -182,8 +216,10 @@
             <ul class="text-gray-400 text-sm space-y-1 list-disc list-inside">
                 <li>PBKDF2 password hashing with SHA256</li>
                 <li>CSRF protection on all forms</li>
-                <li>Rate limiting on login attempts</li>
+                <li>Rate limiting on login attempts (automatic lockout after repeated failures)</li>
                 <li>Minimum password complexity requirements</li>
+                <li>Optional TOTP two-factor authentication with authenticator app support</li>
+                <li>Hashed backup codes for 2FA account recovery</li>
             </ul>
         </div>
 
@@ -204,6 +240,18 @@
                 <li>Hosted on Railway with managed infrastructure</li>
                 <li>PostgreSQL database with automated backups</li>
                 <li>Environment variables for all secrets and credentials</li>
+            </ul>
+        </div>
+
+        <!-- Monitoring & Auditing -->
+        <div>
+            <h3 class="text-ch-gold font-semibold mb-2">Monitoring & Auditing</h3>
+            <ul class="text-gray-400 text-sm space-y-1 list-disc list-inside">
+                <li>Comprehensive audit logging of all administrative actions</li>
+                <li>IP address tracking on sensitive operations</li>
+                <li>Real-time error monitoring with Sentry (no personal data collected)</li>
+                <li>Automated dependency vulnerability scanning via Dependabot</li>
+                <li>Regular security audits with pip-audit</li>
             </ul>
         </div>
     </div>
