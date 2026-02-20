@@ -89,3 +89,23 @@ class TestBetaRequestView:
         assert response.status_code == 200
         assert b'required' in response.content.lower()
         assert not BetaRequest.objects.filter(email='test@church.org').exists()
+
+
+@pytest.mark.django_db
+class TestBetaLandingPage:
+    def test_landing_page_shows_beta_badge(self):
+        client = Client()
+        response = client.get('/')
+        assert response.status_code == 200
+        assert b'BETA' in response.content
+
+    def test_landing_page_has_request_access_cta(self):
+        client = Client()
+        response = client.get('/')
+        assert b'Request Beta Access' in response.content
+        assert b'Start Free Trial' not in response.content
+
+    def test_beta_banner_on_public_pages(self):
+        client = Client()
+        response = client.get('/')
+        assert b'closed beta' in response.content.lower()

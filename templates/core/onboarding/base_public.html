@@ -69,11 +69,20 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-ch-black text-gray-100 min-h-screen">
+    <!-- Beta Banner -->
+    <div id="beta-banner" class="bg-ch-gold/10 border-b border-ch-gold/30 py-2 px-4 text-center text-sm">
+        <span class="text-ch-gold">Aria is in closed beta.</span>
+        <span class="text-gray-300">We're onboarding churches one at a time to ensure a great experience.</span>
+        <a href="{% url 'onboarding_signup' %}" class="text-ch-gold font-medium hover:underline ml-1">Request Access</a>
+        <button onclick="document.getElementById('beta-banner').style.display='none';localStorage.setItem('beta-banner-dismissed','1')" class="ml-2 text-gray-500 hover:text-gray-300">&times;</button>
+    </div>
+    <script>if(localStorage.getItem('beta-banner-dismissed')==='1')document.getElementById('beta-banner').style.display='none';</script>
     <div class="min-h-screen flex flex-col">
         <!-- Header -->
         <header class="bg-ch-dark border-b border-ch-gray py-4 px-6">
             <div class="max-w-6xl mx-auto flex items-center justify-between">
                 <a href="/" class="text-2xl font-bold text-ch-gold">Aria</a>
+                <span class="bg-ch-gold/20 text-ch-gold text-xs font-semibold px-2 py-0.5 rounded-full ml-2">BETA</span>
                 <div class="flex items-center gap-4">
                     <span class="text-gray-400 text-sm hidden sm:inline">Worship Arts Team Portal</span>
                     <a href="{% url 'login' %}"
@@ -94,7 +103,11 @@
         <!-- Footer -->
         <footer class="bg-ch-dark border-t border-ch-gray py-4 px-6 text-center text-gray-500 text-sm">
             <p>&copy; {% now "Y" %} Aria. All rights reserved.</p>
-            <p class="text-xs text-gray-600 mt-2">Song tempo data powered by <a href="https://getsongbpm.com" target="_blank" class="hover:text-gray-400">GetSongBPM.com</a></p>
+            <p class="text-xs text-gray-600 mt-2">
+                <a href="/security/" class="hover:text-gray-400">Security</a>
+                <span class="mx-2">|</span>
+                Song tempo data powered by <a href="https://getsongbpm.com" target="_blank" class="hover:text-gray-400">GetSongBPM.com</a>
+            </p>
         </footer>
     </div>
 </body>
