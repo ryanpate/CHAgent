@@ -110,6 +110,7 @@ urlpatterns = [
     path('subscribe/required/', views.subscription_required, name='subscription_required'),
     path('subscribe/success/', views.subscription_success, name='subscription_success'),
     # Organization Onboarding
+    path('beta/signup/', views.beta_signup, name='beta_signup'),
     path('signup/', views.onboarding_signup, name='onboarding_signup'),
     path('onboarding/select-plan/', views.onboarding_select_plan, name='onboarding_select_plan'),
     path('onboarding/checkout/', views.onboarding_checkout, name='onboarding_checkout'),

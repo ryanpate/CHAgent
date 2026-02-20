@@ -235,3 +235,59 @@ class TestBetaAdminView:
         client.force_login(user)
         response = client.get('/platform-admin/beta-requests/')
         assert response.status_code in (302, 403)
+
+
+@pytest.mark.django_db
+class TestBetaSignupFlow:
+    def test_beta_signup_page_accessible(self):
+        from core.models import BetaRequest, SubscriptionPlan
+        SubscriptionPlan.objects.get_or_create(
+            slug='test-plan-t8',
+            defaults={
+                'name': 'Test Plan', 'tier': 'team',
+                'price_monthly_cents': 3999, 'price_yearly_cents': 39900,
+                'max_users': 15, 'max_volunteers': 200,
+                'max_ai_queries_monthly': 1000, 'is_active': True,
+            }
+        )
+        BetaRequest.objects.create(
+            name='Approved User', email='approved@church.org',
+            church_name='Approved Church', church_size='medium',
+            status='invited',
+        )
+        client = Client()
+        response = client.get('/beta/signup/?email=approved@church.org')
+        assert response.status_code == 200
+        assert b'Approved Church' in response.content
+
+    def test_beta_signup_creates_org_with_beta_status(self):
+        from core.models import BetaRequest, Organization, SubscriptionPlan
+        SubscriptionPlan.objects.get_or_create(
+            slug='test-plan-t8b',
+            defaults={
+                'name': 'Test Plan', 'tier': 'team',
+                'price_monthly_cents': 3999, 'price_yearly_cents': 39900,
+                'max_users': 15, 'max_volunteers': 200,
+                'max_ai_queries_monthly': 1000, 'is_active': True,
+            }
+        )
+        BetaRequest.objects.create(
+            name='Beta User', email='beta@church.org',
+            church_name='Beta Church', church_size='small',
+            status='invited',
+        )
+        client = Client()
+        response = client.post('/beta/signup/?email=beta@church.org', {
+            'email': 'beta@church.org',
+            'password': 'securepassword123',
+            'first_name': 'Beta',
+            'last_name': 'User',
+        })
+        org = Organization.objects.filter(name='Beta Church').first()
+        assert org is not None
+        assert org.subscription_status == 'beta'
+
+    def test_uninvited_email_rejected(self):
+        client = Client()
+        response = client.get('/beta/signup/?email=random@church.org')
+        assert response.status_code == 302

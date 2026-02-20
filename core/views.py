@@ -3798,6 +3798,82 @@ def onboarding_signup(request):
     return render(request, 'core/onboarding/signup.html', {'is_beta': True})
 
 
+def beta_signup(request):
+    """
+    Account creation for approved beta users.
+    Expects ?email= query param matching an approved/invited BetaRequest.
+    Creates an organization with subscription_status='beta'.
+    """
+    from django.contrib import messages
+    from django.contrib.auth import login
+    from accounts.models import User
+    from .models import Organization, OrganizationMembership, SubscriptionPlan, BetaRequest
+
+    email = request.GET.get('email', '').strip().lower() or request.POST.get('email', '').strip().lower()
+
+    beta_req = BetaRequest.objects.filter(
+        email=email, status__in=('approved', 'invited')
+    ).first()
+
+    if not beta_req:
+        messages.error(request, 'No approved beta request found for this email.')
+        return redirect('onboarding_signup')
+
+    if request.method == 'POST':
+        password = request.POST.get('password', '')
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+
+        errors = []
+        if not password or len(password) < 8:
+            errors.append('Password must be at least 8 characters.')
+        if User.objects.filter(email=email).exists():
+            errors.append('An account with this email already exists.')
+
+        if errors:
+            return render(request, 'core/onboarding/beta_signup.html', {
+                'errors': errors, 'beta_request': beta_req,
+                'first_name': first_name, 'last_name': last_name,
+            })
+
+        user = User.objects.create_user(
+            username=email, email=email, password=password,
+            first_name=first_name, last_name=last_name,
+        )
+
+        plan = SubscriptionPlan.objects.filter(
+            is_active=True, tier='ministry'
+        ).first() or SubscriptionPlan.objects.filter(is_active=True).order_by('-price_monthly_cents').first()
+
+        org = Organization.objects.create(
+            name=beta_req.church_name,
+            email=email,
+            subscription_plan=plan,
+            subscription_status='beta',
+        )
+
+        OrganizationMembership.objects.create(
+            user=user, organization=org, role='owner',
+            can_manage_users=True, can_manage_settings=True,
+            can_view_analytics=True, can_manage_billing=True,
+        )
+
+        user.default_organization = org
+        user.save()
+
+        beta_req.status = 'signed_up'
+        beta_req.save()
+
+        login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+        request.session['onboarding_org_id'] = org.id
+
+        return redirect('onboarding_connect_pco')
+
+    return render(request, 'core/onboarding/beta_signup.html', {
+        'beta_request': beta_req,
+    })
+
+
 @login_required
 def onboarding_select_plan(request):
     """
