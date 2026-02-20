@@ -4886,3 +4886,29 @@ def totp_disable(request):
         messages.error(request, 'Invalid code. 2FA was not disabled.')
 
     return redirect('security_settings')
+
+
+@login_required
+def totp_login_verify(request):
+    """Verify TOTP code during login."""
+    from .models import TOTPDevice
+    from django.contrib import messages
+
+    device = TOTPDevice.objects.filter(user=request.user, is_verified=True).first()
+    if not device:
+        return redirect('dashboard')
+
+    if request.session.get('2fa_verified'):
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        code = request.POST.get('code', '').strip()
+        if device.verify_code(code) or device.verify_backup_code(code):
+            request.session['2fa_verified'] = True
+            device.last_used_at = timezone.now()
+            device.save(update_fields=['last_used_at'])
+            return redirect('dashboard')
+        else:
+            messages.error(request, 'Invalid code. Please try again.')
+
+    return render(request, 'core/auth/totp_login.html')

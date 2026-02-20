@@ -28,6 +28,7 @@ class TenantMiddleware(MiddlewareMixin):
     # URLs that don't require organization context
     PUBLIC_URLS = [
         '/accounts/login/',
+        '/login/2fa/',
         '/accounts/logout/',
         '/accounts/register/',
         '/health/',
@@ -395,6 +396,45 @@ class TenantQuerySetMixin:
         if org:
             return self.for_organization(org)
         return self.get_queryset().none()
+
+
+class TwoFactorMiddleware(MiddlewareMixin):
+    """Redirect users with 2FA enabled to verify if not yet verified this session."""
+
+    EXEMPT_URLS = [
+        '/login/2fa/',
+        '/accounts/login/',
+        '/accounts/logout/',
+        '/admin/',
+        '/settings/security/',
+    ]
+
+    def process_request(self, request):
+        if not request.user.is_authenticated:
+            return None
+
+        # Check exempt URLs
+        path = request.path
+        if any(path.startswith(url) for url in self.EXEMPT_URLS):
+            return None
+
+        # Check public URLs (from TenantMiddleware)
+        if any(path.startswith(url) for url in TenantMiddleware.PUBLIC_URLS):
+            return None
+
+        # Already verified 2FA this session
+        if request.session.get('2fa_verified'):
+            return None
+
+        # Check if user has verified 2FA device
+        from .models import TOTPDevice
+        try:
+            TOTPDevice.objects.get(user=request.user, is_verified=True)
+        except TOTPDevice.DoesNotExist:
+            return None
+
+        # User has 2FA but hasn't verified this session - redirect
+        return redirect('totp_login_verify')
 
 
 class SecurityHeadersMiddleware(MiddlewareMixin):

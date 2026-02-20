@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Two-Factor Verification{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-16">
+    <div class="bg-ch-dark rounded-lg p-8 shadow-xl">
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-bold text-ch-gold mb-2">Two-Factor Verification</h1>
+            <p class="text-gray-400">Enter the code from your authenticator app</p>
+        </div>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
+            <p>{{ message }}</p>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+            <div>
+                <label for="code" class="block text-sm font-medium text-gray-300 mb-2">Authentication Code</label>
+                <input type="text" name="code" id="code"
+                       placeholder="000000"
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 text-white text-center text-lg font-mono tracking-widest placeholder-gray-500 focus:outline-none focus:border-ch-gold transition"
+                       maxlength="8" inputmode="numeric" autocomplete="one-time-code" required autofocus>
+                <p class="text-gray-500 text-xs mt-2">You can also use a backup code.</p>
+            </div>
+            <button type="submit"
+                    class="w-full bg-ch-gold text-black py-3 rounded-lg font-medium hover:bg-yellow-500 transition">
+                Verify
+            </button>
+        </form>
+
+        <div class="text-center mt-6">
+            <a href="{% url 'logout' %}" class="text-gray-500 text-sm hover:text-gray-300">
+                Sign out
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

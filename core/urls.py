@@ -134,6 +134,8 @@ urlpatterns = [
     path('settings/security/2fa/setup/', views.totp_setup, name='totp_setup'),
     path('settings/security/2fa/verify-setup/', views.totp_verify_setup, name='totp_verify_setup'),
     path('settings/security/2fa/disable/', views.totp_disable, name='totp_disable'),
+    # 2FA Login Verification
+    path('login/2fa/', views.totp_login_verify, name='totp_login_verify'),
     # Platform Admin Dashboard
     path('platform-admin/', admin_views.admin_dashboard, name='admin_dashboard'),
     path('platform-admin/organizations/', admin_views.admin_organizations_list, name='admin_organizations_list'),
