@@ -63,7 +63,7 @@ class TestTenantMiddleware:
         assert request.membership is not None
         assert request.membership.user == user_alpha_owner
 
-    def test_middleware_no_org_for_unauthenticated_user(self, request_factory):
+    def test_middleware_no_org_for_unauthenticated_user(self, db, request_factory):
         """Middleware should not set organization for unauthenticated users."""
         from django.contrib.auth.models import AnonymousUser
 
@@ -430,7 +430,7 @@ class TestMultiOrgUserAccess:
     def test_session_org_switch(self, db, multi_org_user, org_alpha, org_beta):
         """User should be able to switch between organizations via session."""
         client = Client()
-        client.login(username='multi_org_user', password='testpass123')
+        client.force_login(multi_org_user)
 
         # Set to Alpha org
         session = client.session

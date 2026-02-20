@@ -146,13 +146,13 @@ def mock_person_blockouts():
         'person_name': 'Sarah Johnson',
         'blockouts': [
             {
-                'starts_at': '2025-12-24',  # Use future date
-                'ends_at': '2025-12-26',
+                'starts_at': '2026-12-24',  # Use future date
+                'ends_at': '2026-12-26',
                 'reason': 'Christmas vacation'
             },
             {
-                'starts_at': '2025-01-01',
-                'ends_at': '2025-01-01',
+                'starts_at': '2027-01-01',
+                'ends_at': '2027-01-01',
                 'reason': "New Year's Day"
             },
         ],
@@ -450,9 +450,9 @@ class TestFormatPersonBlockouts:
         result = format_person_blockouts(mock_person_blockouts)
 
         assert 'Sarah Johnson' in result
-        assert '2025-12-24' in result or 'December 24' in result
+        assert '2026-12-24' in result or 'December 24' in result
         assert 'Christmas vacation' in result
-        assert '2025-01-01' in result or 'January 1' in result
+        assert '2027-01-01' in result or 'January 1' in result
 
     def test_shows_blockout_count(self, mock_person_blockouts):
         """Test that blockout count is shown."""

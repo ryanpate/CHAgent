@@ -231,12 +231,12 @@ class TestAnalyticsViewIsolation:
         """
         # Export engagement report for Alpha
         response_alpha = client_alpha.get(
-            reverse('analytics_export', kwargs={'report_type': 'engagement'})
+            reverse('analytics_export', kwargs={'report_type': 'volunteer_engagement'})
         )
 
         # Export engagement report for Beta
         response_beta = client_beta.get(
-            reverse('analytics_export', kwargs={'report_type': 'engagement'})
+            reverse('analytics_export', kwargs={'report_type': 'volunteer_engagement'})
         )
 
         # Both should succeed
@@ -382,7 +382,7 @@ class TestInactiveOrgAccess:
 
         try:
             client = Client()
-            client.login(username='alpha_owner', password='testpass123')
+            client.force_login(user_alpha_owner)
 
             response = client.get(reverse('dashboard'))
 
@@ -411,7 +411,7 @@ class TestSuspendedSubscriptionAccess:
 
         try:
             client = Client()
-            client.login(username='alpha_owner', password='testpass123')
+            client.force_login(user_alpha_owner)
 
             # Set org in session
             session = client.session

@@ -97,13 +97,14 @@ class TenantMiddleware(MiddlewareMixin):
             # No organization context - check if user has any orgs
             memberships = OrganizationMembership.objects.filter(
                 user=request.user,
-                is_active=True
+                is_active=True,
+                organization__is_active=True
             ).select_related('organization')
 
             if memberships.count() == 0:
-                # User has no organizations - redirect to create one
-                if not request.path.startswith('/org/'):
-                    return redirect('org_create')
+                # User has no organizations - redirect to onboarding
+                if not request.path.startswith('/onboarding/'):
+                    return redirect('/onboarding/')
             elif memberships.count() == 1:
                 # User has exactly one org - use it automatically
                 membership = memberships.first()
@@ -112,9 +113,11 @@ class TenantMiddleware(MiddlewareMixin):
                 # Store in session
                 request.session['organization_id'] = membership.organization.id
             else:
-                # User has multiple orgs - redirect to selector
-                if not request.path.startswith('/org/'):
-                    return redirect('org_select')
+                # User has multiple orgs - auto-select the first one
+                membership = memberships.first()
+                request.organization = membership.organization
+                request.membership = membership
+                request.session['organization_id'] = membership.organization.id
 
         return None
 
@@ -216,8 +219,8 @@ class TenantMiddleware(MiddlewareMixin):
 
     def _handle_no_membership(self, request):
         """Handle when user tries to access an org they're not a member of."""
-        # Redirect to org selector or show error
-        return redirect('org_select')
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("You do not have access to this organization.")
 
 
 class OrganizationContextMixin:

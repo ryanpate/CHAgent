@@ -446,7 +446,7 @@ def client_alpha(db, user_alpha_owner, org_alpha):
     from core.models import OrganizationMembership
 
     client = Client()
-    client.login(username='alpha_owner', password='testpass123')
+    client.force_login(user_alpha_owner)
 
     # Set organization in session
     session = client.session
@@ -464,7 +464,7 @@ def client_beta(db, user_beta_owner, org_beta):
     This client has the organization set in the session.
     """
     client = Client()
-    client.login(username='beta_owner', password='testpass123')
+    client.force_login(user_beta_owner)
 
     # Set organization in session
     session = client.session
