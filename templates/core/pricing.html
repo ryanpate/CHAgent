@@ -139,11 +139,17 @@
 
 {% block content %}
 <div>
+    <!-- Beta Notice Banner -->
+    <div class="bg-ch-gold/10 border border-ch-gold/30 rounded-lg p-4 mb-8 text-center">
+        <p class="text-ch-gold font-semibold">Free During Beta</p>
+        <p class="text-gray-400 text-sm">All features are free during our closed beta. These will be the prices when we launch publicly.</p>
+    </div>
+
     <!-- Header -->
     <div class="text-center mb-12">
         <h1 class="text-4xl font-bold text-white mb-4">Worship Team Software Pricing</h1>
         <p class="text-xl text-gray-400 max-w-2xl mx-auto">
-            Simple, transparent plans for churches of all sizes. Planning Center integration included with every plan. Start your 14-day free trial today.
+            Simple, transparent plans for churches of all sizes. Planning Center integration included with every plan. All features are free during beta.
         </p>
     </div>
 
@@ -278,7 +284,7 @@
             {% else %}
             <a href="{% url 'onboarding_signup' %}?plan={{ plan.slug }}"
                class="block text-center {% if plan.name == 'Team' %}bg-ch-gold hover:bg-ch-gold/90 text-ch-black{% else %}bg-ch-gray hover:bg-ch-gray/80 text-white{% endif %} font-semibold py-3 px-6 rounded-lg transition-colors">
-                Start Free Trial
+                Request Access
             </a>
             {% endif %}
         </div>
@@ -440,9 +446,9 @@
         <p class="text-gray-400 mb-6">Join churches using Aria to build stronger volunteer relationships.</p>
         <a href="{% url 'onboarding_signup' %}"
            class="inline-block bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-3 px-8 rounded-lg transition-colors">
-            Start Your Free Trial
+            Request Beta Access
         </a>
-        <p class="text-gray-500 text-sm mt-4">14 days free. No credit card required.</p>
+        <p class="text-gray-500 text-sm mt-4">Free during beta. No credit card required.</p>
     </div>
 </div>
 

@@ -109,3 +109,22 @@ class TestBetaLandingPage:
         client = Client()
         response = client.get('/')
         assert b'closed beta' in response.content.lower()
+
+
+@pytest.mark.django_db
+class TestBetaPricingPage:
+    def test_pricing_page_shows_beta_note(self):
+        from core.models import SubscriptionPlan
+        SubscriptionPlan.objects.get_or_create(
+            slug='test-plan',
+            defaults={
+                'name': 'Test Plan', 'tier': 'team',
+                'price_monthly_cents': 3999, 'price_yearly_cents': 39900,
+                'max_users': 15, 'max_volunteers': 200,
+                'max_ai_queries_monthly': 1000, 'is_active': True,
+            }
+        )
+        client = Client()
+        response = client.get('/pricing/')
+        assert response.status_code == 200
+        assert b'free during beta' in response.content.lower()
