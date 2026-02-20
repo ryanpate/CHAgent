@@ -183,3 +183,55 @@ class TestSecurityPage:
         response = client.get('/security/')
         content = response.content.decode()
         assert 'security@aria.church' in content
+
+
+@pytest.mark.django_db
+class TestBetaAdminView:
+    def test_admin_can_view_beta_requests(self):
+        from accounts.models import User
+        from core.models import BetaRequest
+        admin = User.objects.create_user(
+            username='superadmin_t7', email='admin_t7@aria.church',
+            password='testpass123',
+        )
+        admin.is_superadmin = True
+        admin.save()
+        BetaRequest.objects.create(
+            name='Test Church Leader', email='leader@church.org',
+            church_name='Test Church', church_size='medium',
+        )
+        client = Client()
+        client.force_login(admin)
+        response = client.get('/platform-admin/beta-requests/')
+        assert response.status_code == 200
+        assert b'Test Church' in response.content
+
+    def test_admin_can_approve_request(self):
+        from accounts.models import User
+        from core.models import BetaRequest
+        admin = User.objects.create_user(
+            username='superadmin_t7b', email='admin_t7b@aria.church',
+            password='testpass123',
+        )
+        admin.is_superadmin = True
+        admin.save()
+        req = BetaRequest.objects.create(
+            name='Approved Leader', email='approved@church.org',
+            church_name='Approved Church', church_size='small',
+        )
+        client = Client()
+        client.force_login(admin)
+        response = client.post(f'/platform-admin/beta-requests/{req.id}/approve/')
+        req.refresh_from_db()
+        assert req.status in ('approved', 'invited')
+
+    def test_non_admin_cannot_access(self):
+        from accounts.models import User
+        user = User.objects.create_user(
+            username='regular_t7', email='user_t7@church.org',
+            password='testpass123',
+        )
+        client = Client()
+        client.force_login(user)
+        response = client.get('/platform-admin/beta-requests/')
+        assert response.status_code in (302, 403)

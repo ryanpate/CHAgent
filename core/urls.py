@@ -138,4 +138,7 @@ urlpatterns = [
     path('platform-admin/revenue/', admin_views.admin_revenue_analytics, name='admin_revenue_analytics'),
     path('platform-admin/usage/', admin_views.admin_usage_analytics, name='admin_usage_analytics'),
     path('platform-admin/users/', admin_views.admin_users_list, name='admin_users_list'),
+    path('platform-admin/beta-requests/', admin_views.admin_beta_requests, name='admin_beta_requests'),
+    path('platform-admin/beta-requests/<int:pk>/approve/', admin_views.admin_beta_approve, name='admin_beta_approve'),
+    path('platform-admin/beta-requests/<int:pk>/reject/', admin_views.admin_beta_reject, name='admin_beta_reject'),
 ]

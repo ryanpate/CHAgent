@@ -16,7 +16,7 @@ from django.contrib import messages
 from .models import (
     Organization, SubscriptionPlan, OrganizationMembership,
     Volunteer, Interaction, ChatMessage, FollowUp,
-    Announcement, Channel, Project, Task
+    Announcement, Channel, Project, Task, BetaRequest
 )
 from accounts.models import User
 from .middleware import require_superadmin
@@ -443,3 +443,78 @@ def admin_users_list(request):
     }
 
     return render(request, 'core/admin/users_list.html', context)
+
+
+@login_required
+@require_superadmin
+def admin_beta_requests(request):
+    """List all beta requests with filtering."""
+    status_filter = request.GET.get('status', '')
+    requests_qs = BetaRequest.objects.all().order_by('-created_at')
+    if status_filter:
+        requests_qs = requests_qs.filter(status=status_filter)
+
+    context = {
+        'beta_requests': requests_qs,
+        'status_filter': status_filter,
+        'pending_count': BetaRequest.objects.filter(status='pending').count(),
+    }
+    return render(request, 'core/admin/beta_requests.html', context)
+
+
+@login_required
+@require_superadmin
+def admin_beta_approve(request, pk):
+    """Approve a beta request and send invitation email."""
+    from django.core.mail import send_mail
+    from django.conf import settings as django_settings
+
+    beta_req = get_object_or_404(BetaRequest, pk=pk)
+
+    if request.method == 'POST' and beta_req.status == 'pending':
+        beta_req.status = 'approved'
+        beta_req.reviewed_at = timezone.now()
+        beta_req.reviewed_by = request.user
+        beta_req.save()
+
+        try:
+            send_mail(
+                subject='Your Aria Beta Access is Approved!',
+                message=(
+                    f"Hi {beta_req.name},\n\n"
+                    f"Great news! Your beta access request for {beta_req.church_name} has been approved.\n\n"
+                    f"You can now create your account and get started:\n"
+                    f"{getattr(django_settings, 'SITE_URL', 'https://aria.church')}/beta/signup/?email={beta_req.email}\n\n"
+                    f"During the beta period, all features are free. We'd love your feedback!\n\n"
+                    f"Welcome to Aria,\n"
+                    f"The Aria Team"
+                ),
+                from_email=getattr(django_settings, 'DEFAULT_FROM_EMAIL', 'noreply@aria.church'),
+                recipient_list=[beta_req.email],
+                fail_silently=True,
+            )
+            beta_req.status = 'invited'
+            beta_req.save()
+        except Exception:
+            pass
+
+        messages.success(request, f'Beta request from {beta_req.church_name} approved.')
+
+    return redirect('admin_beta_requests')
+
+
+@login_required
+@require_superadmin
+def admin_beta_reject(request, pk):
+    """Reject a beta request."""
+    beta_req = get_object_or_404(BetaRequest, pk=pk)
+
+    if request.method == 'POST' and beta_req.status == 'pending':
+        beta_req.status = 'rejected'
+        beta_req.reviewed_at = timezone.now()
+        beta_req.reviewed_by = request.user
+        beta_req.rejection_reason = request.POST.get('reason', '')
+        beta_req.save()
+        messages.success(request, f'Beta request from {beta_req.church_name} rejected.')
+
+    return redirect('admin_beta_requests')
