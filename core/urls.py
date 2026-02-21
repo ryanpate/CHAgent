@@ -87,6 +87,17 @@ urlpatterns = [
     path('tasks/<int:pk>/comment/', views.task_comment, name='task_comment'),
     # My Tasks Dashboard
     path('my-tasks/', views.my_tasks, name='my_tasks'),
+    # Knowledge Base Documents
+    path('documents/', views.document_list, name='document_list'),
+    path('documents/upload/', views.document_upload, name='document_upload'),
+    path('documents/categories/', views.document_category_list, name='document_category_list'),
+    path('documents/categories/create/', views.document_category_create, name='document_category_create'),
+    path('documents/categories/<int:pk>/edit/', views.document_category_edit, name='document_category_edit'),
+    path('documents/categories/<int:pk>/delete/', views.document_category_delete, name='document_category_delete'),
+    path('documents/<int:pk>/', views.document_detail, name='document_detail'),
+    path('documents/<int:pk>/edit/', views.document_edit, name='document_edit'),
+    path('documents/<int:pk>/delete/', views.document_delete, name='document_delete'),
+    path('documents/<int:pk>/download/', views.document_download, name='document_download'),
     # Task Templates (Recurring Tasks)
     path('templates/', views.template_list, name='template_list'),
     path('templates/new/', views.template_create, name='template_create'),

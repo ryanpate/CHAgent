@@ -1,5 +1,6 @@
 """Tests for the Knowledge Base document upload feature."""
 import pytest
+from django.test import Client
 from django.core.files.uploadedfile import SimpleUploadedFile
 from core.models import DocumentCategory, Document, DocumentChunk
 
@@ -210,3 +211,87 @@ class TestDocumentSearch:
         doc_titles = [r['document_title'] for r in results]
         assert 'Alpha Doc' in doc_titles
         assert 'Beta Doc' not in doc_titles
+
+
+@pytest.mark.django_db
+class TestDocumentViews:
+    def test_document_list_requires_login(self):
+        client = Client()
+        response = client.get('/documents/')
+        assert response.status_code == 302  # Redirect to login
+
+    def test_document_list_accessible(self, client_alpha):
+        response = client_alpha.get('/documents/')
+        assert response.status_code == 200
+        assert b'Knowledge Base' in response.content
+
+    def test_upload_requires_admin(self, client_alpha, org_alpha, user_alpha_member):
+        """Regular members cannot upload documents."""
+        member_client = Client()
+        member_client.force_login(user_alpha_member)
+        session = member_client.session
+        session['organization_id'] = org_alpha.id
+        session.save()
+
+        response = member_client.get('/documents/upload/')
+        assert response.status_code == 403
+
+    def test_upload_page_accessible_for_owner(self, client_alpha):
+        response = client_alpha.get('/documents/upload/')
+        assert response.status_code == 200
+
+    def test_upload_txt_document(self, client_alpha, org_alpha):
+        fake_file = SimpleUploadedFile(
+            'guide.txt', b'How to turn on the sound board: Step 1...',
+            content_type='text/plain'
+        )
+        response = client_alpha.post('/documents/upload/', {
+            'title': 'Sound Board Guide',
+            'description': 'How to set up the sound board',
+            'file': fake_file,
+        })
+        assert response.status_code == 302  # Redirect to document detail
+        assert Document.objects.filter(organization=org_alpha, title='Sound Board Guide').exists()
+
+    def test_document_detail(self, client_alpha, org_alpha, user_alpha_owner):
+        fake_file = SimpleUploadedFile('test.txt', b'content', content_type='text/plain')
+        doc = Document.objects.create(
+            title='Test Doc', file=fake_file,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='txt', file_size=7, is_processed=True,
+        )
+        response = client_alpha.get(f'/documents/{doc.pk}/')
+        assert response.status_code == 200
+        assert b'Test Doc' in response.content
+
+    def test_document_isolation(self, client_alpha, org_beta, user_beta_owner):
+        """Alpha client cannot see Beta's documents."""
+        fake_file = SimpleUploadedFile('beta.txt', b'secret', content_type='text/plain')
+        doc = Document.objects.create(
+            title='Beta Secret', file=fake_file,
+            organization=org_beta, uploaded_by=user_beta_owner,
+            file_type='txt', file_size=6, is_processed=True,
+        )
+        response = client_alpha.get(f'/documents/{doc.pk}/')
+        assert response.status_code == 404
+
+    def test_delete_document(self, client_alpha, org_alpha, user_alpha_owner):
+        fake_file = SimpleUploadedFile('test.txt', b'content', content_type='text/plain')
+        doc = Document.objects.create(
+            title='To Delete', file=fake_file,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='txt', file_size=7,
+        )
+        response = client_alpha.post(f'/documents/{doc.pk}/delete/')
+        assert response.status_code == 302
+        assert not Document.objects.filter(pk=doc.pk).exists()
+
+    def test_download_document(self, client_alpha, org_alpha, user_alpha_owner):
+        fake_file = SimpleUploadedFile('test.txt', b'file content here', content_type='text/plain')
+        doc = Document.objects.create(
+            title='Downloadable', file=fake_file,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='txt', file_size=17,
+        )
+        response = client_alpha.get(f'/documents/{doc.pk}/download/')
+        assert response.status_code == 200

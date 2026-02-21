@@ -9,7 +9,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, FileResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
@@ -18,7 +18,7 @@ from django.db.models import Count, Q
 from django.utils import timezone
 
 from .models import Interaction, Volunteer, ChatMessage, ConversationContext, FollowUp, ResponseFeedback, AuditLog
-from .middleware import require_organization
+from .middleware import require_organization, require_role
 from .agent import (
     query_agent,
     process_interaction,
@@ -4912,3 +4912,239 @@ def totp_login_verify(request):
             messages.error(request, 'Invalid code. Please try again.')
 
     return render(request, 'core/auth/totp_login.html')
+
+
+# =============================================================================
+# Knowledge Base Document Views
+# =============================================================================
+
+@login_required
+@require_organization
+def document_list(request):
+    """List all documents in the organization's knowledge base."""
+    from .models import Document, DocumentCategory
+
+    category_slug = request.GET.get('category', '')
+    search_query = request.GET.get('q', '')
+
+    documents = Document.objects.filter(organization=request.organization)
+    categories = DocumentCategory.objects.filter(organization=request.organization)
+
+    if category_slug:
+        documents = documents.filter(category__slug=category_slug)
+    if search_query:
+        documents = documents.filter(
+            Q(title__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+
+    is_admin = request.membership.role in ('owner', 'admin')
+    return render(request, 'core/documents/document_list.html', {
+        'documents': documents,
+        'categories': categories,
+        'selected_category': category_slug,
+        'search_query': search_query,
+        'is_admin': is_admin,
+    })
+
+
+@login_required
+@require_organization
+@require_role('owner', 'admin')
+def document_upload(request):
+    """Upload a new document to the knowledge base."""
+    from .models import Document, DocumentCategory
+    from .document_processing import process_document
+    from django.contrib import messages
+
+    categories = DocumentCategory.objects.filter(organization=request.organization)
+
+    if request.method == 'POST':
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            messages.error(request, 'Please select a file to upload.')
+            return render(request, 'core/documents/document_upload.html', {'categories': categories})
+
+        # Validate file size (10 MB)
+        if uploaded_file.size > 10 * 1024 * 1024:
+            messages.error(request, 'File size must be under 10 MB.')
+            return render(request, 'core/documents/document_upload.html', {'categories': categories})
+
+        # Determine file type
+        name_lower = uploaded_file.name.lower()
+        if name_lower.endswith('.pdf'):
+            file_type = 'pdf'
+        elif name_lower.endswith('.txt'):
+            file_type = 'txt'
+        else:
+            messages.error(request, 'Only PDF and TXT files are supported.')
+            return render(request, 'core/documents/document_upload.html', {'categories': categories})
+
+        title = request.POST.get('title', '').strip() or uploaded_file.name
+        description = request.POST.get('description', '').strip()
+        category_id = request.POST.get('category')
+
+        doc = Document.objects.create(
+            title=title,
+            description=description,
+            file=uploaded_file,
+            organization=request.organization,
+            uploaded_by=request.user,
+            file_type=file_type,
+            file_size=uploaded_file.size,
+            category_id=category_id if category_id else None,
+        )
+
+        try:
+            process_document(doc)
+            messages.success(request, f'"{doc.title}" uploaded and processed successfully.')
+        except Exception as e:
+            messages.warning(request, f'Document uploaded but processing failed: {e}')
+
+        return redirect('document_detail', pk=doc.pk)
+
+    return render(request, 'core/documents/document_upload.html', {'categories': categories})
+
+
+@login_required
+@require_organization
+def document_detail(request, pk):
+    """View document details and extracted text."""
+    from .models import Document
+    doc = get_object_or_404(Document, pk=pk, organization=request.organization)
+    is_admin = request.membership.role in ('owner', 'admin')
+    return render(request, 'core/documents/document_detail.html', {
+        'document': doc,
+        'is_admin': is_admin,
+        'chunk_count': doc.chunks.count(),
+    })
+
+
+@login_required
+@require_organization
+@require_role('owner', 'admin')
+def document_edit(request, pk):
+    """Edit document title, description, or category."""
+    from .models import Document, DocumentCategory
+    from django.contrib import messages
+    doc = get_object_or_404(Document, pk=pk, organization=request.organization)
+    categories = DocumentCategory.objects.filter(organization=request.organization)
+
+    if request.method == 'POST':
+        doc.title = request.POST.get('title', doc.title).strip()
+        doc.description = request.POST.get('description', '').strip()
+        category_id = request.POST.get('category')
+        doc.category_id = category_id if category_id else None
+        doc.save()
+        messages.success(request, 'Document updated.')
+        return redirect('document_detail', pk=doc.pk)
+
+    return render(request, 'core/documents/document_edit.html', {
+        'document': doc,
+        'categories': categories,
+    })
+
+
+@login_required
+@require_organization
+@require_role('owner', 'admin')
+def document_delete(request, pk):
+    """Delete a document and all its chunks."""
+    from .models import Document
+    from django.contrib import messages
+    doc = get_object_or_404(Document, pk=pk, organization=request.organization)
+    if request.method == 'POST':
+        title = doc.title
+        doc.file.delete(save=False)
+        doc.delete()
+        messages.success(request, f'"{title}" deleted.')
+        return redirect('document_list')
+    return render(request, 'core/documents/document_confirm_delete.html', {'document': doc})
+
+
+@login_required
+@require_organization
+def document_download(request, pk):
+    """Download the original uploaded file."""
+    from .models import Document
+    doc = get_object_or_404(Document, pk=pk, organization=request.organization)
+    response = FileResponse(doc.file.open('rb'), content_type='application/octet-stream')
+    response['Content-Disposition'] = f'attachment; filename="{doc.file.name.split("/")[-1]}"'
+    return response
+
+
+@login_required
+@require_organization
+@require_role('owner', 'admin')
+def document_category_list(request):
+    """List and manage document categories."""
+    from .models import DocumentCategory
+    categories = DocumentCategory.objects.filter(
+        organization=request.organization
+    ).annotate(doc_count=Count('documents'))
+    return render(request, 'core/documents/category_list.html', {'categories': categories})
+
+
+@login_required
+@require_organization
+@require_role('owner', 'admin')
+def document_category_create(request):
+    """Create a new document category."""
+    from .models import DocumentCategory
+    from django.utils.text import slugify
+    from django.contrib import messages
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        if name:
+            slug = slugify(name)
+            if DocumentCategory.objects.filter(organization=request.organization, slug=slug).exists():
+                messages.error(request, 'A category with that name already exists.')
+            else:
+                DocumentCategory.objects.create(
+                    name=name, slug=slug, description=description,
+                    organization=request.organization, created_by=request.user,
+                )
+                messages.success(request, f'Category "{name}" created.')
+                return redirect('document_category_list')
+
+    return render(request, 'core/documents/category_create.html')
+
+
+@login_required
+@require_organization
+@require_role('owner', 'admin')
+def document_category_edit(request, pk):
+    """Edit a document category."""
+    from .models import DocumentCategory
+    from django.contrib import messages
+    category = get_object_or_404(DocumentCategory, pk=pk, organization=request.organization)
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        if name:
+            category.name = name
+            category.description = description
+            category.save()
+            messages.success(request, 'Category updated.')
+            return redirect('document_category_list')
+
+    return render(request, 'core/documents/category_edit.html', {'category': category})
+
+
+@login_required
+@require_organization
+@require_role('owner', 'admin')
+def document_category_delete(request, pk):
+    """Delete a document category (documents become uncategorized)."""
+    from .models import DocumentCategory
+    from django.contrib import messages
+    category = get_object_or_404(DocumentCategory, pk=pk, organization=request.organization)
+    if request.method == 'POST':
+        name = category.name
+        category.delete()
+        messages.success(request, f'Category "{name}" deleted. Documents moved to uncategorized.')
+        return redirect('document_category_list')
+    return render(request, 'core/documents/category_confirm_delete.html', {'category': category})
