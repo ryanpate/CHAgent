@@ -2112,6 +2112,7 @@ def get_system_prompt(assistant_name='Aria', organization_name=None):
 3. Provide aggregate insights about the volunteer team
 4. Look up volunteer information from Planning Center
 5. Find songs, setlists, and chord charts from Planning Center Services
+6. Reference uploaded Knowledge Base documents to answer procedural and reference questions
 
 ## Your Capabilities:
 - When a user logs an interaction, extract and organize key information (names, preferences, prayer requests, feedback, etc.)
@@ -2140,6 +2141,8 @@ def get_system_prompt(assistant_name='Aria', organization_name=None):
 - When a user asks for specific sections (e.g., "2nd verse", "chorus"), find and display just that section from the lyrics data provided. Look for section markers like "Verse 1", "Verse 2", "Chorus", "Bridge", etc. in the lyrics content.
 - If lyrics or chord chart content is included in the context data, always display it directly rather than pointing to download links.
 - IMPORTANT: If the context indicates that lyrics/chord content could NOT be extracted (e.g., "[NOTE: No lyrics or chord chart text content could be extracted...]"), clearly tell the user that the lyrics are not available in a readable text format in Planning Center. Do NOT offer download links as an alternative - just explain that the files are likely image-based PDFs that cannot be read as text and suggest they check the song directly in Planning Center or that the worship team may need to add text-based lyrics to the song in PCO.
+- When answering from uploaded Knowledge Base documents, always cite the document title. Example: 'According to the Sound Board Setup Guide, the first step is...'
+- Only use document content that is directly relevant to the user's question.
 
 ## Data Extraction:
 When processing a new interaction, extract and structure:
@@ -4179,6 +4182,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
 
     # Step 1: Get relevant interactions
     relevant_interactions = []
+    question_embedding = None
 
     if aggregate:
         # For aggregate questions, get ALL interactions to ensure comprehensive answers
@@ -4344,6 +4348,35 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
     # Add blockout/availability data to context if available
     if blockout_data_context:
         context = blockout_data_context + "\n" + context
+
+    # Add Knowledge Base document context if available
+    if organization and question_embedding:
+        try:
+            from .embeddings import search_similar_documents
+            doc_results = search_similar_documents(
+                question_embedding, organization, limit=5, threshold=0.3
+            )
+            if doc_results:
+                doc_context_parts = []
+                seen_docs = set()
+                for result in doc_results:
+                    doc_key = (result['document_id'], result['chunk_index'])
+                    if doc_key not in seen_docs:
+                        seen_docs.add(doc_key)
+                        cat_label = f" ({result['category_name']})" if result['category_name'] else ""
+                        doc_context_parts.append(
+                            f'From "{result["document_title"]}"{cat_label}:\n'
+                            f'{result["content"]}'
+                        )
+                if doc_context_parts:
+                    doc_context = (
+                        "\n[KNOWLEDGE BASE DOCUMENTS]\n"
+                        + "\n\n---\n\n".join(doc_context_parts)
+                    )
+                    context = doc_context + "\n\n" + context
+                    logger.info(f"Added {len(doc_context_parts)} document chunks to context")
+        except Exception as e:
+            logger.error(f"Error searching documents: {e}")
 
     # Step 3: Get chat history for this session
     all_history = ChatMessage.objects.filter(
