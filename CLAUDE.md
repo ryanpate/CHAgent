@@ -7,12 +7,12 @@
 Last Updated: February 20, 2026
 
 ### Quick Stats
-- **36+ Database Models** across all domains (including blog, beta requests, security)
-- **120+ View Functions** with full CRUD operations
-- **95+ Templates** for complete user journeys
-- **9 Test Files** with 370 passing test cases (0 failures)
-- **30+ Migrations** tracking schema evolution
-- **Recent Focus**: Test suite stability, two-factor authentication, audit logging, Sentry error monitoring
+- **39+ Database Models** across all domains (including blog, beta requests, security, knowledge base)
+- **130+ View Functions** with full CRUD operations
+- **104+ Templates** for complete user journeys
+- **9 Test Files** with 394 passing test cases (0 failures)
+- **31+ Migrations** tracking schema evolution
+- **Recent Focus**: Knowledge Base document upload, test suite stability, two-factor authentication, audit logging
 
 ### Current Sprint (February 2026)
 - ✅ **Closed Beta System** - Full beta request and approval workflow
@@ -59,6 +59,16 @@ Last Updated: February 20, 2026
   - Fixed blockout date fixtures using past dates (2025 → 2026)
   - Fixed analytics export test using invalid report type
   - All 370 tests now passing with 0 failures
+- ✅ **Knowledge Base Documents** - Upload documents for Aria to reference in answers
+  - DocumentCategory, Document, DocumentChunk models with multi-tenant isolation
+  - PDF text extraction (pypdf) and plain text support
+  - Chunked embedding pipeline (text-embedding-3-small) for RAG search
+  - 10 views: list, upload, detail, edit, delete, download, category CRUD
+  - 9 templates with dark theme matching existing design system
+  - Aria integration: document chunks searched alongside interactions, cited in answers
+  - Sidebar "Knowledge Base" nav item with book icon
+  - Admin/owner permissions for upload/edit/delete, all members can view and query
+  - 24 new tests (model, processing, search, view tests) — 394 total passing
 - 📋 Create og-image.png and twitter-card.png (pending design)
 - 📋 Submit sitemap to Google Search Console (manual step)
 - 📋 Write first blog posts (content creation)
@@ -272,6 +282,12 @@ Aria is the AI assistant that powers the chat interface. She can handle many typ
 - "What are the most common prayer requests?"
 - "Which volunteers have birthdays this month?"
 - "Team summary for November"
+
+### Knowledge Base Documents
+- **Procedural Questions**: "How do I turn on the sound board?" / "What's the lighting setup procedure?"
+- **Reference Lookups**: "What's our onboarding checklist?" / "Show me the volunteer guidelines"
+- **Citations**: Aria cites the source document title when answering from uploaded documents
+- Admins/owners upload PDF or TXT documents at `/documents/upload/`; Aria searches them alongside interactions
 
 ### Smart Disambiguation
 When queries are ambiguous, Aria asks for clarification:
@@ -597,6 +613,9 @@ Aria understands many date formats:
 | `BetaRequest` | Beta access requests with admin approval workflow |
 | `AuditLog` | Admin action audit trail with IP tracking and details |
 | `TOTPDevice` | TOTP 2FA devices with backup codes per user |
+| `DocumentCategory` | Knowledge Base document categories per organization |
+| `Document` | Uploaded documents (PDF/TXT) with extracted text and metadata |
+| `DocumentChunk` | Chunked document text with embeddings for semantic search |
 
 ---
 
@@ -673,6 +692,18 @@ path('settings/security/2fa/verify-setup/', views.totp_verify_setup, name='totp_
 path('settings/security/2fa/disable/', views.totp_disable, name='totp_disable')
 path('login/2fa/', views.totp_login_verify, name='totp_login_verify')
 
+# Knowledge Base
+path('documents/', views.document_list, name='document_list')
+path('documents/upload/', views.document_upload, name='document_upload')
+path('documents/<int:pk>/', views.document_detail, name='document_detail')
+path('documents/<int:pk>/edit/', views.document_edit, name='document_edit')
+path('documents/<int:pk>/delete/', views.document_delete, name='document_delete')
+path('documents/<int:pk>/download/', views.document_download, name='document_download')
+path('documents/categories/', views.document_category_list, name='document_category_list')
+path('documents/categories/create/', views.document_category_create, name='document_category_create')
+path('documents/categories/<int:pk>/edit/', views.document_category_edit, name='document_category_edit')
+path('documents/categories/<int:pk>/delete/', views.document_category_delete, name='document_category_delete')
+
 # Platform Admin - Audit Log
 path('platform-admin/audit-log/', admin_views.admin_audit_log, name='admin_audit_log')
 ```
@@ -718,7 +749,8 @@ CHAgent/
 │   ├── admin_views.py        # Platform admin views (incl. beta requests, audit log)
 │   ├── urls.py               # URL routing
 │   ├── sitemaps.py           # SEO sitemap for static/resource pages
-│   ├── embeddings.py         # Vector search
+│   ├── embeddings.py         # Vector search (interactions + document chunks)
+│   ├── document_processing.py # Document text extraction and chunking for Knowledge Base
 │   ├── middleware.py         # TenantMiddleware, TwoFactorMiddleware, SecurityHeadersMiddleware
 │   ├── context_processors.py # Organization template context
 │   ├── notifications.py      # Push notification service
@@ -747,6 +779,16 @@ CHAgent/
 │       │   ├── totp_setup.html      # 2FA QR code setup
 │       │   ├── totp_backup_codes.html # Backup codes display
 │       │   └── totp_login.html      # 2FA login verification
+│       ├── documents/               # Knowledge Base templates
+│       │   ├── document_list.html   # Document grid with search/filter
+│       │   ├── document_upload.html # Upload form (PDF/TXT)
+│       │   ├── document_detail.html # Document metadata and text preview
+│       │   ├── document_edit.html   # Edit document metadata
+│       │   ├── document_confirm_delete.html
+│       │   ├── category_list.html   # Category management
+│       │   ├── category_create.html
+│       │   ├── category_edit.html
+│       │   └── category_confirm_delete.html
 │       ├── settings/security.html   # Security settings (2FA)
 │       └── onboarding/
 │           ├── signup.html           # Beta request form
@@ -754,6 +796,7 @@ CHAgent/
 │           └── beta_signup.html      # Approved user signup
 ├── tests/
 │   ├── test_beta_request.py  # Beta system & security tests (26 tests)
+│   ├── test_documents.py     # Knowledge Base document tests (24 tests)
 │   ├── test_2fa.py           # Two-factor authentication tests (13 tests)
 │   └── test_audit_log.py     # Audit log model & integration tests (9 tests)
 ├── docs/plans/               # Design docs & implementation plans
@@ -1528,6 +1571,7 @@ The following features have been implemented:
 - [x] **Audit Logging**: Admin action audit trail with IP tracking and filterable dashboard
 - [x] **Error Monitoring**: Sentry SDK integration with PII protection and custom error pages
 - [x] **Dependency Scanning**: Dependabot configuration for weekly vulnerability scanning
+- [x] **Knowledge Base**: Document upload with RAG search, Aria integration, and citation support
 
 ---
 
