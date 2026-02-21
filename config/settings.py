@@ -185,6 +185,15 @@ if _static_dir.exists():
 else:
     STATICFILES_DIRS = []
 
+
+# Media files (user-uploaded content)
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
+
+# File upload limits (10 MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
 # WhiteNoise configuration - use simpler storage that doesn't require manifest
 STORAGES = {
     'default': {
