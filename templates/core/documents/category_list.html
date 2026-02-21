@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Document Categories{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <a href="{% url 'document_list' %}" class="text-gray-400 hover:text-ch-gold transition text-sm">&larr; Back to Knowledge Base</a>
+            <h2 class="font-display text-2xl mt-2">Document Categories</h2>
+        </div>
+        <a href="{% url 'document_category_create' %}" class="px-4 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+            + New Category
+        </a>
+    </div>
+
+    {% if categories %}
+    <div class="space-y-3">
+        {% for cat in categories %}
+        <div class="bg-ch-dark rounded-lg p-4 flex justify-between items-center">
+            <div>
+                <h3 class="font-medium text-white">{{ cat.name }}</h3>
+                {% if cat.description %}
+                <p class="text-sm text-gray-400 mt-1">{{ cat.description }}</p>
+                {% endif %}
+                <span class="text-xs text-gray-500">{{ cat.doc_count }} document{{ cat.doc_count|pluralize }}</span>
+            </div>
+            <div class="flex gap-2">
+                <a href="{% url 'document_category_edit' cat.pk %}" class="px-3 py-1.5 bg-ch-gray text-gray-300 rounded text-sm hover:bg-gray-600 transition">Edit</a>
+                <a href="{% url 'document_category_delete' cat.pk %}" class="px-3 py-1.5 bg-red-900/50 text-red-300 rounded text-sm hover:bg-red-900 transition">Delete</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-ch-dark rounded-lg p-12 text-center">
+        <p class="text-gray-400 mb-4">No categories yet. Create categories to organize your documents.</p>
+        <a href="{% url 'document_category_create' %}" class="px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition inline-block">
+            Create First Category
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

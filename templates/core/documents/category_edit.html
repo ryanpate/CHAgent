@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit {{ category.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="mb-6">
+        <a href="{% url 'document_category_list' %}" class="text-gray-400 hover:text-ch-gold transition">&larr; Back to Categories</a>
+    </div>
+
+    <h2 class="font-display text-2xl mb-6">Edit Category</h2>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <div>
+            <label class="block text-sm text-gray-400 mb-2">Name <span class="text-red-400">*</span></label>
+            <input type="text" name="name" value="{{ category.name }}" required
+                   class="w-full bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold transition">
+        </div>
+
+        <div>
+            <label class="block text-sm text-gray-400 mb-2">Description</label>
+            <textarea name="description" rows="3"
+                      class="w-full bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold transition">{{ category.description }}</textarea>
+        </div>
+
+        <button type="submit" class="w-full px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+            Save Changes
+        </button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ document.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="mb-6">
+        <a href="{% url 'document_list' %}" class="text-gray-400 hover:text-ch-gold transition">&larr; Back to Knowledge Base</a>
+    </div>
+
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h2 class="font-display text-2xl">{{ document.title }}</h2>
+                {% if document.description %}
+                <p class="text-gray-400 mt-2">{{ document.description }}</p>
+                {% endif %}
+            </div>
+            {% if is_admin %}
+            <div class="flex gap-2">
+                <a href="{% url 'document_edit' document.pk %}" class="px-3 py-1.5 bg-ch-gray text-gray-300 rounded-lg text-sm hover:bg-gray-600 transition">Edit</a>
+                <a href="{% url 'document_delete' document.pk %}" class="px-3 py-1.5 bg-red-900/50 text-red-300 rounded-lg text-sm hover:bg-red-900 transition">Delete</a>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+                <span class="text-gray-500">Type</span>
+                <p class="text-gray-300">{{ document.file_type|upper }}</p>
+            </div>
+            <div>
+                <span class="text-gray-500">Size</span>
+                <p class="text-gray-300">{{ document.file_size|filesizeformat }}</p>
+            </div>
+            {% if document.page_count %}
+            <div>
+                <span class="text-gray-500">Pages</span>
+                <p class="text-gray-300">{{ document.page_count }}</p>
+            </div>
+            {% endif %}
+            <div>
+                <span class="text-gray-500">Chunks</span>
+                <p class="text-gray-300">{{ chunk_count }}</p>
+            </div>
+            {% if document.category %}
+            <div>
+                <span class="text-gray-500">Category</span>
+                <p class="text-ch-gold">{{ document.category.name }}</p>
+            </div>
+            {% endif %}
+            <div>
+                <span class="text-gray-500">Uploaded by</span>
+                <p class="text-gray-300">{{ document.uploaded_by.display_name|default:document.uploaded_by.username }}</p>
+            </div>
+            <div>
+                <span class="text-gray-500">Date</span>
+                <p class="text-gray-300">{{ document.created_at|date:"M j, Y" }}</p>
+            </div>
+            <div>
+                <span class="text-gray-500">Status</span>
+                {% if document.is_processed %}
+                <p class="text-green-400">Processed</p>
+                {% elif document.processing_error %}
+                <p class="text-red-400">Error</p>
+                {% else %}
+                <p class="text-yellow-400">Processing...</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if document.processing_error %}
+        <div class="mt-4 p-3 bg-red-900/30 border border-red-800 rounded-lg text-sm text-red-300">
+            {{ document.processing_error }}
+        </div>
+        {% endif %}
+
+        <div class="mt-4">
+            <a href="{% url 'document_download' document.pk %}" class="inline-flex items-center gap-2 px-4 py-2 bg-ch-gray text-gray-300 rounded-lg hover:bg-gray-600 transition text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Download Original
+            </a>
+        </div>
+    </div>
+
+    {% if document.extracted_text %}
+    <div class="bg-ch-dark rounded-lg p-6">
+        <details>
+            <summary class="cursor-pointer text-gray-400 hover:text-white transition font-medium">
+                Extracted Text Preview
+            </summary>
+            <pre class="mt-4 text-sm text-gray-300 whitespace-pre-wrap bg-ch-gray rounded-lg p-4 max-h-96 overflow-y-auto">{{ document.extracted_text }}</pre>
+        </details>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

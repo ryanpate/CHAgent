@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block title %}Knowledge Base{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h2 class="font-display text-2xl">Knowledge Base</h2>
+            <p class="text-sm text-gray-400 mt-1">{{ documents|length }} document{{ documents|length|pluralize }}</p>
+        </div>
+        {% if is_admin %}
+        <div class="flex gap-2">
+            <a href="{% url 'document_category_list' %}" class="px-4 py-2 bg-ch-gray text-gray-300 rounded-lg font-medium hover:bg-gray-600 transition">
+                Categories
+            </a>
+            <a href="{% url 'document_upload' %}" class="px-4 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                + Upload Document
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Search and Filter -->
+    <form method="get" class="mb-6">
+        <div class="flex gap-4">
+            <input type="text" name="q" value="{{ search_query }}"
+                   placeholder="Search documents..."
+                   class="flex-1 bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold transition">
+            <select name="category" onchange="this.form.submit()"
+                    class="bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold transition">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                <option value="{{ cat.slug }}" {% if selected_category == cat.slug %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="px-6 py-3 bg-ch-gray rounded-lg hover:bg-ch-gold hover:text-black transition">
+                Search
+            </button>
+        </div>
+    </form>
+
+    {% if documents %}
+    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {% for doc in documents %}
+        <a href="{% url 'document_detail' doc.pk %}" class="bg-ch-dark rounded-lg p-5 hover:bg-ch-gray transition block">
+            <div class="flex items-start gap-3 mb-3">
+                {% if doc.file_type == 'pdf' %}
+                <svg class="w-8 h-8 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                </svg>
+                {% else %}
+                <svg class="w-8 h-8 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                {% endif %}
+                <div class="min-w-0">
+                    <h3 class="font-medium text-white truncate">{{ doc.title }}</h3>
+                    {% if doc.description %}
+                    <p class="text-sm text-gray-400 mt-1 line-clamp-2">{{ doc.description }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex items-center gap-3 text-xs text-gray-500">
+                {% if doc.category %}
+                <span class="bg-ch-gray px-2 py-0.5 rounded text-gray-400">{{ doc.category.name }}</span>
+                {% endif %}
+                <span>{{ doc.file_type|upper }}</span>
+                {% if doc.page_count %}
+                <span>{{ doc.page_count }} page{{ doc.page_count|pluralize }}</span>
+                {% endif %}
+                <span>{{ doc.created_at|date:"M j, Y" }}</span>
+                {% if not doc.is_processed %}
+                <span class="text-yellow-400">Processing...</span>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-ch-dark rounded-lg p-12 text-center">
+        <svg class="w-16 h-16 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+        <h3 class="text-lg text-gray-400 mb-2">No documents yet</h3>
+        <p class="text-gray-500 mb-4">Upload documents so {{ organization.ai_assistant_name|default:"Aria" }} can reference them when answering questions.</p>
+        {% if is_admin %}
+        <a href="{% url 'document_upload' %}" class="px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition inline-block">
+            Upload First Document
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
