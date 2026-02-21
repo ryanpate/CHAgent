@@ -103,3 +103,53 @@ def search_similar(query_embedding: list[float], limit: int = 10):
 
     # Return top N interactions
     return [item[0] for item in scored_interactions[:limit]]
+
+
+def search_similar_documents(query_embedding: list[float], organization, limit: int = 5, threshold: float = 0.3) -> list[dict]:
+    """
+    Find document chunks most similar to query, scoped to organization.
+
+    Args:
+        query_embedding: The embedding vector to search against.
+        organization: Organization instance to scope the search.
+        limit: Maximum number of results to return.
+        threshold: Minimum cosine similarity score to include.
+
+    Returns:
+        List of dicts with 'content', 'document_title', 'document_id',
+        'category_name', 'similarity', and 'chunk_index'.
+    """
+    from .models import DocumentChunk
+    import math
+
+    def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
+        if not vec1 or not vec2 or len(vec1) != len(vec2):
+            return 0.0
+        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        norm1 = math.sqrt(sum(a * a for a in vec1))
+        norm2 = math.sqrt(sum(b * b for b in vec2))
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+        return dot_product / (norm1 * norm2)
+
+    chunks = DocumentChunk.objects.filter(
+        organization=organization,
+        embedding_json__isnull=False,
+        document__is_processed=True,
+    ).select_related('document', 'document__category')
+
+    scored = []
+    for chunk in chunks:
+        similarity = cosine_similarity(query_embedding, chunk.embedding_json)
+        if similarity >= threshold:
+            scored.append({
+                'content': chunk.content,
+                'document_title': chunk.document.title,
+                'document_id': chunk.document.id,
+                'category_name': chunk.document.category.name if chunk.document.category else '',
+                'similarity': similarity,
+                'chunk_index': chunk.chunk_index,
+            })
+
+    scored.sort(key=lambda x: x['similarity'], reverse=True)
+    return scored[:limit]
