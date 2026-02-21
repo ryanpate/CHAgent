@@ -3417,3 +3417,86 @@ class TOTPDevice(models.Model):
             name=self.user.email,
             issuer_name='Aria Church',
         )
+
+
+# =============================================================================
+# Knowledge Base - Document Upload & Search
+# =============================================================================
+
+class DocumentCategory(models.Model):
+    """Organizes uploaded documents into categories per organization."""
+    name = models.CharField(max_length=100)
+    slug = models.SlugField()
+    description = models.TextField(blank=True)
+    organization = models.ForeignKey(
+        'Organization', on_delete=models.CASCADE, related_name='document_categories'
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['organization', 'slug']
+        ordering = ['name']
+        verbose_name_plural = 'document categories'
+
+    def __str__(self):
+        return self.name
+
+
+class Document(models.Model):
+    """An uploaded document that Aria can reference when answering questions."""
+    FILE_TYPE_CHOICES = [
+        ('pdf', 'PDF'),
+        ('txt', 'Plain Text'),
+    ]
+
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    file = models.FileField(upload_to='documents/%Y/%m/')
+    category = models.ForeignKey(
+        DocumentCategory, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='documents'
+    )
+    organization = models.ForeignKey(
+        'Organization', on_delete=models.CASCADE, related_name='documents'
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True
+    )
+    file_type = models.CharField(max_length=10, choices=FILE_TYPE_CHOICES)
+    file_size = models.IntegerField(default=0)
+    page_count = models.IntegerField(default=0)
+    extracted_text = models.TextField(blank=True)
+    is_processed = models.BooleanField(default=False)
+    processing_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title
+
+
+class DocumentChunk(models.Model):
+    """A chunk of document text with its embedding for semantic search."""
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, related_name='chunks'
+    )
+    chunk_index = models.IntegerField()
+    content = models.TextField()
+    embedding_json = models.JSONField(null=True, blank=True)
+    page_number = models.IntegerField(null=True, blank=True)
+    organization = models.ForeignKey(
+        'Organization', on_delete=models.CASCADE, related_name='document_chunks'
+    )
+
+    class Meta:
+        ordering = ['document', 'chunk_index']
+        unique_together = ['document', 'chunk_index']
+
+    def __str__(self):
+        return f'{self.document.title} - Chunk {self.chunk_index}'
