@@ -81,12 +81,14 @@
         <!-- Header -->
         <header class="bg-ch-dark border-b border-ch-gray py-4 px-6">
             <div class="max-w-6xl mx-auto flex items-center justify-between">
-                <a href="/" class="text-2xl font-bold text-ch-gold">Aria</a>
-                <span class="bg-ch-gold/20 text-ch-gold text-xs font-semibold px-2 py-0.5 rounded-full ml-2">BETA</span>
+                <div class="flex items-center gap-2">
+                    <a href="/" class="text-2xl font-bold text-ch-gold">Aria</a>
+                    <span class="bg-ch-gold/20 text-ch-gold text-xs font-semibold px-2 py-0.5 rounded-full">BETA</span>
+                </div>
                 <div class="flex items-center gap-4">
                     <span class="text-gray-400 text-sm hidden sm:inline">Worship Arts Team Portal</span>
                     <a href="{% url 'login' %}"
-                       class="bg-ch-gray hover:bg-ch-gray/80 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors border border-ch-gray hover:border-ch-gold/50">
+                       class="bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-2.5 px-5 rounded-lg text-sm transition-colors">
                         Sign In
                     </a>
                 </div>
