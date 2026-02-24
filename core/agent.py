@@ -2142,6 +2142,7 @@ def get_system_prompt(assistant_name='Aria', organization_name=None):
 - If lyrics or chord chart content is included in the context data, always display it directly rather than pointing to download links.
 - IMPORTANT: If the context indicates that lyrics/chord content could NOT be extracted (e.g., "[NOTE: No lyrics or chord chart text content could be extracted...]"), clearly tell the user that the lyrics are not available in a readable text format in Planning Center. Do NOT offer download links as an alternative - just explain that the files are likely image-based PDFs that cannot be read as text and suggest they check the song directly in Planning Center or that the worship team may need to add text-based lyrics to the song in PCO.
 - When answering from uploaded Knowledge Base documents, always cite the document title. Example: 'According to the Sound Board Setup Guide, the first step is...'
+- When referencing images from the Knowledge Base, include the image reference marker exactly as provided (e.g., [IMAGE_REF:123]). Only include image references when the image is directly relevant to the user's question.
 - Only use document content that is directly relevant to the user's question.
 
 ## Data Extraction:
@@ -3400,6 +3401,28 @@ def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None, ser
             return f"\n[SERVICE PLAN: No service plan found for '{date_str}'.]\n"
 
 
+def _build_image_context(image_results: list[dict]) -> str:
+    """Build context string from image search results for the AI prompt."""
+    if not image_results:
+        return ''
+
+    image_context_parts = []
+    for result in image_results:
+        part = (
+            f'From "{result["document_title"]}" (image):\n'
+            f'Description: {result["description"]}\n'
+        )
+        if result.get('ocr_text'):
+            part += f'Text in image: {result["ocr_text"]}\n'
+        part += f'[IMAGE_REF:{result["image_id"]}]'
+        image_context_parts.append(part)
+
+    return (
+        "\n[KNOWLEDGE BASE IMAGES]\n"
+        + "\n\n---\n\n".join(image_context_parts)
+    )
+
+
 def query_agent(question: str, user, session_id: str, organization=None) -> str:
     """
     Answer a question using RAG (Retrieval Augmented Generation):
@@ -4375,6 +4398,16 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
                     )
                     context = doc_context + "\n\n" + context
                     logger.info(f"Added {len(doc_context_parts)} document chunks to context")
+
+            # Search Knowledge Base images
+            from .embeddings import search_similar_images
+            image_results = search_similar_images(
+                question_embedding, organization, limit=3, threshold=0.3
+            )
+            if image_results:
+                image_context = _build_image_context(image_results)
+                context = image_context + "\n\n" + context
+                logger.info(f"Added {len(image_results)} document images to context")
         except Exception as e:
             logger.error(f"Error searching documents: {e}")
 

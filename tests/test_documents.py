@@ -708,3 +708,46 @@ class TestSearchSimilarImages:
         query_embedding = [0.0] + [1.0] + [0.0] * 1534
         results = search_similar_images(query_embedding, org_alpha, limit=3, threshold=0.3)
         assert len(results) == 0
+
+
+@pytest.mark.django_db
+class TestAgentImageIntegration:
+    def test_image_context_built_correctly(self):
+        """Verify that _build_image_context creates proper context with IMAGE_REF tokens."""
+        from core.agent import _build_image_context
+
+        image_results = [{
+            'description': 'A stage plot showing positions',
+            'ocr_text': 'Monitor 1',
+            'image_url': '/media/document_images/2026/02/stage.png',
+            'document_title': 'Stage Guide',
+            'document_id': 1,
+            'image_id': 42,
+            'similarity': 0.85,
+        }]
+
+        context = _build_image_context(image_results)
+
+        assert '[IMAGE_REF:42]' in context
+        assert 'Stage Guide' in context
+        assert 'stage plot' in context.lower()
+        assert 'Monitor 1' in context
+        assert '[KNOWLEDGE BASE IMAGES]' in context
+
+    def test_image_context_empty_results(self):
+        from core.agent import _build_image_context
+        assert _build_image_context([]) == ''
+
+    def test_image_context_no_ocr_text(self):
+        from core.agent import _build_image_context
+        result = _build_image_context([{
+            'description': 'A photo',
+            'ocr_text': '',
+            'image_url': '/media/img.png',
+            'document_title': 'Photos',
+            'document_id': 1,
+            'image_id': 10,
+            'similarity': 0.7,
+        }])
+        assert 'Text in image' not in result
+        assert '[IMAGE_REF:10]' in result
