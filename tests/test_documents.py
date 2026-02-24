@@ -581,3 +581,55 @@ class TestProcessDocumentImages:
         img = images.first()
         assert img.description == ''
         assert 'API rate limit' in img.processing_error
+
+
+@pytest.mark.django_db
+class TestStandaloneImageUpload:
+    @patch('core.document_processing.describe_image_with_vision')
+    @patch('core.document_processing.get_embedding')
+    def test_upload_png_creates_document_and_image(self, mock_embed, mock_describe, client_alpha, org_alpha):
+        from core.models import DocumentImage
+
+        mock_describe.return_value = {'description': 'A stage layout', 'ocr_text': ''}
+        mock_embed.return_value = [0.1] * 1536
+
+        fake_img = SimpleUploadedFile('stage.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        response = client_alpha.post('/documents/upload/', {
+            'file': fake_img,
+            'title': 'Stage Layout',
+            'description': 'Our current stage layout',
+        })
+
+        assert response.status_code == 302
+        doc = Document.objects.filter(title='Stage Layout').first()
+        assert doc is not None
+        assert doc.file_type == 'image'
+        images = DocumentImage.objects.filter(document=doc)
+        assert images.count() == 1
+        assert images.first().source_type == 'standalone'
+
+    def test_upload_unsupported_type_rejected(self, client_alpha):
+        fake_file = SimpleUploadedFile('doc.docx', b'fake', content_type='application/vnd.openxmlformats')
+        response = client_alpha.post('/documents/upload/', {'file': fake_file})
+
+        assert response.status_code == 200
+        assert Document.objects.count() == 0
+
+    @patch('core.document_processing.describe_image_with_vision')
+    @patch('core.document_processing.get_embedding')
+    def test_upload_jpg_accepted(self, mock_embed, mock_describe, client_alpha):
+        from core.models import DocumentImage
+
+        mock_describe.return_value = {'description': 'A photo', 'ocr_text': ''}
+        mock_embed.return_value = [0.1] * 1536
+
+        fake_img = SimpleUploadedFile('photo.jpg', b'\xff\xd8\xff' + b'\x00' * 100, content_type='image/jpeg')
+        response = client_alpha.post('/documents/upload/', {
+            'file': fake_img,
+            'title': 'Team Photo',
+        })
+
+        assert response.status_code == 302
+        doc = Document.objects.filter(title='Team Photo').first()
+        assert doc is not None
+        assert doc.file_type == 'image'

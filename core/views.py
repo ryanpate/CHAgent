@@ -4976,8 +4976,10 @@ def document_upload(request):
             file_type = 'pdf'
         elif name_lower.endswith('.txt'):
             file_type = 'txt'
+        elif name_lower.endswith(('.png', '.jpg', '.jpeg')):
+            file_type = 'image'
         else:
-            messages.error(request, 'Only PDF and TXT files are supported.')
+            messages.error(request, 'Only PDF, TXT, PNG, JPG, and JPEG files are supported.')
             return render(request, 'core/documents/document_upload.html', {'categories': categories})
 
         title = request.POST.get('title', '').strip() or uploaded_file.name

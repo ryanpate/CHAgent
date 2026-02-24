@@ -108,6 +108,78 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[dict
     return chunks
 
 
+def _process_standalone_image(document) -> None:
+    """
+    Process a standalone image upload (PNG, JPG, JPEG).
+
+    Creates a DocumentImage record pointing at the already-saved file,
+    describes the image with Claude Vision, generates an embedding,
+    and stores the description in Document.extracted_text.
+
+    Args:
+        document: A Document model instance with file_type == 'image'.
+    """
+    from .models import DocumentImage
+
+    try:
+        # Get image dimensions via Pillow (may fail for corrupt/fake bytes)
+        width, height = 0, 0
+        try:
+            from PIL import Image
+            img = Image.open(document.file.path)
+            width, height = img.size
+        except Exception:
+            pass
+
+        # Create DocumentImage referencing the already-saved file
+        doc_image = DocumentImage(
+            document=document,
+            organization=document.organization,
+            image_file=document.file.name,
+            original_filename=document.file.name.rsplit('/', 1)[-1],
+            source_type='standalone',
+            width=width,
+            height=height,
+        )
+
+        # Describe with Vision
+        vision_result = describe_image_with_vision(
+            document.file.path,
+            document_context=document.title,
+        )
+
+        doc_image.description = vision_result.get('description', '')
+        doc_image.ocr_text = vision_result.get('ocr_text', '')
+
+        if 'error' in vision_result:
+            doc_image.processing_error = vision_result['error']
+
+        # Embed combined description + OCR text
+        combined_text = f'{doc_image.description} {doc_image.ocr_text}'.strip()
+        if combined_text:
+            doc_image.embedding_json = get_embedding(combined_text)
+
+        doc_image.save()
+
+        # Store description in Document.extracted_text for detail page
+        document.extracted_text = combined_text
+        document.is_processed = True
+        document.processing_error = ''
+        document.save()
+
+        logger.info(
+            f'Processed standalone image "{document.title}" '
+            f'({width}x{height})'
+        )
+
+    except Exception as e:
+        logger.error(f'Error processing standalone image "{document.title}": {e}')
+        document.processing_error = str(e)
+        document.is_processed = False
+        document.save()
+        raise
+
+
 def process_document(document) -> None:
     """
     Full processing pipeline for an uploaded document:
@@ -123,6 +195,11 @@ def process_document(document) -> None:
     from .models import DocumentChunk
 
     try:
+        # Standalone images use a separate pipeline
+        if document.file_type == 'image':
+            _process_standalone_image(document)
+            return
+
         document.file.seek(0)
         extracted_text, page_count = extract_text_from_file(
             document.file, document.file_type
