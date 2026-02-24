@@ -438,6 +438,7 @@ class TestExtractImagesFromPdf:
 
 
 from unittest.mock import patch, MagicMock
+from core.document_processing import process_document
 
 
 @pytest.mark.django_db
@@ -503,3 +504,80 @@ class TestDescribeImageWithVision:
         assert result['description'] == ''
         assert result['ocr_text'] == ''
         assert 'error' in result
+
+
+@pytest.mark.django_db
+class TestProcessDocumentImages:
+    @patch('core.document_processing.describe_image_with_vision')
+    @patch('core.document_processing.get_embedding')
+    @patch('core.document_processing.extract_images_from_pdf')
+    def test_process_pdf_with_images(self, mock_extract, mock_embed, mock_describe, org_alpha, user_alpha_owner, tmp_path):
+        from core.models import DocumentImage
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        fake_pdf = SimpleUploadedFile('test.pdf', b'%PDF-fake-content', content_type='application/pdf')
+        doc = Document.objects.create(
+            title='Stage Guide', file=fake_pdf,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='pdf', file_size=500,
+        )
+
+        mock_extract.return_value = [{
+            'image_bytes': b'\x89PNG\r\n\x1a\n' + b'\x00' * 100,
+            'page_number': 2,
+            'name': 'stage_plot.png',
+            'width': 800,
+            'height': 600,
+        }]
+        mock_describe.return_value = {
+            'description': 'A stage plot diagram',
+            'ocr_text': 'Monitor 1',
+        }
+        mock_embed.return_value = [0.1] * 1536
+
+        from core.document_processing import _process_document_images
+        _process_document_images(doc)
+
+        images = DocumentImage.objects.filter(document=doc)
+        assert images.count() == 1
+        img = images.first()
+        assert img.description == 'A stage plot diagram'
+        assert img.ocr_text == 'Monitor 1'
+        assert img.page_number == 2
+        assert img.width == 800
+        assert img.height == 600
+        assert img.source_type == 'pdf_extract'
+        assert img.embedding_json == [0.1] * 1536
+
+    @patch('core.document_processing.describe_image_with_vision')
+    @patch('core.document_processing.get_embedding')
+    @patch('core.document_processing.extract_images_from_pdf')
+    def test_process_pdf_vision_failure_still_saves_image(self, mock_extract, mock_embed, mock_describe, org_alpha, user_alpha_owner):
+        from core.models import DocumentImage
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        fake_pdf = SimpleUploadedFile('test.pdf', b'%PDF-fake', content_type='application/pdf')
+        doc = Document.objects.create(
+            title='Guide', file=fake_pdf,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='pdf', file_size=100,
+        )
+
+        mock_extract.return_value = [{
+            'image_bytes': b'\x89PNG\r\n\x1a\n' + b'\x00' * 100,
+            'page_number': 1, 'name': 'img.png',
+            'width': 400, 'height': 300,
+        }]
+        mock_describe.return_value = {
+            'description': '', 'ocr_text': '', 'error': 'API rate limit',
+        }
+        mock_embed.return_value = None
+
+        from core.document_processing import _process_document_images
+        _process_document_images(doc)
+
+        images = DocumentImage.objects.filter(document=doc)
+        assert images.count() == 1
+        img = images.first()
+        assert img.description == ''
+        assert 'API rate limit' in img.processing_error

@@ -3,9 +3,12 @@ Document processing module for the Knowledge Base feature.
 Handles text extraction from uploaded files and chunking for embedding.
 """
 import logging
+from io import BytesIO
 from typing import BinaryIO
 
 import anthropic
+
+from .embeddings import get_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -112,12 +115,12 @@ def process_document(document) -> None:
     2. Chunk text
     3. Generate embeddings for each chunk
     4. Save chunks to database
+    5. Extract and process images (PDFs only)
 
     Args:
         document: A Document model instance.
     """
     from .models import DocumentChunk
-    from .embeddings import get_embedding
 
     try:
         document.file.seek(0)
@@ -156,12 +159,127 @@ def process_document(document) -> None:
             f'{len(chunks)} chunks, {page_count} pages'
         )
 
+        # Process images for PDFs (after text processing so failures don't block text)
+        if document.file_type == 'pdf':
+            try:
+                _process_document_images(document)
+            except Exception as img_err:
+                logger.error(
+                    f'Image processing failed for "{document.title}": {img_err}'
+                )
+
     except Exception as e:
         logger.error(f'Error processing document "{document.title}": {e}')
         document.processing_error = str(e)
         document.is_processed = False
         document.save()
         raise
+
+
+def _process_document_images(document) -> None:
+    """
+    Extract images from a PDF document, describe them with Vision, and save as DocumentImage records.
+
+    Only runs for documents with file_type == 'pdf'. Each extracted image is:
+    1. Normalized to PNG or JPEG via Pillow
+    2. Saved as a DocumentImage record
+    3. Described using Claude Vision (description + OCR text)
+    4. Embedded for semantic search
+
+    Image processing errors are captured per-image and do not block other images.
+
+    Args:
+        document: A Document model instance with file_type == 'pdf'.
+    """
+    from .models import DocumentImage
+    from django.core.files.base import ContentFile
+    from PIL import Image
+
+    if document.file_type != 'pdf':
+        return
+
+    images = extract_images_from_pdf(document.file.path)
+
+    for img_data in images:
+        try:
+            raw_bytes = img_data['image_bytes']
+            page_number = img_data.get('page_number')
+            original_name = img_data.get('name', 'image')
+            width = img_data.get('width', 0)
+            height = img_data.get('height', 0)
+
+            # Normalize image to PNG or JPEG via Pillow
+            try:
+                pil_image = Image.open(BytesIO(raw_bytes))
+                output_buf = BytesIO()
+                if pil_image.mode in ('RGBA', 'LA', 'P'):
+                    pil_image.save(output_buf, format='PNG')
+                    ext = 'png'
+                else:
+                    pil_image.save(output_buf, format='JPEG')
+                    ext = 'jpg'
+                image_content = output_buf.getvalue()
+            except Exception:
+                # If Pillow can't process, save raw bytes as-is with .png extension
+                image_content = raw_bytes
+                ext = 'png'
+
+            # Build filename
+            base_name = original_name.rsplit('.', 1)[0] if '.' in original_name else original_name
+            filename = f'doc{document.pk}_p{page_number}_{base_name}.{ext}'
+
+            # Create DocumentImage record
+            doc_image = DocumentImage(
+                document=document,
+                organization=document.organization,
+                original_filename=original_name,
+                source_type='pdf_extract',
+                page_number=page_number,
+                width=width,
+                height=height,
+            )
+
+            # Save the image file
+            doc_image.image_file.save(filename, ContentFile(image_content), save=False)
+
+            # Describe with Vision
+            vision_result = describe_image_with_vision(
+                doc_image.image_file.path,
+                document_context=document.title,
+            )
+
+            doc_image.description = vision_result.get('description', '')
+            doc_image.ocr_text = vision_result.get('ocr_text', '')
+
+            if 'error' in vision_result:
+                doc_image.processing_error = vision_result['error']
+
+            # Embed combined description + OCR text for semantic search
+            combined_text = f'{doc_image.description} {doc_image.ocr_text}'.strip()
+            if combined_text and not doc_image.processing_error:
+                doc_image.embedding_json = get_embedding(combined_text)
+            elif combined_text:
+                # Still try to embed even with vision error, but don't fail
+                try:
+                    embedding = get_embedding(combined_text)
+                    if embedding:
+                        doc_image.embedding_json = embedding
+                except Exception:
+                    pass
+
+            doc_image.save()
+
+            logger.info(
+                f'Processed image "{original_name}" from page {page_number} '
+                f'of document "{document.title}"'
+            )
+
+        except Exception as e:
+            logger.error(
+                f'Error processing image "{img_data.get("name", "unknown")}" '
+                f'from document "{document.title}": {e}'
+            )
+            continue
 
 
 def extract_images_from_pdf(pdf_path: str) -> list[dict]:
