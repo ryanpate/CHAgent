@@ -31,6 +31,38 @@ from .volunteer_matching import VolunteerMatcher, MatchType
 import re
 
 
+def render_image_refs(content: str, organization) -> str:
+    """Replace [IMAGE_REF:id] tokens with HTML img tags."""
+    from .models import DocumentImage
+
+    def replace_match(match):
+        image_id = int(match.group(1))
+        try:
+            image = DocumentImage.objects.get(
+                id=image_id,
+                organization=organization,
+            )
+            alt_text = (image.description[:100] + '...') if len(image.description) > 100 else image.description
+            doc_title = image.document.title if image.document else 'Uploaded image'
+            return (
+                f'<div class="my-3">'
+                f'<a href="{image.image_file.url}" target="_blank">'
+                f'<img src="{image.image_file.url}" '
+                f'alt="{alt_text}" '
+                f'class="rounded-lg max-w-sm max-h-64 cursor-pointer hover:opacity-90" '
+                f'loading="lazy">'
+                f'</a>'
+                f'<p class="text-xs text-gray-400 mt-1">'
+                f'From: {doc_title}'
+                f'</p>'
+                f'</div>'
+            )
+        except DocumentImage.DoesNotExist:
+            return ''
+
+    return re.sub(r'\[IMAGE_REF:(\d+)\]', replace_match, content)
+
+
 def get_org(request):
     """Helper to get organization from request, with fallback for migration period."""
     return getattr(request, 'organization', None)

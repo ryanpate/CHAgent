@@ -751,3 +751,88 @@ class TestAgentImageIntegration:
         }])
         assert 'Text in image' not in result
         assert '[IMAGE_REF:10]' in result
+
+
+@pytest.mark.django_db
+class TestRenderImageRefs:
+    def test_replaces_image_ref_with_html(self, org_alpha, user_alpha_owner):
+        from core.models import DocumentImage
+        from core.views import render_image_refs
+
+        fake_file = SimpleUploadedFile('test.pdf', b'%PDF', content_type='application/pdf')
+        doc = Document.objects.create(
+            title='Stage Guide', file=fake_file,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='pdf', file_size=100, is_processed=True,
+        )
+        fake_img = SimpleUploadedFile('stage.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        img = DocumentImage.objects.create(
+            document=doc, organization=org_alpha,
+            image_file=fake_img, source_type='pdf_extract',
+            description='A stage plot diagram',
+        )
+
+        content = f'Here is the stage layout:\n\n[IMAGE_REF:{img.pk}]'
+        result = render_image_refs(content, org_alpha)
+
+        assert '[IMAGE_REF:' not in result
+        assert '<img' in result
+        assert 'src="' in result
+        assert 'Stage Guide' in result
+
+    def test_strips_invalid_image_ref(self, org_alpha):
+        from core.views import render_image_refs
+        content = 'Here is the image:\n\n[IMAGE_REF:99999]'
+        result = render_image_refs(content, org_alpha)
+
+        assert '[IMAGE_REF:' not in result
+        assert '<img' not in result
+
+    def test_strips_cross_org_image_ref(self, org_alpha, org_beta, user_beta_owner):
+        from core.models import DocumentImage
+        from core.views import render_image_refs
+
+        fake_file = SimpleUploadedFile('test.pdf', b'%PDF', content_type='application/pdf')
+        doc = Document.objects.create(
+            title='Beta Doc', file=fake_file,
+            organization=org_beta, uploaded_by=user_beta_owner,
+            file_type='pdf', file_size=100, is_processed=True,
+        )
+        fake_img = SimpleUploadedFile('b.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        img = DocumentImage.objects.create(
+            document=doc, organization=org_beta,
+            image_file=fake_img, source_type='pdf_extract',
+        )
+
+        content = f'[IMAGE_REF:{img.pk}]'
+        result = render_image_refs(content, org_alpha)
+        assert '<img' not in result
+
+    def test_no_image_refs_passes_through(self, org_alpha):
+        from core.views import render_image_refs
+        content = 'Just a normal response with no images.'
+        result = render_image_refs(content, org_alpha)
+        assert result == content
+
+    def test_multiple_image_refs(self, org_alpha, user_alpha_owner):
+        from core.models import DocumentImage
+        from core.views import render_image_refs
+
+        fake_file = SimpleUploadedFile('test.pdf', b'%PDF', content_type='application/pdf')
+        doc = Document.objects.create(
+            title='Guide', file=fake_file,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='pdf', file_size=100, is_processed=True,
+        )
+        imgs = []
+        for i in range(2):
+            fake_img = SimpleUploadedFile(f'img{i}.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+            imgs.append(DocumentImage.objects.create(
+                document=doc, organization=org_alpha,
+                image_file=fake_img, source_type='pdf_extract',
+                description=f'Image {i}',
+            ))
+
+        content = f'First image:\n[IMAGE_REF:{imgs[0].pk}]\nSecond:\n[IMAGE_REF:{imgs[1].pk}]'
+        result = render_image_refs(content, org_alpha)
+        assert result.count('<img') == 2

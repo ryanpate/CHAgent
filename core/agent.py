@@ -4455,6 +4455,11 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
         logger.error(f"Error querying Claude: {e}")
         return f"I encountered an error while processing your question. Please try again later."
 
+    # Render any image references in the answer
+    if organization:
+        from .views import render_image_refs
+        answer = render_image_refs(answer, organization)
+
     # Step 5: Save to chat history
     ChatMessage.objects.create(
         user=user,
