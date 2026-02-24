@@ -5,6 +5,8 @@ Handles text extraction from uploaded files and chunking for embedding.
 import logging
 from typing import BinaryIO
 
+import anthropic
+
 logger = logging.getLogger(__name__)
 
 
@@ -160,3 +162,79 @@ def process_document(document) -> None:
         document.is_processed = False
         document.save()
         raise
+
+
+def describe_image_with_vision(image_path: str, document_context: str = '') -> dict:
+    """Send image to Claude Vision for description and OCR.
+
+    Args:
+        image_path: Path to image file on disk.
+        document_context: Optional document title for context.
+
+    Returns:
+        dict with 'description', 'ocr_text', and optionally 'error'.
+    """
+    import base64
+    import mimetypes
+
+    try:
+        mime_type, _ = mimetypes.guess_type(image_path)
+        if not mime_type or not mime_type.startswith('image/'):
+            mime_type = 'image/png'
+
+        with open(image_path, 'rb') as f:
+            image_data = base64.standard_b64encode(f.read()).decode('utf-8')
+
+        client = anthropic.Anthropic()
+
+        context_line = f'This image is from a document titled "{document_context}". ' if document_context else ''
+
+        response = client.messages.create(
+            model='claude-sonnet-4-20250514',
+            max_tokens=1024,
+            messages=[{
+                'role': 'user',
+                'content': [
+                    {
+                        'type': 'image',
+                        'source': {
+                            'type': 'base64',
+                            'media_type': mime_type,
+                            'data': image_data,
+                        },
+                    },
+                    {
+                        'type': 'text',
+                        'text': (
+                            f'{context_line}'
+                            'Provide two sections:\n'
+                            'DESCRIPTION: A detailed description of what this image shows '
+                            '(diagrams, layouts, charts, photos, etc.).\n'
+                            'OCR_TEXT: Any text visible in the image, transcribed exactly. '
+                            'If no text is visible, write "None".'
+                        ),
+                    },
+                ],
+            }],
+        )
+
+        raw_text = response.content[0].text
+
+        # Parse DESCRIPTION and OCR_TEXT sections
+        description = ''
+        ocr_text = ''
+        if 'DESCRIPTION:' in raw_text:
+            parts = raw_text.split('OCR_TEXT:')
+            description = parts[0].replace('DESCRIPTION:', '').strip()
+            if len(parts) > 1:
+                ocr_text = parts[1].strip()
+                if ocr_text.lower() == 'none':
+                    ocr_text = ''
+        else:
+            description = raw_text.strip()
+
+        return {'description': description, 'ocr_text': ocr_text}
+
+    except Exception as e:
+        logger.error(f'Error describing image with Vision: {e}')
+        return {'description': '', 'ocr_text': '', 'error': str(e)}

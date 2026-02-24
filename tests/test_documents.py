@@ -385,3 +385,71 @@ class TestDocumentImageModel:
         )
         assert DocumentImage.objects.filter(organization=org_alpha).count() == 1
         assert DocumentImage.objects.filter(organization=org_beta).count() == 1
+
+
+from unittest.mock import patch, MagicMock
+
+
+@pytest.mark.django_db
+class TestDescribeImageWithVision:
+    @patch('core.document_processing.anthropic')
+    def test_describe_image_returns_description_and_ocr(self, mock_anthropic, tmp_path):
+        # Create a fake image file
+        img_path = tmp_path / 'test.png'
+        img_path.write_bytes(b'\x89PNG\r\n\x1a\n' + b'\x00' * 100)
+
+        # Mock the Anthropic client response
+        mock_client = MagicMock()
+        mock_anthropic.Anthropic.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text=(
+            'DESCRIPTION: A stage layout diagram showing three monitor positions '
+            'and the main speaker array.\n\n'
+            'OCR_TEXT: Monitor 1, Monitor 2, Main L, Main R'
+        ))]
+        mock_client.messages.create.return_value = mock_response
+
+        from core.document_processing import describe_image_with_vision
+        result = describe_image_with_vision(str(img_path), document_context='Stage Setup Guide')
+
+        assert 'description' in result
+        assert 'ocr_text' in result
+        assert 'stage layout' in result['description'].lower()
+        assert 'Monitor 1' in result['ocr_text']
+        mock_client.messages.create.assert_called_once()
+
+    @patch('core.document_processing.anthropic')
+    def test_describe_image_handles_no_ocr_text(self, mock_anthropic, tmp_path):
+        img_path = tmp_path / 'photo.jpg'
+        img_path.write_bytes(b'\xff\xd8\xff' + b'\x00' * 100)
+
+        mock_client = MagicMock()
+        mock_anthropic.Anthropic.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text=(
+            'DESCRIPTION: A photograph of the worship team during rehearsal.\n\n'
+            'OCR_TEXT: None'
+        ))]
+        mock_client.messages.create.return_value = mock_response
+
+        from core.document_processing import describe_image_with_vision
+        result = describe_image_with_vision(str(img_path))
+
+        assert 'worship team' in result['description'].lower()
+        assert result['ocr_text'] == '' or result['ocr_text'] == 'None'
+
+    @patch('core.document_processing.anthropic')
+    def test_describe_image_handles_api_error(self, mock_anthropic, tmp_path):
+        img_path = tmp_path / 'test.png'
+        img_path.write_bytes(b'\x89PNG\r\n\x1a\n' + b'\x00' * 100)
+
+        mock_client = MagicMock()
+        mock_anthropic.Anthropic.return_value = mock_client
+        mock_client.messages.create.side_effect = Exception('API rate limit')
+
+        from core.document_processing import describe_image_with_vision
+        result = describe_image_with_vision(str(img_path))
+
+        assert result['description'] == ''
+        assert result['ocr_text'] == ''
+        assert 'error' in result
