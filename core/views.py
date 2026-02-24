@@ -5044,13 +5044,15 @@ def document_upload(request):
 @require_organization
 def document_detail(request, pk):
     """View document details and extracted text."""
-    from .models import Document
+    from .models import Document, DocumentImage
     doc = get_object_or_404(Document, pk=pk, organization=request.organization)
     is_admin = request.membership.role in ('owner', 'admin')
+    document_images = DocumentImage.objects.filter(document=doc)
     return render(request, 'core/documents/document_detail.html', {
         'document': doc,
         'is_admin': is_admin,
         'chunk_count': doc.chunks.count(),
+        'document_images': document_images,
     })
 
 

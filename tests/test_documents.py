@@ -815,6 +815,7 @@ class TestRenderImageRefs:
         assert result == content
 
     def test_multiple_image_refs(self, org_alpha, user_alpha_owner):
+
         from core.models import DocumentImage
         from core.views import render_image_refs
 
@@ -836,3 +837,51 @@ class TestRenderImageRefs:
         content = f'First image:\n[IMAGE_REF:{imgs[0].pk}]\nSecond:\n[IMAGE_REF:{imgs[1].pk}]'
         result = render_image_refs(content, org_alpha)
         assert result.count('<img') == 2
+
+
+@pytest.mark.django_db
+class TestImageDocumentTemplates:
+    @patch('core.document_processing.describe_image_with_vision')
+    @patch('core.document_processing.get_embedding')
+    def test_document_list_shows_image_icon(self, mock_embed, mock_describe, client_alpha, org_alpha, user_alpha_owner):
+        mock_describe.return_value = {'description': 'Photo', 'ocr_text': ''}
+        mock_embed.return_value = [0.1] * 1536
+
+        fake_img = SimpleUploadedFile('photo.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        Document.objects.create(
+            title='Team Photo', file=fake_img,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='image', file_size=100, is_processed=True,
+        )
+
+        response = client_alpha.get('/documents/')
+        content = response.content.decode()
+        # The green image icon SVG should appear for image file types
+        assert 'text-green-400' in content
+
+    @patch('core.document_processing.describe_image_with_vision')
+    @patch('core.document_processing.get_embedding')
+    def test_document_detail_shows_image_preview(self, mock_embed, mock_describe, client_alpha, org_alpha, user_alpha_owner):
+        from core.models import DocumentImage
+
+        mock_describe.return_value = {'description': 'A stage layout', 'ocr_text': ''}
+        mock_embed.return_value = [0.1] * 1536
+
+        fake_img = SimpleUploadedFile('stage.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        doc = Document.objects.create(
+            title='Stage Layout', file=fake_img,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='image', file_size=100, is_processed=True,
+        )
+        DocumentImage.objects.create(
+            document=doc, organization=org_alpha,
+            image_file=fake_img, source_type='standalone',
+            description='A stage layout diagram',
+        )
+
+        response = client_alpha.get(f'/documents/{doc.pk}/')
+        content = response.content.decode()
+        # Image preview section should contain an <img> tag and the AI description
+        assert '<img' in content
+        assert 'Image Preview' in content
+        assert 'A stage layout diagram' in content

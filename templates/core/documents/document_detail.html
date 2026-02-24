@@ -85,6 +85,54 @@
         </div>
     </div>
 
+    {% if document.file_type == 'image' %}
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <h3 class="text-gray-400 font-medium mb-4">Image Preview</h3>
+        <a href="{{ document.file.url }}" target="_blank">
+            <img src="{{ document.file.url }}" alt="{{ document.title }}"
+                 class="rounded-lg max-w-full max-h-96 cursor-pointer hover:opacity-90" loading="lazy">
+        </a>
+        {% if document_images %}
+        {% for img in document_images %}
+        {% if img.description %}
+        <div class="mt-4">
+            <h4 class="text-sm text-gray-500 mb-1">AI Description</h4>
+            <p class="text-gray-300 text-sm">{{ img.description }}</p>
+        </div>
+        {% endif %}
+        {% if img.ocr_text %}
+        <div class="mt-2">
+            <h4 class="text-sm text-gray-500 mb-1">Text Found in Image</h4>
+            <p class="text-gray-300 text-sm">{{ img.ocr_text }}</p>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if document.file_type == 'pdf' and document_images %}
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <h3 class="text-gray-400 font-medium mb-4">Extracted Images ({{ document_images|length }})</h3>
+        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {% for img in document_images %}
+            <div class="bg-ch-gray rounded-lg p-3">
+                <a href="{{ img.image_file.url }}" target="_blank">
+                    <img src="{{ img.image_file.url }}" alt="{{ img.description|truncatewords:15 }}"
+                         class="rounded w-full max-h-48 object-contain cursor-pointer hover:opacity-90" loading="lazy">
+                </a>
+                {% if img.page_number %}
+                <p class="text-xs text-gray-500 mt-2">Page {{ img.page_number }}</p>
+                {% endif %}
+                {% if img.description %}
+                <p class="text-xs text-gray-400 mt-1 line-clamp-2">{{ img.description }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     {% if document.extracted_text %}
     <div class="bg-ch-dark rounded-lg p-6">
         <details>
