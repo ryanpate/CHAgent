@@ -3450,6 +3450,7 @@ class Document(models.Model):
     FILE_TYPE_CHOICES = [
         ('pdf', 'PDF'),
         ('txt', 'Plain Text'),
+        ('image', 'Image'),
     ]
 
     title = models.CharField(max_length=200)
@@ -3500,3 +3501,47 @@ class DocumentChunk(models.Model):
 
     def __str__(self):
         return f'{self.document.title} - Chunk {self.chunk_index}'
+
+
+class DocumentImage(models.Model):
+    """An image extracted from a document or uploaded standalone, with AI-generated description."""
+    SOURCE_TYPE_CHOICES = [
+        ('pdf_extract', 'Extracted from PDF'),
+        ('standalone', 'Standalone Upload'),
+    ]
+
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, related_name='images',
+        null=True, blank=True
+    )
+    organization = models.ForeignKey(
+        'Organization', on_delete=models.CASCADE, related_name='document_images'
+    )
+
+    # Image file
+    image_file = models.ImageField(upload_to='document_images/%Y/%m/')
+    original_filename = models.CharField(max_length=255, blank=True)
+
+    # Source info
+    source_type = models.CharField(max_length=20, choices=SOURCE_TYPE_CHOICES)
+    page_number = models.IntegerField(null=True, blank=True)
+
+    # AI-generated content (from Claude Vision)
+    description = models.TextField(blank=True)
+    ocr_text = models.TextField(blank=True)
+
+    # Embedding of combined description + OCR text for semantic search
+    embedding_json = models.JSONField(null=True, blank=True)
+
+    # Metadata
+    width = models.IntegerField(default=0)
+    height = models.IntegerField(default=0)
+    processing_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['document', 'page_number', 'created_at']
+
+    def __str__(self):
+        doc_title = self.document.title if self.document else 'Standalone'
+        return f'{doc_title} - Image {self.pk}'

@@ -2,7 +2,7 @@
 import pytest
 from django.test import Client
 from django.core.files.uploadedfile import SimpleUploadedFile
-from core.models import DocumentCategory, Document, DocumentChunk
+from core.models import DocumentCategory, Document, DocumentChunk, DocumentImage
 
 
 @pytest.mark.django_db
@@ -295,3 +295,93 @@ class TestDocumentViews:
         )
         response = client_alpha.get(f'/documents/{doc.pk}/download/')
         assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestDocumentImageModel:
+    def test_create_image_from_pdf(self, org_alpha, user_alpha_owner):
+        fake_pdf = SimpleUploadedFile('test.pdf', b'%PDF-fake', content_type='application/pdf')
+        doc = Document.objects.create(
+            title='Stage Plot', file=fake_pdf,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='pdf', file_size=100,
+        )
+        fake_img = SimpleUploadedFile('stage.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        img = DocumentImage.objects.create(
+            document=doc,
+            organization=org_alpha,
+            image_file=fake_img,
+            original_filename='stage.png',
+            source_type='pdf_extract',
+            page_number=1,
+            description='A stage plot showing speaker positions',
+            ocr_text='Monitor 1, Monitor 2',
+            width=800,
+            height=600,
+        )
+        assert img.pk is not None
+        assert img.document == doc
+        assert img.source_type == 'pdf_extract'
+        assert img.page_number == 1
+        assert str(img.image_file)  # has a file path
+
+    def test_create_standalone_image(self, org_alpha, user_alpha_owner):
+        fake_img = SimpleUploadedFile('diagram.jpg', b'\xff\xd8\xff' + b'\x00' * 100, content_type='image/jpeg')
+        doc = Document.objects.create(
+            title='Equipment Diagram', file=fake_img,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='image', file_size=200,
+        )
+        img = DocumentImage.objects.create(
+            document=doc,
+            organization=org_alpha,
+            image_file=fake_img,
+            original_filename='diagram.jpg',
+            source_type='standalone',
+            description='A wiring diagram for the audio setup',
+            ocr_text='None',
+            width=1024,
+            height=768,
+        )
+        assert img.pk is not None
+        assert img.source_type == 'standalone'
+        assert img.document.file_type == 'image'
+
+    def test_image_str_representation(self, org_alpha, user_alpha_owner):
+        fake_pdf = SimpleUploadedFile('test.pdf', b'%PDF-fake', content_type='application/pdf')
+        doc = Document.objects.create(
+            title='Stage Plot', file=fake_pdf,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='pdf', file_size=100,
+        )
+        fake_img = SimpleUploadedFile('img.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        img = DocumentImage.objects.create(
+            document=doc, organization=org_alpha,
+            image_file=fake_img, original_filename='img.png',
+            source_type='pdf_extract',
+        )
+        assert 'Stage Plot' in str(img)
+
+    def test_image_organization_isolation(self, org_alpha, org_beta, user_alpha_owner, user_beta_owner):
+        fake_img1 = SimpleUploadedFile('a.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        doc1 = Document.objects.create(
+            title='Alpha Doc', file=fake_img1,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='image', file_size=100,
+        )
+        DocumentImage.objects.create(
+            document=doc1, organization=org_alpha,
+            image_file=fake_img1, source_type='standalone',
+        )
+        fake_img2 = SimpleUploadedFile('b.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        doc2 = Document.objects.create(
+            title='Beta Doc', file=fake_img2,
+            organization=org_beta, uploaded_by=user_beta_owner,
+            file_type='image', file_size=100,
+        )
+        DocumentImage.objects.create(
+            document=doc2, organization=org_beta,
+            image_file=fake_img2, source_type='standalone',
+        )
+        assert DocumentImage.objects.filter(organization=org_alpha).count() == 1
+        assert DocumentImage.objects.filter(organization=org_beta).count() == 1
