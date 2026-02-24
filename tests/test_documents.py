@@ -633,3 +633,78 @@ class TestStandaloneImageUpload:
         doc = Document.objects.filter(title='Team Photo').first()
         assert doc is not None
         assert doc.file_type == 'image'
+
+
+@pytest.mark.django_db
+class TestSearchSimilarImages:
+    def test_search_returns_matching_images(self, org_alpha, user_alpha_owner):
+        from core.models import DocumentImage
+        from core.embeddings import search_similar_images
+
+        fake_file = SimpleUploadedFile('test.pdf', b'%PDF', content_type='application/pdf')
+        doc = Document.objects.create(
+            title='Stage Guide', file=fake_file,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='pdf', file_size=100, is_processed=True,
+        )
+        fake_img = SimpleUploadedFile('plot.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        DocumentImage.objects.create(
+            document=doc, organization=org_alpha,
+            image_file=fake_img, source_type='pdf_extract',
+            description='A stage plot showing monitor positions',
+            ocr_text='Monitor 1, Monitor 2',
+            embedding_json=[1.0] + [0.0] * 1535,
+        )
+
+        query_embedding = [0.9] + [0.0] * 1535
+        results = search_similar_images(query_embedding, org_alpha, limit=3, threshold=0.1)
+
+        assert len(results) == 1
+        assert results[0]['document_title'] == 'Stage Guide'
+        assert 'stage plot' in results[0]['description'].lower()
+        assert 'image_url' in results[0]
+        assert 'image_id' in results[0]
+
+    def test_search_respects_organization_isolation(self, org_alpha, org_beta, user_alpha_owner, user_beta_owner):
+        from core.models import DocumentImage
+        from core.embeddings import search_similar_images
+
+        fake_file = SimpleUploadedFile('test.pdf', b'%PDF', content_type='application/pdf')
+        doc = Document.objects.create(
+            title='Alpha Guide', file=fake_file,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='pdf', file_size=100, is_processed=True,
+        )
+        fake_img = SimpleUploadedFile('a.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        DocumentImage.objects.create(
+            document=doc, organization=org_alpha,
+            image_file=fake_img, source_type='pdf_extract',
+            description='Alpha image',
+            embedding_json=[1.0] + [0.0] * 1535,
+        )
+
+        query_embedding = [1.0] + [0.0] * 1535
+        results = search_similar_images(query_embedding, org_beta, limit=3, threshold=0.1)
+        assert len(results) == 0
+
+    def test_search_below_threshold_excluded(self, org_alpha, user_alpha_owner):
+        from core.models import DocumentImage
+        from core.embeddings import search_similar_images
+
+        fake_file = SimpleUploadedFile('test.pdf', b'%PDF', content_type='application/pdf')
+        doc = Document.objects.create(
+            title='Guide', file=fake_file,
+            organization=org_alpha, uploaded_by=user_alpha_owner,
+            file_type='pdf', file_size=100, is_processed=True,
+        )
+        fake_img = SimpleUploadedFile('a.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+        DocumentImage.objects.create(
+            document=doc, organization=org_alpha,
+            image_file=fake_img, source_type='pdf_extract',
+            description='Unrelated image',
+            embedding_json=[1.0] + [0.0] * 1535,
+        )
+
+        query_embedding = [0.0] + [1.0] + [0.0] * 1534
+        results = search_similar_images(query_embedding, org_alpha, limit=3, threshold=0.3)
+        assert len(results) == 0

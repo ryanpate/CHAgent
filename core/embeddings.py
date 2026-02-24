@@ -153,3 +153,53 @@ def search_similar_documents(query_embedding: list[float], organization, limit: 
 
     scored.sort(key=lambda x: x['similarity'], reverse=True)
     return scored[:limit]
+
+
+def search_similar_images(query_embedding: list[float], organization, limit: int = 3, threshold: float = 0.3) -> list[dict]:
+    """
+    Find document images most similar to query, scoped to organization.
+
+    Args:
+        query_embedding: The embedding vector to search against.
+        organization: Organization instance to scope the search.
+        limit: Maximum number of results to return.
+        threshold: Minimum cosine similarity score to include.
+
+    Returns:
+        List of dicts with 'description', 'ocr_text', 'image_url',
+        'document_title', 'document_id', 'image_id', 'similarity'.
+    """
+    from .models import DocumentImage
+    import math
+
+    def cosine_similarity(vec1, vec2):
+        if not vec1 or not vec2 or len(vec1) != len(vec2):
+            return 0.0
+        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        norm1 = math.sqrt(sum(a * a for a in vec1))
+        norm2 = math.sqrt(sum(b * b for b in vec2))
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+        return dot_product / (norm1 * norm2)
+
+    images = DocumentImage.objects.filter(
+        organization=organization,
+        embedding_json__isnull=False,
+    ).select_related('document')
+
+    scored = []
+    for img in images:
+        similarity = cosine_similarity(query_embedding, img.embedding_json)
+        if similarity >= threshold:
+            scored.append({
+                'description': img.description,
+                'ocr_text': img.ocr_text,
+                'image_url': img.image_file.url if img.image_file else '',
+                'document_title': img.document.title if img.document else 'Uploaded image',
+                'document_id': img.document.id if img.document else None,
+                'image_id': img.id,
+                'similarity': similarity,
+            })
+
+    scored.sort(key=lambda x: x['similarity'], reverse=True)
+    return scored[:limit]
