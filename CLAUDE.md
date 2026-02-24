@@ -4,15 +4,15 @@
 
 **🎯 Overall Completion: ~95%** | **📊 Production-Ready Core Features** | **🔒 Closed Beta**
 
-Last Updated: February 20, 2026
+Last Updated: February 24, 2026
 
 ### Quick Stats
-- **39+ Database Models** across all domains (including blog, beta requests, security, knowledge base)
+- **40+ Database Models** across all domains (including blog, beta requests, security, knowledge base)
 - **130+ View Functions** with full CRUD operations
 - **104+ Templates** for complete user journeys
-- **9 Test Files** with 394 passing test cases (0 failures)
-- **31+ Migrations** tracking schema evolution
-- **Recent Focus**: Knowledge Base document upload, test suite stability, two-factor authentication, audit logging
+- **9 Test Files** with 424 passing test cases (0 failures)
+- **32+ Migrations** tracking schema evolution
+- **Recent Focus**: Knowledge Base image support, document upload, test suite stability, two-factor authentication, audit logging
 
 ### Current Sprint (February 2026)
 - ✅ **Closed Beta System** - Full beta request and approval workflow
@@ -69,6 +69,17 @@ Last Updated: February 20, 2026
   - Sidebar "Knowledge Base" nav item with book icon
   - Admin/owner permissions for upload/edit/delete, all members can view and query
   - 24 new tests (model, processing, search, view tests) — 394 total passing
+- ✅ **Knowledge Base Image Support** - Extract and process images from PDFs, accept standalone image uploads
+  - DocumentImage model for storing images with AI-generated descriptions and OCR text
+  - Claude Vision integration for image description and OCR extraction
+  - PDF image extraction via pypdf (filters small images, caps at 20 per PDF)
+  - Standalone image uploads (PNG, JPG, JPEG) with Vision processing
+  - Semantic search over image descriptions via embeddings
+  - Aria includes relevant images inline in chat responses via `[IMAGE_REF:id]` tokens
+  - Server-side rendering of image references to clickable `<img>` thumbnails
+  - Document list shows green icon for image files, red for PDF, blue for TXT
+  - Document detail shows image preview with AI description and extracted images gallery
+  - 30 new tests (model, vision, extraction, search, agent, rendering, templates) — 424 total passing
 - 📋 Create og-image.png and twitter-card.png (pending design)
 - 📋 Submit sitemap to Google Search Console (manual step)
 - 📋 Write first blog posts (content creation)
@@ -286,8 +297,12 @@ Aria is the AI assistant that powers the chat interface. She can handle many typ
 ### Knowledge Base Documents
 - **Procedural Questions**: "How do I turn on the sound board?" / "What's the lighting setup procedure?"
 - **Reference Lookups**: "What's our onboarding checklist?" / "Show me the volunteer guidelines"
+- **Image Queries**: "What does the stage layout look like?" / "Show me the lighting diagram"
 - **Citations**: Aria cites the source document title when answering from uploaded documents
-- Admins/owners upload PDF or TXT documents at `/documents/upload/`; Aria searches them alongside interactions
+- **Inline Images**: When relevant images are found, Aria displays them as clickable thumbnails in chat
+- Admins/owners upload PDF, TXT, or image (PNG/JPG/JPEG) documents at `/documents/upload/`
+- Images in PDFs are automatically extracted, described by Claude Vision, and made searchable
+- Aria searches document text and image descriptions alongside interactions
 
 ### Smart Disambiguation
 When queries are ambiguous, Aria asks for clarification:
@@ -614,8 +629,9 @@ Aria understands many date formats:
 | `AuditLog` | Admin action audit trail with IP tracking and details |
 | `TOTPDevice` | TOTP 2FA devices with backup codes per user |
 | `DocumentCategory` | Knowledge Base document categories per organization |
-| `Document` | Uploaded documents (PDF/TXT) with extracted text and metadata |
+| `Document` | Uploaded documents (PDF/TXT/Image) with extracted text and metadata |
 | `DocumentChunk` | Chunked document text with embeddings for semantic search |
+| `DocumentImage` | Images (from PDF extraction or standalone upload) with AI descriptions, OCR text, and embeddings |
 
 ---
 
@@ -749,8 +765,8 @@ CHAgent/
 │   ├── admin_views.py        # Platform admin views (incl. beta requests, audit log)
 │   ├── urls.py               # URL routing
 │   ├── sitemaps.py           # SEO sitemap for static/resource pages
-│   ├── embeddings.py         # Vector search (interactions + document chunks)
-│   ├── document_processing.py # Document text extraction and chunking for Knowledge Base
+│   ├── embeddings.py         # Vector search (interactions, document chunks, image descriptions)
+│   ├── document_processing.py # Document text extraction, chunking, image extraction, Claude Vision processing
 │   ├── middleware.py         # TenantMiddleware, TwoFactorMiddleware, SecurityHeadersMiddleware
 │   ├── context_processors.py # Organization template context
 │   ├── notifications.py      # Push notification service
@@ -1572,6 +1588,7 @@ The following features have been implemented:
 - [x] **Error Monitoring**: Sentry SDK integration with PII protection and custom error pages
 - [x] **Dependency Scanning**: Dependabot configuration for weekly vulnerability scanning
 - [x] **Knowledge Base**: Document upload with RAG search, Aria integration, and citation support
+- [x] **Knowledge Base Image Support**: PDF image extraction, standalone image uploads, Claude Vision descriptions, inline image display in chat
 
 ---
 
@@ -1719,6 +1736,50 @@ Resolved 29 pre-existing test failures (7 failures + 22 errors) caused by 4 dist
 - **Analytics export report type** (1 failure): Test used `'engagement'` but view expects `'volunteer_engagement'`.
 
 Result: **370 tests passing, 0 failures, 0 errors**.
+
+### Knowledge Base Image Support
+- **DocumentImage Model**: New model for storing images with AI-generated descriptions, OCR text, and embeddings
+  - Supports both PDF-extracted images (`source_type='pdf_extract'`) and standalone uploads (`source_type='standalone'`)
+  - Organization-scoped with foreign key to Document
+  - Fields: image_file, description, ocr_text, embedding_json, width, height, processing_error
+  - Migration: `core.0027_alter_document_file_type_documentimage`
+- **Claude Vision Integration**: `describe_image_with_vision()` sends images to `claude-sonnet-4-20250514`
+  - Single prompt generates both DESCRIPTION and OCR_TEXT sections
+  - Document title provided as context for domain-aware descriptions
+  - Graceful error handling — failed images saved with `processing_error`, don't block text processing
+- **PDF Image Extraction**: `extract_images_from_pdf()` uses pypdf's `page.images` API
+  - `_filter_small_images()` removes images below 50x50 pixels (decorative artifacts)
+  - `_cap_images()` limits to 20 images per PDF (cost control)
+  - Pillow normalizes extracted images to PNG/JPEG format
+- **Standalone Image Upload**: Upload form accepts `.png,.jpg,.jpeg` files
+  - File type detection sets `file_type='image'` for image extensions
+  - `_process_standalone_image()` creates Document + DocumentImage + Vision processing
+  - Description stored in `Document.extracted_text` for detail page display
+- **Image Semantic Search**: `search_similar_images()` in `core/embeddings.py`
+  - Cosine similarity search over DocumentImage.embedding_json
+  - Organization-scoped, configurable limit and similarity threshold
+- **Agent Integration**: `_build_image_context()` in `core/agent.py`
+  - Image search results included alongside document chunk context
+  - System prompt instructs Aria to use `[IMAGE_REF:id]` tokens for relevant images
+- **Chat Image Rendering**: `render_image_refs()` in `core/views.py`
+  - Replaces `[IMAGE_REF:id]` tokens with clickable `<img>` HTML before saving ChatMessage
+  - Organization-scoped security — cross-org references silently stripped
+  - Thumbnails (`max-w-sm max-h-64`) open full size in new tab
+- **Template Updates**:
+  - Document list: green image icon for image files, red for PDF, blue for TXT
+  - Document detail: Image Preview section with AI description and OCR text
+  - Document detail: Extracted Images gallery for PDFs (responsive grid with page numbers)
+- **30 new tests** across 8 test classes:
+  - DocumentImage model CRUD and org isolation
+  - Claude Vision API mocking and error handling
+  - PDF extraction, filtering, and capping
+  - Pipeline integration and error resilience
+  - Standalone upload view and file type validation
+  - Image semantic search and org isolation
+  - Agent context building and empty results
+  - Image reference rendering, security, and cross-org stripping
+  - Template icon and preview rendering
+  - Full suite: **424 tests passing, 0 failures, 0 errors**
 
 ---
 
