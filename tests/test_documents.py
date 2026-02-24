@@ -387,6 +387,56 @@ class TestDocumentImageModel:
         assert DocumentImage.objects.filter(organization=org_beta).count() == 1
 
 
+@pytest.mark.django_db
+class TestExtractImagesFromPdf:
+    def test_extract_no_images_returns_empty(self, tmp_path):
+        """A text-only PDF yields no images."""
+        from core.document_processing import extract_images_from_pdf
+        from pypdf import PdfWriter
+        writer = PdfWriter()
+        writer.add_blank_page(width=612, height=792)
+        pdf_path = tmp_path / 'text_only.pdf'
+        with open(pdf_path, 'wb') as f:
+            writer.write(f)
+        images = extract_images_from_pdf(str(pdf_path))
+        assert images == []
+
+    def test_small_images_filtered_out(self, tmp_path):
+        """Images below 50x50 pixels should be filtered out."""
+        from core.document_processing import _filter_small_images
+        images = [
+            {'image_bytes': b'fake', 'width': 10, 'height': 10, 'page_number': 1, 'name': 'bullet.png'},
+            {'image_bytes': b'fake', 'width': 800, 'height': 600, 'page_number': 1, 'name': 'diagram.png'},
+        ]
+        filtered = _filter_small_images(images, min_dimension=50)
+        assert len(filtered) == 1
+        assert filtered[0]['name'] == 'diagram.png'
+
+    def test_small_image_kept_if_one_dimension_large(self):
+        """An image like 10x800 should be kept because one dimension is >= min."""
+        from core.document_processing import _filter_small_images
+        images = [
+            {'image_bytes': b'fake', 'width': 10, 'height': 800, 'page_number': 1, 'name': 'banner.png'},
+        ]
+        filtered = _filter_small_images(images, min_dimension=50)
+        assert len(filtered) == 1
+        assert filtered[0]['name'] == 'banner.png'
+
+    def test_max_images_cap(self, tmp_path):
+        """No more than 20 images should be returned."""
+        from core.document_processing import _cap_images
+        images = [{'image_bytes': b'fake', 'page_number': i, 'name': f'img{i}.png'} for i in range(30)]
+        capped = _cap_images(images, max_images=20)
+        assert len(capped) == 20
+
+    def test_cap_images_no_cap_needed(self):
+        """When fewer images than max, all are returned."""
+        from core.document_processing import _cap_images
+        images = [{'image_bytes': b'fake', 'page_number': i, 'name': f'img{i}.png'} for i in range(5)]
+        capped = _cap_images(images, max_images=20)
+        assert len(capped) == 5
+
+
 from unittest.mock import patch, MagicMock
 
 

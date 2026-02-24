@@ -164,6 +164,100 @@ def process_document(document) -> None:
         raise
 
 
+def extract_images_from_pdf(pdf_path: str) -> list[dict]:
+    """Extract embedded images from a PDF file.
+
+    Uses pypdf's page.images API to iterate over images in each page,
+    then uses Pillow to determine dimensions. Images that are too small
+    are filtered out and the total count is capped.
+
+    Args:
+        pdf_path: Path to a PDF file on disk.
+
+    Returns:
+        List of dicts with keys: image_bytes, page_number, name, width, height.
+    """
+    from pypdf import PdfReader
+    from PIL import Image
+    from io import BytesIO
+
+    reader = PdfReader(pdf_path)
+    images: list[dict] = []
+
+    for page_num, page in enumerate(reader.pages, start=1):
+        try:
+            page_images = page.images
+        except Exception as e:
+            logger.warning(f'Could not access images on page {page_num}: {e}')
+            continue
+
+        for img in page_images:
+            try:
+                raw_bytes = img.data
+                pil_image = Image.open(BytesIO(raw_bytes))
+                width, height = pil_image.size
+                images.append({
+                    'image_bytes': raw_bytes,
+                    'page_number': page_num,
+                    'name': img.name,
+                    'width': width,
+                    'height': height,
+                })
+            except Exception as e:
+                logger.warning(
+                    f'Skipping image "{getattr(img, "name", "unknown")}" '
+                    f'on page {page_num}: {e}'
+                )
+                continue
+
+    images = _filter_small_images(images)
+    images = _cap_images(images)
+    return images
+
+
+def _filter_small_images(
+    images: list[dict], min_dimension: int = 50
+) -> list[dict]:
+    """Remove images where BOTH width AND height are below min_dimension.
+
+    An image that is 10x800 is kept because one dimension exceeds the
+    threshold.
+
+    Args:
+        images: List of image dicts with 'width' and 'height' keys.
+        min_dimension: Minimum size threshold in pixels.
+
+    Returns:
+        Filtered list of image dicts.
+    """
+    return [
+        img for img in images
+        if img.get('width', 0) >= min_dimension
+        or img.get('height', 0) >= min_dimension
+    ]
+
+
+def _cap_images(images: list[dict], max_images: int = 20) -> list[dict]:
+    """Return at most the first max_images images.
+
+    Logs a warning if the list was truncated.
+
+    Args:
+        images: List of image dicts.
+        max_images: Maximum number of images to return.
+
+    Returns:
+        Truncated list of image dicts.
+    """
+    if len(images) > max_images:
+        logger.warning(
+            f'Document contains {len(images)} images; '
+            f'capping to {max_images}.'
+        )
+        return images[:max_images]
+    return images
+
+
 def describe_image_with_vision(image_path: str, document_context: str = '') -> dict:
     """Send image to Claude Vision for description and OCR.
 
