@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 from django.db import IntegrityError
 from django.test import override_settings
 from core.models import NativePushToken
@@ -154,3 +155,62 @@ class TestPushTokenRegistrationAPI:
         }, content_type='application/json')
         assert response.status_code == 204
         assert NativePushToken.objects.filter(token='token-to-remove').count() == 0
+
+
+@pytest.mark.django_db
+class TestNativePushNotification:
+    def test_send_to_native_ios_token(self, user_alpha_owner, org_alpha):
+        from core.notifications import send_notification_to_user
+        NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='apns-token-123',
+            platform='ios',
+        )
+        with patch('core.notifications.send_native_push') as mock_send:
+            mock_send.return_value = True
+            count = send_notification_to_user(
+                user_alpha_owner,
+                'dm',
+                'New Message',
+                'You have a new direct message',
+                url='/comms/messages/1/',
+            )
+            assert count >= 1
+            mock_send.assert_called()
+
+    def test_send_to_native_android_token(self, user_alpha_owner, org_alpha):
+        from core.notifications import send_notification_to_user
+        NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='fcm-token-456',
+            platform='android',
+        )
+        with patch('core.notifications.send_native_push') as mock_send:
+            mock_send.return_value = True
+            count = send_notification_to_user(
+                user_alpha_owner,
+                'announcement',
+                'New Announcement',
+                'Team meeting moved to Thursday',
+            )
+            assert count >= 1
+
+    def test_inactive_token_skipped(self, user_alpha_owner, org_alpha):
+        from core.notifications import send_notification_to_user
+        NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='inactive-token',
+            platform='ios',
+            is_active=False,
+        )
+        with patch('core.notifications.send_native_push') as mock_send:
+            send_notification_to_user(
+                user_alpha_owner,
+                'dm',
+                'Test',
+                'Test body',
+            )
+            mock_send.assert_not_called()

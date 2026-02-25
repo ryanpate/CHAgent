@@ -207,17 +207,13 @@ def send_notification_to_user(
             # No preferences set - use defaults (send all)
             pass
 
-    # Get user's active subscriptions
+    sent_count = 0
+
+    # Send to web push subscriptions
     subscriptions = PushSubscription.objects.filter(
         user=user,
         is_active=True
     )
-
-    if not subscriptions.exists():
-        logger.info(f"No active subscriptions for user {user.username}")
-        return 0
-
-    sent_count = 0
 
     for subscription in subscriptions:
         # Create log entry
@@ -247,6 +243,26 @@ def send_notification_to_user(
             sent_count += 1
             subscription.last_used_at = timezone.now()
             subscription.save(update_fields=['last_used_at'])
+
+    # Send to native push tokens (iOS/Android apps)
+    try:
+        from .models import NativePushToken
+        native_tokens = NativePushToken.objects.filter(
+            user=user,
+            is_active=True,
+        )
+        for token_obj in native_tokens:
+            try:
+                success = send_native_push(token_obj, title, body, url, data)
+                if success:
+                    sent_count += 1
+            except Exception as e:
+                logger.error(f"Native push failed for {token_obj}: {e}")
+    except ImportError:
+        pass
+
+    if sent_count == 0:
+        logger.info(f"No active subscriptions or tokens for user {user.username}")
 
     return sent_count
 
@@ -288,6 +304,66 @@ def send_notification_to_users(
         )
         total_sent += sent
     return total_sent
+
+
+# =============================================================================
+# Native Push Notification Functions (iOS/Android)
+# =============================================================================
+
+def send_native_push(token_obj, title, body, url='/', data=None):
+    """Send a push notification to a native iOS/Android device."""
+    payload = {
+        'title': title,
+        'body': body,
+        'url': url,
+        'data': data or {},
+    }
+
+    try:
+        if token_obj.platform == 'android':
+            return _send_fcm(token_obj.token, payload)
+        elif token_obj.platform == 'ios':
+            return _send_apns(token_obj.token, payload)
+    except Exception as e:
+        logger.error(f"Failed to send native push to {token_obj.platform}: {e}")
+        return False
+    return False
+
+
+def _send_fcm(token, payload):
+    """Send via Firebase Cloud Messaging."""
+    try:
+        import firebase_admin
+        from firebase_admin import messaging
+
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app()
+
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title=payload['title'],
+                body=payload['body'],
+            ),
+            data={
+                'url': payload.get('url', '/'),
+                **{k: str(v) for k, v in payload.get('data', {}).items()},
+            },
+            token=token,
+        )
+        messaging.send(message)
+        return True
+    except Exception as e:
+        logger.error(f"FCM send failed: {e}")
+        return False
+
+
+def _send_apns(token, payload):
+    """Send via Apple Push Notification service.
+
+    Uses FCM under the hood since the Capacitor app uses FCM SDK
+    for both iOS and Android.
+    """
+    return _send_fcm(token, payload)
 
 
 # =============================================================================
