@@ -3158,6 +3158,29 @@ class NotificationLog(models.Model):
         return f"{self.notification_type}: {self.title} -> {self.user.username}"
 
 
+class NativePushToken(models.Model):
+    """Native push notification token for iOS (APNs) and Android (FCM) apps."""
+    PLATFORM_CHOICES = [
+        ('ios', 'iOS'),
+        ('android', 'Android'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='native_push_tokens')
+    organization = models.ForeignKey('Organization', on_delete=models.CASCADE, related_name='native_push_tokens')
+    token = models.TextField()
+    platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES)
+    device_name = models.CharField(max_length=100, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'token']
+
+    def __str__(self):
+        return f"{self.user.email} - {self.platform} - {self.device_name}"
+
+
 class SongBPMCache(models.Model):
     """
     Caches BPM values for songs with source tracking.
