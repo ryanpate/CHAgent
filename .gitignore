@@ -122,6 +122,13 @@ media/
 # Git worktrees
 .worktrees/
 
+# Mobile app (Capacitor)
+mobile/node_modules/
+mobile/ios/App/Pods/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+
 # macOS
 .DS_Store
 
