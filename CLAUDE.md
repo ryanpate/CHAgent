@@ -4,12 +4,12 @@
 
 **🎯 Overall Completion: ~95%** | **📊 Production-Ready Core Features** | **🔒 Closed Beta**
 
-Last Updated: February 24, 2026
+Last Updated: February 25, 2026
 
 ### Quick Stats
 - **40+ Database Models** across all domains (including blog, beta requests, security, knowledge base)
 - **130+ View Functions** with full CRUD operations
-- **104+ Templates** for complete user journeys
+- **105+ Templates** for complete user journeys
 - **10 Test Files** with 441 passing test cases (0 failures)
 - **33+ Migrations** tracking schema evolution
 - **Recent Focus**: Native mobile app (Capacitor), Knowledge Base image support, document upload, test suite stability, two-factor authentication, audit logging
@@ -92,6 +92,11 @@ Last Updated: February 24, 2026
   - iOS (Xcode) and Android (Gradle) platform projects with app icons and splash screens
   - App Store/Play Store listing content and pre-submission checklist
   - 17 new tests (model, auth API, push registration, notifications, app-mode) — 441 total passing
+- ✅ **Privacy Policy Page** (`/privacy/`) - Public privacy policy for App Store compliance
+  - 10 sections: data collection, AI processing, data sharing, security, retention, user rights, children's privacy
+  - Legal entity: Ryan Pate operating as ARIA, contact: support@aria.church
+  - SEO meta tags and BreadcrumbList schema markup
+  - Added to sitemap and footer navigation on all public pages
 - 📋 Create og-image.png and twitter-card.png (pending design)
 - 📋 Submit sitemap to Google Search Console (manual step)
 - 📋 Write first blog posts (content creation)
@@ -553,6 +558,7 @@ worship-arts-portal/
 │       ├── followup_detail.html
 │       ├── care_dashboard.html
 │       ├── security.html          # Public security page
+│       ├── privacy.html           # Public privacy policy page
 │       ├── push_preferences.html
 │       ├── admin/
 │       │   ├── base.html
@@ -717,6 +723,10 @@ path('followups/<int:pk>/delete/', views.followup_delete)
 path('feedback/', views.feedback_dashboard, name='feedback_dashboard')
 path('feedback/<int:pk>/resolve/', views.feedback_resolve)
 
+# Public Pages
+path('security/', views.security_page, name='security')
+path('privacy/', views.privacy_policy, name='privacy')
+
 # Security Settings & 2FA
 path('settings/security/', views.security_settings, name='security_settings')
 path('settings/security/2fa/setup/', views.totp_setup, name='totp_setup')
@@ -808,6 +818,7 @@ CHAgent/
 │   └── core/
 │       ├── dashboard.html    # Main chat interface
 │       ├── security.html     # Public security page
+│       ├── privacy.html      # Public privacy policy page
 │       ├── interaction_*.html
 │       ├── volunteer_*.html
 │       ├── followup_*.html
@@ -1306,6 +1317,14 @@ Public security page at `/security/` explaining the platform's security measures
 - Collapsible technical details for IT staff
 - Responsible disclosure contact: security@aria.church
 
+### Privacy Policy
+
+Public privacy policy at `/privacy/` required for App Store submission:
+- 10 sections covering data collection, AI processing, data sharing, security, retention, user rights, children's privacy
+- Legal entity: Ryan Pate operating as ARIA
+- Contact: support@aria.church
+- Added to sitemap and footer navigation
+
 ### Security Headers (SecurityHeadersMiddleware)
 
 Custom middleware in `core/middleware.py` adds:
@@ -1538,6 +1557,9 @@ path('resources/volunteer-application-template/', views.resource_volunteer_appli
 path('resources/worship-schedule-template/', views.resource_schedule_template),
 path('resources/planning-center-setup-guide/', views.resource_pco_guide),
 
+# Privacy
+path('privacy/', views.privacy_policy, name='privacy'),
+
 # Sitemap
 path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='sitemap'),
 ```
@@ -1621,6 +1643,7 @@ The following features have been implemented:
 - [x] **Closed Beta System**: Beta request form, admin approval, invitation flow
 - [x] **Security Hardening**: HSTS, CSP, Permissions-Policy, django-axes rate limiting, session timeout
 - [x] **Security Page**: Public `/security/` page with plain-language and technical security details
+- [x] **Privacy Policy**: Public `/privacy/` page with 10 sections covering data collection, AI processing, sharing, retention, and user rights
 - [x] **Two-Factor Authentication**: TOTP-based 2FA with QR setup, backup codes, login enforcement
 - [x] **Audit Logging**: Admin action audit trail with IP tracking and filterable dashboard
 - [x] **Error Monitoring**: Sentry SDK integration with PII protection and custom error pages
