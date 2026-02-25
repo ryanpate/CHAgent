@@ -214,3 +214,19 @@ class TestNativePushNotification:
                 'Test body',
             )
             mock_send.assert_not_called()
+
+
+@pytest.mark.django_db
+class TestAppModeDetection:
+    def test_app_mode_cookie_hides_sidebar(self, client_alpha):
+        client_alpha.cookies['aria_app'] = '1'
+        response = client_alpha.get('/dashboard/')
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'app-mode-hidden' in content
+
+    def test_web_mode_shows_sidebar(self, client_alpha):
+        response = client_alpha.get('/dashboard/')
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'app-mode-hidden' not in content

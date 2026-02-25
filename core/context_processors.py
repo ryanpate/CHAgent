@@ -24,7 +24,11 @@ def organization_context(request):
     - ai_assistant_name: Custom AI name for this organization
     - Subscription status flags for warning banners
     """
+    # Detect native app mode (Capacitor WebView sets this cookie)
+    is_app_mode = request.COOKIES.get('aria_app') == '1' or request.GET.get('app') == '1'
+
     context = {
+        'is_app_mode': is_app_mode,
         'organization': None,
         'membership': None,
         'is_owner': False,

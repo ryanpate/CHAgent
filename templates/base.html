@@ -346,7 +346,7 @@
     </style>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-ch-black text-white min-h-screen" x-data="{ sidebarOpen: false }">
+<body class="bg-ch-black text-white min-h-screen{% if is_app_mode %} app-mode-hidden{% endif %}" x-data="{ sidebarOpen: false }">
     {% if user.is_authenticated %}
     <!-- Subscription Warning Banners -->
     {% if show_trial_warning %}
@@ -369,6 +369,7 @@
         {% endif %}
     </div>
     {% endif %}
+    {% if not is_app_mode %}
     <!-- Mobile Header -->
     <header class="md:hidden fixed top-0 left-0 right-0 z-40 bg-ch-dark border-b border-gray-800 px-4 py-3 flex items-center justify-between safe-top">
         <button @click="sidebarOpen = true" class="mobile-menu-btn p-2 rounded-lg hover:bg-ch-gray transition">
@@ -619,9 +620,10 @@
             </div>
         </div>
     </aside>
+    {% endif %}
 
     <!-- Main Content -->
-    <main class="md:ml-64 p-4 md:p-8 min-h-screen pt-16 md:pt-8">
+    <main class="{% if not is_app_mode %}md:ml-64 pt-16 md:pt-8{% endif %} p-4 md:p-8 min-h-screen">
         {% if messages %}
         <div class="mb-4">
             {% for message in messages %}

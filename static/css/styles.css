@@ -21,6 +21,12 @@ body {
     color: var(--text-primary);
 }
 
+/* Native app mode - extra padding for status bar and tab bar */
+body.app-mode-hidden {
+    padding-top: env(safe-area-inset-top, 44px);
+    padding-bottom: 80px;
+}
+
 /* Typography */
 .font-display {
     font-family: 'Playfair Display', Georgia, serif;
