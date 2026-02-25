@@ -333,11 +333,18 @@ def send_native_push(token_obj, title, body, url='/', data=None):
 def _send_fcm(token, payload):
     """Send via Firebase Cloud Messaging."""
     try:
+        import json
+        import os
         import firebase_admin
-        from firebase_admin import messaging
+        from firebase_admin import credentials, messaging
 
         if not firebase_admin._apps:
-            firebase_admin.initialize_app()
+            cred_json = os.environ.get('FIREBASE_CREDENTIALS_JSON')
+            if cred_json:
+                cred = credentials.Certificate(json.loads(cred_json))
+                firebase_admin.initialize_app(cred)
+            else:
+                firebase_admin.initialize_app()
 
         message = messaging.Message(
             notification=messaging.Notification(
