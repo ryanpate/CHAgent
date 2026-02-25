@@ -67,11 +67,14 @@ INSTALLED_APPS = [
     'core',
     'blog',
     'axes',
+    'rest_framework',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -84,6 +87,38 @@ MIDDLEWARE = [
     'django_htmx.middleware.HtmxMiddleware',
     'core.middleware.SecurityHeadersMiddleware',
 ]
+
+# REST Framework Configuration (for mobile app API)
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '100/minute',
+    },
+}
+
+from datetime import timedelta as _td
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': _td(hours=1),
+    'REFRESH_TOKEN_LIFETIME': _td(days=30),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+}
+
+# CORS (for mobile app)
+CORS_ALLOWED_ORIGINS = [
+    'capacitor://localhost',
+    'http://localhost',
+]
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'config.urls'
 
