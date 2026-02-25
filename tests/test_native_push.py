@@ -97,3 +97,60 @@ class TestAuthTokenAPI:
         }, content_type='application/json')
         assert response.status_code == 200
         assert 'access' in response.json()
+
+
+@pytest.mark.django_db
+class TestPushTokenRegistrationAPI:
+    def test_register_ios_token(self, client_alpha, org_alpha):
+        response = client_alpha.post('/api/push/register/', {
+            'token': 'apns-device-token-123',
+            'platform': 'ios',
+            'device_name': 'iPhone 15 Pro',
+        }, content_type='application/json')
+        assert response.status_code == 201
+        assert NativePushToken.objects.filter(organization=org_alpha).count() == 1
+
+    def test_register_android_token(self, client_alpha, org_alpha):
+        response = client_alpha.post('/api/push/register/', {
+            'token': 'fcm-token-456',
+            'platform': 'android',
+            'device_name': 'Pixel 8',
+        }, content_type='application/json')
+        assert response.status_code == 201
+
+    def test_register_duplicate_token_updates(self, client_alpha, org_alpha):
+        # Register once
+        client_alpha.post('/api/push/register/', {
+            'token': 'same-token',
+            'platform': 'ios',
+            'device_name': 'Old Name',
+        }, content_type='application/json')
+        # Register again with same token
+        response = client_alpha.post('/api/push/register/', {
+            'token': 'same-token',
+            'platform': 'ios',
+            'device_name': 'New Name',
+        }, content_type='application/json')
+        assert response.status_code == 200
+        assert NativePushToken.objects.filter(organization=org_alpha).count() == 1
+        assert NativePushToken.objects.get(token='same-token').device_name == 'New Name'
+
+    def test_register_requires_auth(self, client):
+        response = client.post('/api/push/register/', {
+            'token': 'some-token',
+            'platform': 'ios',
+        }, content_type='application/json')
+        assert response.status_code in [401, 403]
+
+    def test_unregister_token(self, client_alpha, user_alpha_owner, org_alpha):
+        NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='token-to-remove',
+            platform='ios',
+        )
+        response = client_alpha.delete('/api/push/unregister/', {
+            'token': 'token-to-remove',
+        }, content_type='application/json')
+        assert response.status_code == 204
+        assert NativePushToken.objects.filter(token='token-to-remove').count() == 0
