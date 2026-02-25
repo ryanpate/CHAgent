@@ -10,9 +10,9 @@ Last Updated: February 24, 2026
 - **40+ Database Models** across all domains (including blog, beta requests, security, knowledge base)
 - **130+ View Functions** with full CRUD operations
 - **104+ Templates** for complete user journeys
-- **9 Test Files** with 424 passing test cases (0 failures)
-- **32+ Migrations** tracking schema evolution
-- **Recent Focus**: Knowledge Base image support, document upload, test suite stability, two-factor authentication, audit logging
+- **10 Test Files** with 441 passing test cases (0 failures)
+- **33+ Migrations** tracking schema evolution
+- **Recent Focus**: Native mobile app (Capacitor), Knowledge Base image support, document upload, test suite stability, two-factor authentication, audit logging
 
 ### Current Sprint (February 2026)
 - ✅ **Closed Beta System** - Full beta request and approval workflow
@@ -80,6 +80,18 @@ Last Updated: February 24, 2026
   - Document list shows green icon for image files, red for PDF, blue for TXT
   - Document detail shows image preview with AI description and extracted images gallery
   - 30 new tests (model, vision, extraction, search, agent, rendering, templates) — 424 total passing
+- ✅ **Native Mobile App (Capacitor)** - iOS and Android apps wrapping the Django web app
+  - Ionic Capacitor 6 hybrid native shell with WebView loading from aria.church
+  - NativePushToken model for FCM/APNs device token registration
+  - JWT authentication API (DRF + SimpleJWT) with email-based login
+  - Push token registration/unregistration REST endpoints
+  - Native push notification delivery via Firebase Cloud Messaging (both platforms)
+  - App-mode template detection (cookie/query param) hides sidebar/header in native app
+  - Native tab bar (Chat, Volunteers, Follow-ups, Comms, More)
+  - Login screen with JWT token storage via Capacitor Preferences
+  - iOS (Xcode) and Android (Gradle) platform projects with app icons and splash screens
+  - App Store/Play Store listing content and pre-submission checklist
+  - 17 new tests (model, auth API, push registration, notifications, app-mode) — 441 total passing
 - 📋 Create og-image.png and twitter-card.png (pending design)
 - 📋 Submit sitemap to Google Search Console (manual step)
 - 📋 Write first blog posts (content creation)
@@ -320,6 +332,9 @@ When queries are ambiguous, Aria asks for clarification:
 | **AI Provider** | Anthropic Claude API (claude-sonnet-4-20250514) |
 | **Vector Embeddings** | OpenAI text-embedding-3-small |
 | **Frontend** | Django Templates + HTMX + Tailwind CSS |
+| **Mobile App** | Ionic Capacitor 6 (iOS + Android) |
+| **Mobile Auth** | Django REST Framework + SimpleJWT |
+| **Native Push** | Firebase Cloud Messaging (FCM/APNs) |
 | **Deployment** | Railway |
 
 ---
@@ -632,6 +647,7 @@ Aria understands many date formats:
 | `Document` | Uploaded documents (PDF/TXT/Image) with extracted text and metadata |
 | `DocumentChunk` | Chunked document text with embeddings for semantic search |
 | `DocumentImage` | Images (from PDF extraction or standalone upload) with AI descriptions, OCR text, and embeddings |
+| `NativePushToken` | Native app push tokens (iOS APNs / Android FCM) per user |
 
 ---
 
@@ -722,6 +738,12 @@ path('documents/categories/<int:pk>/delete/', views.document_category_delete, na
 
 # Platform Admin - Audit Log
 path('platform-admin/audit-log/', admin_views.admin_audit_log, name='admin_audit_log')
+
+# Mobile App API (JWT Auth + Push Token Registration)
+path('api/auth/token/', api_views.EmailTokenObtainPairView.as_view(), name='api_token_obtain')
+path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='api_token_refresh')
+path('api/push/register/', api_views.register_push_token, name='api_push_register')
+path('api/push/unregister/', api_views.unregister_push_token, name='api_push_unregister')
 ```
 
 ---
@@ -769,7 +791,9 @@ CHAgent/
 │   ├── document_processing.py # Document text extraction, chunking, image extraction, Claude Vision processing
 │   ├── middleware.py         # TenantMiddleware, TwoFactorMiddleware, SecurityHeadersMiddleware
 │   ├── context_processors.py # Organization template context
-│   ├── notifications.py      # Push notification service
+│   ├── notifications.py      # Push notification service (web + native)
+│   ├── api_views.py          # Mobile app API (JWT auth, push token registration)
+│   ├── api_urls.py           # Mobile app API URL routing
 │   └── volunteer_matching.py # Name matching logic
 ├── blog/                     # SEO Blog App
 │   ├── models.py             # BlogPost, BlogCategory, BlogTag
@@ -814,11 +838,25 @@ CHAgent/
 │   ├── test_beta_request.py  # Beta system & security tests (26 tests)
 │   ├── test_documents.py     # Knowledge Base document tests (24 tests)
 │   ├── test_2fa.py           # Two-factor authentication tests (13 tests)
-│   └── test_audit_log.py     # Audit log model & integration tests (9 tests)
+│   ├── test_audit_log.py     # Audit log model & integration tests (9 tests)
+│   └── test_native_push.py   # Mobile app API & push notification tests (17 tests)
+├── mobile/                   # Capacitor Native App
+│   ├── capacitor.config.ts   # Capacitor config (app ID, server URL, plugins)
+│   ├── package.json          # npm dependencies (Capacitor plugins)
+│   ├── store-listing.md      # App Store / Play Store listing content
+│   ├── src/
+│   │   ├── index.html        # Login screen + tab bar UI
+│   │   ├── app.js            # App init, tab navigation, More menu
+│   │   ├── auth.js           # JWT login, refresh, token storage
+│   │   ├── push.js           # FCM/APNs push registration
+│   │   └── styles.css        # Dark theme mobile styles
+│   ├── resources/            # App icon and splash screen source images
+│   ├── ios/                  # Xcode project (generated by Capacitor)
+│   └── android/              # Android Studio project (generated by Capacitor)
 ├── docs/plans/               # Design docs & implementation plans
 ├── config/
-│   ├── settings.py           # Incl. Stripe, security, django-axes config
-│   └── urls.py               # Main URL routing incl. sitemap
+│   ├── settings.py           # Incl. Stripe, security, django-axes, DRF, JWT config
+│   └── urls.py               # Main URL routing incl. sitemap and API
 └── accounts/
     └── models.py             # Custom User with org helpers
 ```
@@ -1589,6 +1627,7 @@ The following features have been implemented:
 - [x] **Dependency Scanning**: Dependabot configuration for weekly vulnerability scanning
 - [x] **Knowledge Base**: Document upload with RAG search, Aria integration, and citation support
 - [x] **Knowledge Base Image Support**: PDF image extraction, standalone image uploads, Claude Vision descriptions, inline image display in chat
+- [x] **Native Mobile App**: iOS and Android apps via Capacitor with JWT auth, native tab bar, and FCM push notifications
 
 ---
 
@@ -1781,6 +1820,66 @@ Result: **370 tests passing, 0 failures, 0 errors**.
   - Template icon and preview rendering
   - Full suite: **424 tests passing, 0 failures, 0 errors**
 
+### Native Mobile App (Capacitor)
+- **Architecture**: Hybrid native shell (Ionic Capacitor 6) wrapping the existing Django web app in a WebView
+  - App loads pages from `aria.church` with `?app=1` query param for app-mode detection
+  - Native tab bar replaces web sidebar (Chat, Volunteers, Follow-ups, Comms, More)
+  - Login screen with JWT auth stored locally via Capacitor Preferences
+  - External links open in system browser via `@capacitor/browser`
+- **Backend: NativePushToken Model** (`core/models.py`):
+  - Stores FCM/APNs device tokens per user with platform (ios/android) and device name
+  - `unique_together` on user + token prevents duplicate registrations
+  - `is_active` flag for soft-disabling tokens
+  - Migration: `core.0028_nativepushtoken`
+- **Backend: JWT Auth API** (`core/api_views.py`, `core/api_urls.py`):
+  - Django REST Framework + SimpleJWT with email-based login (custom serializer)
+  - `POST /api/auth/token/` — obtain access + refresh tokens
+  - `POST /api/auth/token/refresh/` — refresh expired access tokens
+  - `POST /api/push/register/` — register/update native push token (authenticated)
+  - `DELETE /api/push/unregister/` — remove push token on logout
+  - CORS configured for `capacitor://localhost` and `http://localhost`
+  - 100/minute user rate throttle
+- **Backend: Native Push Delivery** (`core/notifications.py`):
+  - `send_native_push()` sends to FCM for both Android and iOS (APNs via FCM SDK)
+  - `_send_fcm()` uses `firebase-admin` SDK with auto-initialization
+  - Extended `send_notification_to_user()` to include native push tokens alongside web push
+  - Inactive tokens (`is_active=False`) are skipped
+- **Backend: App-Mode Detection** (`core/context_processors.py`, `templates/base.html`):
+  - Detects `aria_app=1` cookie or `?app=1` query parameter
+  - `is_app_mode` template variable conditionally hides sidebar, mobile header
+  - `body.app-mode-hidden` CSS class adds safe-area padding for status bar and tab bar
+- **Mobile App** (`mobile/`):
+  - `capacitor.config.ts` — App ID `church.aria.app`, server URL `https://aria.church`
+  - `src/auth.js` — JWT login, refresh, token expiry check, Preferences storage
+  - `src/push.js` — FCM registration, push action handler with navigation events
+  - `src/app.js` — App init, tab bar, More menu overlay, external link handling
+  - `src/index.html` — Login form + 5-tab navigation bar
+  - `src/styles.css` — Dark theme (#0f0f0f background, #c9a227 gold accent)
+- **Native Platforms**:
+  - `mobile/ios/` — Xcode project with 7 Capacitor plugins, app icons, splash screens
+  - `mobile/android/` — Android Studio project with generated icons and splash screens
+  - Platform-specific assets generated via `@capacitor/assets`
+- **App Store Preparation** (`mobile/store-listing.md`):
+  - App name, description, keywords, category, privacy/support URLs
+  - Screenshot requirements for iPhone 6.7", 5.5", iPad Pro, and Android
+  - Pre-submission checklist (developer accounts, Firebase, APNs, screenshots)
+- **Dependencies Added** (`requirements.txt`):
+  - `djangorestframework>=3.14.0`, `djangorestframework-simplejwt>=5.3.0`
+  - `django-cors-headers>=4.3.0`, `firebase-admin>=6.0.0`
+- **Settings Changes** (`config/settings.py`):
+  - Added `rest_framework` and `corsheaders` to INSTALLED_APPS
+  - `CorsMiddleware` added to MIDDLEWARE
+  - REST_FRAMEWORK config with JWT + Session auth, 100/min throttle
+  - SIMPLE_JWT config: 1-hour access, 30-day refresh, rotation enabled
+  - CORS_ALLOWED_ORIGINS for Capacitor WebView origins
+- **17 new tests** in `tests/test_native_push.py` across 5 test classes:
+  - NativePushToken model CRUD, uniqueness, and tenant isolation
+  - JWT auth token obtain and refresh via email credentials
+  - Push token register, update, unregister, and auth requirement
+  - Native push notification delivery with FCM mocking
+  - App-mode template detection (sidebar hidden vs shown)
+  - Full suite: **441 tests passing, 0 failures, 0 errors**
+
 ---
 
 ## SaaS Development Roadmap
@@ -1874,7 +1973,7 @@ Result: **370 tests passing, 0 failures, 0 errors**.
 ### 💡 Nice to Have (Q3-Q4 2026)
 10. **File Attachments**: Attach files to tasks, messages, and interactions
 11. **Voice Input**: Speech-to-text for quick interaction logging
-12. **Mobile App**: Native mobile app with React Native (PWA already functional)
+12. ~~**Mobile App**~~: ✅ Complete - Native iOS/Android app via Capacitor with JWT auth, tab bar, and FCM push
 13. **Custom Domains**: Organizations can use their own domain (e.g., team.churchname.com)
 14. **White-labeling**: Full custom branding for Enterprise customers
 15. **Multi-campus**: Support for organizations with multiple campuses/locations
