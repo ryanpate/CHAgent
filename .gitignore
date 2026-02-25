@@ -119,6 +119,9 @@ staticfiles/
 # Media files
 media/
 
+# Git worktrees
+.worktrees/
+
 # macOS
 .DS_Store
 
