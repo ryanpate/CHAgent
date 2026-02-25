@@ -83,6 +83,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
     path('blog/', include('blog.urls', namespace='blog')),
+    path('api/', include('core.api_urls')),
     path('', include('core.urls')),
 ]
 
