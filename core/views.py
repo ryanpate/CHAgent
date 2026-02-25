@@ -141,6 +141,11 @@ def security_page(request):
     return render(request, 'core/security.html')
 
 
+def privacy_policy(request):
+    """Public privacy policy page."""
+    return render(request, 'core/privacy.html')
+
+
 # =============================================================================
 # Resource Pages (SEO Content)
 # =============================================================================

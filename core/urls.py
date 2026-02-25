@@ -6,6 +6,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('pricing/', views.pricing, name='pricing'),
     path('security/', views.security_page, name='security'),
+    path('privacy/', views.privacy_policy, name='privacy'),
     # Resources (SEO content)
     path('resources/', views.resources_list, name='resources_list'),
     path('resources/volunteer-application-template/', views.resource_volunteer_application, name='resource_volunteer_application'),
