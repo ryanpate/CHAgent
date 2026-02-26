@@ -86,6 +86,8 @@ Last Updated: February 25, 2026
   - JWT authentication API (DRF + SimpleJWT) with email-based login
   - Push token registration/unregistration REST endpoints
   - Native push notification delivery via Firebase Cloud Messaging (both platforms)
+  - Firebase iOS SDK (FirebaseCore + FirebaseMessaging) with APNs token forwarding
+  - Firebase service account credentials loaded from `FIREBASE_CREDENTIALS_JSON` env var (Railway)
   - App-mode template detection (cookie/query param) hides sidebar/header in native app
   - Native tab bar (Chat, Volunteers, Follow-ups, Comms, More)
   - Login screen with JWT token storage via Capacitor Preferences
@@ -275,6 +277,9 @@ USE_SUBDOMAIN_ROUTING=true
 VAPID_PUBLIC_KEY=your-public-key
 VAPID_PRIVATE_KEY=your-private-key
 VAPID_CLAIMS_EMAIL=mailto:your-email@example.com
+
+# Firebase Cloud Messaging (native push)
+FIREBASE_CREDENTIALS_JSON={"type":"service_account",...}  # Full JSON from Firebase Console
 ```
 
 ---
@@ -776,6 +781,9 @@ OPENAI_API_KEY=sk-...  # For embeddings
 # Planning Center
 PLANNING_CENTER_APP_ID=your-app-id
 PLANNING_CENTER_SECRET=your-secret
+
+# Firebase Cloud Messaging (native push)
+FIREBASE_CREDENTIALS_JSON={"type":"service_account",...}  # Full JSON from Firebase Console
 
 # Error Monitoring
 SENTRY_DSN=https://your-dsn@sentry.io/project-id
@@ -1864,7 +1872,7 @@ Result: **370 tests passing, 0 failures, 0 errors**.
   - 100/minute user rate throttle
 - **Backend: Native Push Delivery** (`core/notifications.py`):
   - `send_native_push()` sends to FCM for both Android and iOS (APNs via FCM SDK)
-  - `_send_fcm()` uses `firebase-admin` SDK with auto-initialization
+  - `_send_fcm()` uses `firebase-admin` SDK with `FIREBASE_CREDENTIALS_JSON` env var support
   - Extended `send_notification_to_user()` to include native push tokens alongside web push
   - Inactive tokens (`is_active=False`) are skipped
 - **Backend: App-Mode Detection** (`core/context_processors.py`, `templates/base.html`):
@@ -1879,7 +1887,7 @@ Result: **370 tests passing, 0 failures, 0 errors**.
   - `src/index.html` — Login form + 5-tab navigation bar
   - `src/styles.css` — Dark theme (#0f0f0f background, #c9a227 gold accent)
 - **Native Platforms**:
-  - `mobile/ios/` — Xcode project with 7 Capacitor plugins, app icons, splash screens
+  - `mobile/ios/` — Xcode project with 7 Capacitor plugins, Firebase iOS SDK (FirebaseCore + FirebaseMessaging), app icons, splash screens
   - `mobile/android/` — Android Studio project with generated icons and splash screens
   - Platform-specific assets generated via `@capacitor/assets`
 - **App Store Preparation** (`mobile/store-listing.md`):
