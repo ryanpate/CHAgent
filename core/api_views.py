@@ -95,3 +95,12 @@ def unregister_push_token(request):
     if deleted:
         return Response(status=status.HTTP_204_NO_CONTENT)
     return Response({'error': 'token not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def clear_badge_count(request):
+    from core.models import NativePushToken
+
+    NativePushToken.objects.filter(user=request.user).update(unread_badge_count=0)
+    return Response({'status': 'cleared'})

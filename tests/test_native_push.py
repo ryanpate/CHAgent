@@ -303,3 +303,47 @@ class TestBadgeCountInPush:
 
         token.refresh_from_db()
         assert token.unread_badge_count == 3
+
+
+@pytest.mark.django_db
+class TestBadgeClearAPI:
+    def test_clear_badge_resets_count(self, client, user_alpha_owner, org_alpha):
+        token = NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='clear-test-token',
+            platform='ios',
+            unread_badge_count=5,
+        )
+        client.force_login(user_alpha_owner)
+        response = client.post('/api/push/badge-clear/')
+        assert response.status_code == 200
+
+        token.refresh_from_db()
+        assert token.unread_badge_count == 0
+
+    def test_clear_badge_resets_all_user_tokens(self, client, user_alpha_owner, org_alpha):
+        NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='token-1',
+            platform='ios',
+            unread_badge_count=3,
+        )
+        NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='token-2',
+            platform='android',
+            unread_badge_count=7,
+        )
+        client.force_login(user_alpha_owner)
+        response = client.post('/api/push/badge-clear/')
+        assert response.status_code == 200
+
+        counts = list(NativePushToken.objects.filter(user=user_alpha_owner).values_list('unread_badge_count', flat=True))
+        assert counts == [0, 0]
+
+    def test_clear_badge_requires_auth(self, client):
+        response = client.post('/api/push/badge-clear/')
+        assert response.status_code in [401, 403]
