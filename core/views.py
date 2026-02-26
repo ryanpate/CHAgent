@@ -107,9 +107,15 @@ def home(request):
     """
     Public landing page for unauthenticated users.
     Redirects to dashboard for authenticated users.
+    Native app users skip landing page and go straight to login.
     """
     if request.user.is_authenticated:
         return redirect('dashboard')
+
+    # Native app: skip landing page, go straight to login
+    is_app = request.COOKIES.get('aria_app') == '1' or request.GET.get('app') == '1'
+    if is_app:
+        return redirect('login')
 
     from .models import SubscriptionPlan
 
