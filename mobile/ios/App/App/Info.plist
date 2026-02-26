@@ -49,5 +49,32 @@
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>ARIA uses Face ID for quick and secure sign-in.</string>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>church.aria.app.chat</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Chat with Aria</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeCompose</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>church.aria.app.followups</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>My Follow-ups</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeTask</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>church.aria.app.interaction</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Log Interaction</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeAdd</string>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -11,6 +11,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
     /// URL from notification tap that launched the app (cold start)
     var pendingNotificationURL: String?
+    /// URL from quick action that launched the app
+    var pendingShortcutURL: String?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         print("[ARIA] Configuring Firebase...")
@@ -74,6 +76,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 }
             }
         }
+
+        // Handle pending quick action shortcut (cold start)
+        if let url = pendingShortcutURL {
+            print("[ARIA] Injecting pending shortcut URL: \(url)")
+            pendingShortcutURL = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                guard let rootVC = self.window?.rootViewController else { return }
+                if let webView = self.findWebView(in: rootVC.view) {
+                    webView.evaluateJavaScript("window.location.href = 'https://aria.church\(url)?app=1';", completionHandler: nil)
+                }
+            }
+        }
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
@@ -121,6 +135,34 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             }
         }
         completionHandler(.newData)
+    }
+
+    // MARK: - Quick Action Shortcuts
+    func application(_ application: UIApplication, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
+        let url = urlForShortcut(shortcutItem.type)
+        print("[ARIA] Quick action: \(shortcutItem.type) -> \(url)")
+
+        guard let rootVC = self.window?.rootViewController else {
+            completionHandler(false)
+            return
+        }
+
+        if let webView = self.findWebView(in: rootVC.view) {
+            webView.evaluateJavaScript("window.location.href = 'https://aria.church\(url)?app=1';", completionHandler: nil)
+            completionHandler(true)
+        } else {
+            pendingShortcutURL = url
+            completionHandler(true)
+        }
+    }
+
+    private func urlForShortcut(_ type: String) -> String {
+        switch type {
+        case "church.aria.app.chat": return "/chat/"
+        case "church.aria.app.followups": return "/followups/"
+        case "church.aria.app.interaction": return "/interactions/create/"
+        default: return "/chat/"
+        }
     }
 
 }
