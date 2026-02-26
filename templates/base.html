@@ -803,9 +803,11 @@
             });
 
             Push.addListener('pushNotificationActionPerformed', function(action) {
-                console.log('[ARIA] Push action:', action.notification.data);
-                var url = action.notification.data && action.notification.data.url;
-                if (url) window.location.href = url;
+                console.log('[ARIA] Push action full:', JSON.stringify(action));
+                var data = action.notification.data || {};
+                var url = data.url || '';
+                console.log('[ARIA] Push action url:', url);
+                if (url && url.startsWith('/')) window.location.href = url;
             });
 
             // Request permission and register for APNs (triggers Firebase to get FCM token)

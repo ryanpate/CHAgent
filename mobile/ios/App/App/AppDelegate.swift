@@ -1,5 +1,6 @@
 import UIKit
 import WebKit
+import UserNotifications
 import Capacitor
 import FirebaseCore
 import FirebaseMessaging
@@ -10,8 +11,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        print("[ARIA] Configuring Firebase...")
         FirebaseApp.configure()
+        print("[ARIA] Firebase configured. Setting messaging delegate...")
         Messaging.messaging().delegate = self
+        print("[ARIA] Messaging delegate set. Firebase app: \(FirebaseApp.app()?.name ?? "nil")")
+
+        // Register for remote notifications explicitly
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            print("[ARIA] Notification authorization: granted=\(granted), error=\(error?.localizedDescription ?? "none")")
+            if granted {
+                DispatchQueue.main.async {
+                    application.registerForRemoteNotifications()
+                    print("[ARIA] Called registerForRemoteNotifications()")
+                }
+            }
+        }
+
         return true
     }
 
@@ -30,7 +46,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        // Proactively fetch FCM token as fallback in case delegate didn't fire
+        print("[ARIA] App became active, fetching FCM token...")
+        fetchFCMTokenIfNeeded()
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
@@ -52,8 +70,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     // Forward APNs token to Firebase so FCM can map it to an FCM registration token
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        let tokenString = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+        print("[ARIA] APNs device token received: \(tokenString.prefix(20))...")
         Messaging.messaging().apnsToken = deviceToken
+        print("[ARIA] APNs token forwarded to Firebase")
         NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        print("[ARIA] APNs registration FAILED: \(error.localizedDescription)")
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
 
 }
@@ -61,21 +87,46 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 // MARK: - Firebase Messaging Delegate
 extension AppDelegate: MessagingDelegate {
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        guard let token = fcmToken else { return }
-        print("FCM registration token: \(token)")
+        guard let token = fcmToken else {
+            print("[ARIA] FCM delegate fired but token is nil")
+            return
+        }
+        print("[ARIA] FCM registration token: \(token.prefix(30))...")
+        injectFCMToken(token)
+    }
 
+    func injectFCMToken(_ token: String) {
         // Inject FCM token into WebView so JS can register it with the server
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            guard let rootVC = self.window?.rootViewController else { return }
+            guard let rootVC = self.window?.rootViewController else {
+                print("[ARIA] No rootViewController found for FCM injection")
+                return
+            }
             if let webView = self.findWebView(in: rootVC.view) {
                 let js = "window.dispatchEvent(new CustomEvent('fcmToken', {detail: '\(token)'}));"
                 webView.evaluateJavaScript(js) { _, error in
                     if let error = error {
-                        print("FCM token injection error: \(error)")
+                        print("[ARIA] FCM token injection error: \(error)")
                     } else {
-                        print("FCM token injected into WebView")
+                        print("[ARIA] FCM token injected into WebView")
                     }
                 }
+            } else {
+                print("[ARIA] No WKWebView found for FCM injection")
+            }
+        }
+    }
+
+    /// Fallback: proactively fetch FCM token if delegate hasn't fired
+    func fetchFCMTokenIfNeeded() {
+        Messaging.messaging().token { token, error in
+            if let error = error {
+                print("[ARIA] FCM token fetch error: \(error.localizedDescription)")
+            } else if let token = token {
+                print("[ARIA] FCM token fetched proactively: \(token.prefix(30))...")
+                self.injectFCMToken(token)
+            } else {
+                print("[ARIA] FCM token fetch returned nil")
             }
         }
     }
