@@ -7,6 +7,7 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://aria.church/app/',
     cleartext: false,
+    allowNavigation: ['aria.church'],
   },
   plugins: {
     SplashScreen: {
