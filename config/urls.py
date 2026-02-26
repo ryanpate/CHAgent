@@ -74,12 +74,43 @@ def manifest(request):
     )
 
 
+def apple_app_site_association(request):
+    """Serve Apple App Site Association file for Universal Links."""
+    import json
+    data = {
+        "applinks": {
+            "details": [
+                {
+                    "appIDs": [
+                        "XXXXXXXXXX.church.aria.app"
+                    ],
+                    "components": [
+                        {"/" : "/chat/*"},
+                        {"/" : "/followups/*"},
+                        {"/" : "/volunteers/*"},
+                        {"/" : "/comms/*"},
+                        {"/" : "/documents/*"},
+                        {"/" : "/interactions/*"},
+                        {"/" : "/analytics/*"},
+                        {"/" : "/care/*"},
+                    ]
+                }
+            ]
+        }
+    }
+    return HttpResponse(
+        json.dumps(data),
+        content_type='application/json'
+    )
+
+
 urlpatterns = [
     path('health/', health_check, name='health_check'),  # Health check first
     path('robots.txt', robots_txt, name='robots_txt'),  # SEO robots.txt
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
     path('sw.js', service_worker, name='service_worker'),  # Service worker at root
     path('manifest.json', manifest, name='manifest'),  # Manifest at root
+    path('.well-known/apple-app-site-association', apple_app_site_association, name='aasa'),
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
     path('blog/', include('blog.urls', namespace='blog')),

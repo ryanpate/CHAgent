@@ -4,6 +4,7 @@ import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { Network } from '@capacitor/network';
+import { App } from '@capacitor/app';
 import {
     login,
     isAuthenticated,
@@ -139,6 +140,19 @@ async function showApp() {
 
     // Initialize push notifications
     await initPushNotifications();
+
+    // Listen for Universal Link / Deep Link opens
+    App.addListener('appUrlOpen', (event) => {
+        console.log('[ARIA] Deep link opened:', event.url);
+        try {
+            const url = new URL(event.url);
+            if (url.hostname === 'aria.church' && url.pathname) {
+                navigateToUrl(url.pathname);
+            }
+        } catch (e) {
+            console.error('[ARIA] Failed to parse deep link:', e);
+        }
+    });
 
     // Listen for navigation events from push notifications
     window.addEventListener('navigate', (e) => {
