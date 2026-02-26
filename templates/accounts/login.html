@@ -16,7 +16,12 @@
         </div>
         {% endif %}
 
-        <form method="post" class="space-y-6">
+        <!-- Biometric status (app mode only, hidden by default) -->
+        <div id="biometric-status" class="text-center text-gray-400 text-sm mb-6" style="display: none;">
+            Authenticating with Face ID...
+        </div>
+
+        <form method="post" id="login-form" class="space-y-6">
             {% csrf_token %}
             <div>
                 <label for="id_username" class="block text-sm font-medium text-gray-300 mb-2">Username</label>
@@ -24,6 +29,8 @@
                        name="username"
                        id="id_username"
                        autocomplete="username"
+                       autocapitalize="none"
+                       autocorrect="off"
                        required
                        class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-ch-gold transition">
             </div>
@@ -47,4 +54,67 @@
         </p>
     </div>
 </div>
+
+{% if is_app_mode %}
+<script>
+(function() {
+    if (!window.Capacitor || !window.Capacitor.registerPlugin) return;
+
+    var NativeBiometric = window.Capacitor.registerPlugin('NativeBiometric');
+    var SERVER = 'aria.church';
+
+    async function tryBiometricLogin() {
+        try {
+            // Check if biometrics are available
+            var result = await NativeBiometric.isAvailable();
+            if (!result.isAvailable) return;
+
+            // Check if we have stored credentials
+            var creds;
+            try {
+                creds = await NativeBiometric.getCredentials({ server: SERVER });
+            } catch(e) {
+                return; // No stored credentials — first login
+            }
+            if (!creds || !creds.username) return;
+
+            // Show status message
+            document.getElementById('biometric-status').style.display = 'block';
+
+            // Prompt Face ID / Touch ID
+            await NativeBiometric.verifyIdentity({
+                reason: 'Sign in to ARIA',
+                title: 'Sign In',
+            });
+
+            // Auto-fill and submit the Django login form
+            document.getElementById('id_username').value = creds.username;
+            document.getElementById('id_password').value = creds.password;
+            document.getElementById('login-form').submit();
+
+        } catch(e) {
+            // Biometric failed or cancelled — hide status, show form normally
+            document.getElementById('biometric-status').style.display = 'none';
+        }
+    }
+
+    // Store credentials after successful manual login
+    var form = document.getElementById('login-form');
+    form.addEventListener('submit', function() {
+        var username = document.getElementById('id_username').value;
+        var password = document.getElementById('id_password').value;
+        if (username && password) {
+            NativeBiometric.setCredentials({
+                username: username,
+                password: password,
+                server: SERVER,
+            }).catch(function() {});
+        }
+    });
+
+    // Try biometric login on page load
+    tryBiometricLogin();
+})();
+</script>
+{% endif %}
 {% endblock %}
