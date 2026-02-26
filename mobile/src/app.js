@@ -2,10 +2,31 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar } from '@capacitor/status-bar';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
-import { login, isAuthenticated, clearTokens } from './auth.js';
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import {
+    login,
+    isAuthenticated,
+    clearTokens,
+    isBiometricAvailable,
+    hasBiometricCredentials,
+    loginWithBiometric,
+    storeBiometricCredentials,
+} from './auth.js';
 import { initPushNotifications } from './push.js';
 
 const SERVER_URL = 'https://aria.church';
+
+async function hapticImpact() {
+    if (Capacitor.isNativePlatform()) {
+        try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
+    }
+}
+
+async function hapticSuccess() {
+    if (Capacitor.isNativePlatform()) {
+        try { await Haptics.notification({ type: NotificationType.Success }); } catch {}
+    }
+}
 
 async function init() {
     // Set dark status bar
@@ -21,7 +42,20 @@ async function init() {
     if (authenticated) {
         await showApp();
     } else {
-        showLogin();
+        // Try biometric login before showing login form
+        const biometricReady = await isBiometricAvailable() && await hasBiometricCredentials();
+        if (biometricReady) {
+            try {
+                await loginWithBiometric();
+                await hapticSuccess();
+                await showApp();
+            } catch {
+                // Biometric failed or cancelled — show login form
+                showLogin();
+            }
+        } else {
+            showLogin();
+        }
     }
 
     await SplashScreen.hide();
@@ -44,6 +78,8 @@ function showLogin() {
 
         try {
             await login(email, password);
+            await storeBiometricCredentials(email, password);
+            await hapticSuccess();
             await showApp();
         } catch (err) {
             error.textContent = err.message;
@@ -67,7 +103,8 @@ async function showApp() {
 
     // Set up tab bar
     document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', () => {
+        tab.addEventListener('click', async () => {
+            await hapticImpact();
             const url = tab.dataset.url;
 
             // Handle "More" tab specially
@@ -98,6 +135,8 @@ function navigateToUrl(path) {
 }
 
 function showMoreMenu() {
+    hapticImpact();
+
     // Simple menu for additional pages
     const items = [
         { label: 'Analytics', url: '/analytics/' },
@@ -140,12 +179,14 @@ function showMoreMenu() {
         if (item.action === 'logout') {
             btn.style.color = '#ef4444';
             btn.addEventListener('click', async () => {
+                await hapticImpact();
                 await clearTokens();
                 document.cookie = 'aria_app=; path=/; domain=aria.church; expires=Thu, 01 Jan 1970 00:00:00 GMT';
                 window.location.reload();
             });
         } else {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
+                await hapticImpact();
                 overlay.remove();
                 navigateToUrl(item.url);
             });
