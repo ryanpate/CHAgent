@@ -178,9 +178,11 @@ extension AppDelegate: MessagingDelegate {
         injectFCMToken(token)
     }
 
-    func injectFCMToken(_ token: String) {
+    func injectFCMToken(_ token: String, attempt: Int = 1) {
         // Inject FCM token into WebView so JS can register it with the server
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        // Wait longer on first attempt to allow redirects (e.g. /app/ -> /login/) to complete
+        let delay: Double = attempt == 1 ? 5.0 : 3.0
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             guard let rootVC = self.window?.rootViewController else {
                 print("[ARIA] No rootViewController found for FCM injection")
                 return
@@ -189,13 +191,20 @@ extension AppDelegate: MessagingDelegate {
                 let js = "window.dispatchEvent(new CustomEvent('fcmToken', {detail: '\(token)'}));"
                 webView.evaluateJavaScript(js) { _, error in
                     if let error = error {
-                        print("[ARIA] FCM token injection error: \(error)")
+                        print("[ARIA] FCM token injection error (attempt \(attempt)): \(error)")
+                        // Retry up to 3 times — page may still be loading
+                        if attempt < 3 {
+                            self.injectFCMToken(token, attempt: attempt + 1)
+                        }
                     } else {
                         print("[ARIA] FCM token injected into WebView")
                     }
                 }
             } else {
-                print("[ARIA] No WKWebView found for FCM injection")
+                print("[ARIA] No WKWebView found for FCM injection (attempt \(attempt))")
+                if attempt < 3 {
+                    self.injectFCMToken(token, attempt: attempt + 1)
+                }
             }
         }
     }
