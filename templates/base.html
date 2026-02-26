@@ -673,13 +673,6 @@
     </script>
 
     <script>
-        // Clear stale app-mode cookie (no longer used for sidebar hiding)
-        (function() {
-            if (document.cookie.indexOf('aria_app=1') !== -1) {
-                document.cookie = 'aria_app=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                document.cookie = 'aria_app=; path=/; domain=aria.church; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-            }
-        })();
         // Capacitor native app detection - add safe-area padding only (do NOT hide sidebar)
         (function() {
             var isNative = window.Capacitor && (

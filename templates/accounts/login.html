@@ -101,16 +101,21 @@
 
     function setupCredentialStorage(NativeBiometric) {
         var form = document.getElementById('login-form');
-        form.addEventListener('submit', function() {
+        form.addEventListener('submit', function(e) {
             var username = document.getElementById('id_username').value;
             var password = document.getElementById('id_password').value;
             if (username && password) {
-                console.log('[ARIA] Storing credentials for biometric...');
-                NativeBiometric.setCredentials({
-                    username: username,
-                    password: password,
-                    server: SERVER,
-                }).catch(function(e) { console.log('[ARIA] Credential store failed:', e); });
+                // Store credentials in background — don't block form submission
+                // Use setTimeout to decouple from the navigation
+                var u = username, p = password;
+                setTimeout(function() {
+                    console.log('[ARIA] Storing credentials for biometric...');
+                    NativeBiometric.setCredentials({
+                        username: u,
+                        password: p,
+                        server: SERVER,
+                    }).catch(function(e) { console.log('[ARIA] Credential store failed:', e); });
+                }, 0);
             }
         });
     }
