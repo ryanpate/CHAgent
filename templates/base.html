@@ -302,10 +302,26 @@
         /* Pull to refresh indicator */
         .ptr-indicator {
             position: fixed;
-            top: 0;
+            top: -50px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 9999;
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(201, 162, 39, 0.3);
+            border-top-color: #c9a227;
+            border-radius: 50%;
+            transition: top 0.2s ease;
+        }
+        .ptr-indicator.pulling {
+            top: 10px;
+        }
+        .ptr-indicator.refreshing {
+            top: 10px;
+            animation: ptr-spin 0.6s linear infinite;
+        }
+        @keyframes ptr-spin {
+            to { transform: translateX(-50%) rotate(360deg); }
         }
 
         /* Skeleton loader animation */
@@ -347,6 +363,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-ch-black text-white min-h-screen{% if is_app_mode %} app-mode-hidden{% endif %}" x-data="{ sidebarOpen: false }">
+    <div id="ptr-indicator" class="ptr-indicator"></div>
     {% if user.is_authenticated %}
     <!-- Subscription Warning Banners -->
     {% if show_trial_warning %}
@@ -720,6 +737,52 @@
                 var el = e.target.closest('a, button, .nav-link, [role="button"]');
                 if (el) {
                     try { Haptics.impact({ style: 'LIGHT' }); } catch(e) {}
+                }
+            });
+        })();
+    </script>
+
+    <script>
+        // Pull-to-refresh for native app
+        (function() {
+            if (!window.Capacitor || !window.Capacitor.Plugins) return;
+
+            var startY = 0;
+            var pulling = false;
+            var threshold = 60;
+            var indicator = document.getElementById('ptr-indicator');
+
+            document.addEventListener('touchstart', function(e) {
+                if (window.scrollY === 0) {
+                    startY = e.touches[0].clientY;
+                    pulling = true;
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchmove', function(e) {
+                if (!pulling) return;
+                var distance = e.touches[0].clientY - startY;
+                if (distance > 0 && distance < 120) {
+                    indicator.style.top = (distance - 50) + 'px';
+                    if (distance > threshold) {
+                        indicator.classList.add('pulling');
+                    } else {
+                        indicator.classList.remove('pulling');
+                    }
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchend', function() {
+                if (!pulling) return;
+                pulling = false;
+                var currentTop = parseInt(indicator.style.top) || -50;
+                if (currentTop > threshold - 50) {
+                    indicator.classList.remove('pulling');
+                    indicator.classList.add('refreshing');
+                    window.location.reload();
+                } else {
+                    indicator.style.top = '-50px';
+                    indicator.classList.remove('pulling');
                 }
             });
         })();
