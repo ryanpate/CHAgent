@@ -673,17 +673,21 @@
     </script>
 
     <script>
-        // Auto-detect Capacitor native app and set app-mode cookie + hide sidebar
+        // Clear stale app-mode cookie (no longer used for sidebar hiding)
+        (function() {
+            if (document.cookie.indexOf('aria_app=1') !== -1) {
+                document.cookie = 'aria_app=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                document.cookie = 'aria_app=; path=/; domain=aria.church; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            }
+        })();
+        // Capacitor native app detection - add safe-area padding only (do NOT hide sidebar)
         (function() {
             var isNative = window.Capacitor && (
                 (window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ||
                 (window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen)
             );
             if (isNative) {
-                if (document.cookie.indexOf('aria_app=1') === -1) {
-                    document.cookie = 'aria_app=1; path=/; max-age=31536000; secure; samesite=lax';
-                }
-                document.body.classList.add('app-mode-hidden');
+                document.body.classList.add('capacitor-native');
             }
         })();
     </script>

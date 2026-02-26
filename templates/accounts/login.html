@@ -57,15 +57,17 @@
 
 <script>
 (function() {
-    if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.NativeBiometric) return;
-
-    var NativeBiometric = window.Capacitor.Plugins.NativeBiometric;
     var SERVER = 'aria.church';
 
-    async function tryBiometricLogin() {
+    function getNativeBiometric() {
+        return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NativeBiometric;
+    }
+
+    async function tryBiometricLogin(NativeBiometric) {
         try {
-            // Check if biometrics are available
+            console.log('[ARIA] Checking biometric availability...');
             var result = await NativeBiometric.isAvailable();
+            console.log('[ARIA] Biometric available:', result.isAvailable);
             if (!result.isAvailable) return;
 
             // Check if we have stored credentials
@@ -73,46 +75,64 @@
             try {
                 creds = await NativeBiometric.getCredentials({ server: SERVER });
             } catch(e) {
-                return; // No stored credentials — first login
+                console.log('[ARIA] No stored credentials — first login');
+                return;
             }
             if (!creds || !creds.username) return;
 
-            // Show status message
+            console.log('[ARIA] Found stored credentials, prompting Face ID...');
             document.getElementById('biometric-status').style.display = 'block';
 
-            // Prompt Face ID / Touch ID
             await NativeBiometric.verifyIdentity({
                 reason: 'Sign in to ARIA',
                 title: 'Sign In',
             });
 
-            // Auto-fill and submit the Django login form
+            console.log('[ARIA] Face ID verified, submitting login form');
             document.getElementById('id_username').value = creds.username;
             document.getElementById('id_password').value = creds.password;
             document.getElementById('login-form').submit();
 
         } catch(e) {
-            // Biometric failed or cancelled — hide status, show form normally
+            console.log('[ARIA] Biometric failed or cancelled:', e);
             document.getElementById('biometric-status').style.display = 'none';
         }
     }
 
-    // Store credentials after successful manual login
-    var form = document.getElementById('login-form');
-    form.addEventListener('submit', function() {
-        var username = document.getElementById('id_username').value;
-        var password = document.getElementById('id_password').value;
-        if (username && password) {
-            NativeBiometric.setCredentials({
-                username: username,
-                password: password,
-                server: SERVER,
-            }).catch(function() {});
-        }
-    });
+    function setupCredentialStorage(NativeBiometric) {
+        var form = document.getElementById('login-form');
+        form.addEventListener('submit', function() {
+            var username = document.getElementById('id_username').value;
+            var password = document.getElementById('id_password').value;
+            if (username && password) {
+                console.log('[ARIA] Storing credentials for biometric...');
+                NativeBiometric.setCredentials({
+                    username: username,
+                    password: password,
+                    server: SERVER,
+                }).catch(function(e) { console.log('[ARIA] Credential store failed:', e); });
+            }
+        });
+    }
 
-    // Try biometric login on page load
-    tryBiometricLogin();
+    // Wait for Capacitor bridge to be ready (plugins may load after page script)
+    var attempts = 0;
+    function waitForBiometric() {
+        var NB = getNativeBiometric();
+        if (NB) {
+            console.log('[ARIA] NativeBiometric plugin found');
+            setupCredentialStorage(NB);
+            tryBiometricLogin(NB);
+        } else if (attempts < 10) {
+            attempts++;
+            console.log('[ARIA] Waiting for Capacitor plugins... attempt', attempts);
+            setTimeout(waitForBiometric, 200);
+        } else {
+            console.log('[ARIA] NativeBiometric not available after 2s — not in native app');
+        }
+    }
+
+    waitForBiometric();
 })();
 </script>
 {% endblock %}

@@ -27,6 +27,11 @@ body.app-mode-hidden {
     padding-bottom: 80px;
 }
 
+/* Capacitor native app - safe area padding for status bar */
+body.capacitor-native {
+    padding-top: env(safe-area-inset-top, 0px);
+}
+
 /* Typography */
 .font-display {
     font-family: 'Playfair Display', Georgia, serif;
