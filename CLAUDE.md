@@ -12,7 +12,7 @@ Last Updated: February 25, 2026
 - **105+ Templates** for complete user journeys
 - **10 Test Files** with 441 passing test cases (0 failures)
 - **33+ Migrations** tracking schema evolution
-- **Recent Focus**: Native mobile app (Capacitor), Knowledge Base image support, document upload, test suite stability, two-factor authentication, audit logging
+- **Recent Focus**: Native mobile app (Capacitor) with Face ID biometric auth and haptics, Knowledge Base image support, document upload, test suite stability, two-factor authentication, audit logging
 
 ### Current Sprint (February 2026)
 - ✅ **Closed Beta System** - Full beta request and approval workflow
@@ -88,11 +88,14 @@ Last Updated: February 25, 2026
   - Native push notification delivery via Firebase Cloud Messaging (both platforms)
   - Firebase iOS SDK (FirebaseCore + FirebaseMessaging) with APNs token forwarding
   - Firebase service account credentials loaded from `FIREBASE_CREDENTIALS_JSON` env var (Railway)
-  - App-mode template detection (cookie/query param) hides sidebar/header in native app
-  - Native tab bar (Chat, Volunteers, Follow-ups, Comms, More)
+  - Capacitor native detection via `Capacitor.Plugins.SplashScreen` presence (adds safe-area padding)
+  - Web sidebar navigation preserved in native app (no native tab bar on remote pages)
   - Login screen with JWT token storage via Capacitor Preferences
+  - Face ID / Touch ID biometric authentication via `@capgo/capacitor-native-biometric`
+  - Haptic feedback on all tappable elements via `@capacitor/haptics`
   - iOS (Xcode) and Android (Gradle) platform projects with app icons and splash screens
   - App Store/Play Store listing content and pre-submission checklist
+  - Demo account management command (`create_demo_account`) for App Store review
   - 17 new tests (model, auth API, push registration, notifications, app-mode) — 441 total passing
 - ✅ **Privacy Policy Page** (`/privacy/`) - Public privacy policy for App Store compliance
   - 10 sections: data collection, AI processing, data sharing, security, retention, user rights, children's privacy
@@ -1658,7 +1661,7 @@ The following features have been implemented:
 - [x] **Dependency Scanning**: Dependabot configuration for weekly vulnerability scanning
 - [x] **Knowledge Base**: Document upload with RAG search, Aria integration, and citation support
 - [x] **Knowledge Base Image Support**: PDF image extraction, standalone image uploads, Claude Vision descriptions, inline image display in chat
-- [x] **Native Mobile App**: iOS and Android apps via Capacitor with JWT auth, native tab bar, and FCM push notifications
+- [x] **Native Mobile App**: iOS and Android apps via Capacitor with JWT auth, Face ID/Touch ID biometric login, haptic feedback, and FCM push notifications
 
 ---
 
@@ -1853,10 +1856,29 @@ Result: **370 tests passing, 0 failures, 0 errors**.
 
 ### Native Mobile App (Capacitor)
 - **Architecture**: Hybrid native shell (Ionic Capacitor 6) wrapping the existing Django web app in a WebView
-  - App loads pages from `aria.church` with `?app=1` query param for app-mode detection
-  - Native tab bar replaces web sidebar (Chat, Volunteers, Follow-ups, Comms, More)
-  - Login screen with JWT auth stored locally via Capacitor Preferences
+  - App loads pages from `aria.church` — WebView renders Django templates directly
+  - Web sidebar navigation preserved (native tab bar not used since remote pages replace local HTML)
+  - Login via Django's standard login page at `/accounts/login/`
   - External links open in system browser via `@capacitor/browser`
+  - **IMPORTANT: Capacitor bridge on remote pages** — `registerPlugin()` is NOT available; use `Capacitor.Plugins.X` direct access instead (e.g., `Capacitor.Plugins.NativeBiometric`, `Capacitor.Plugins.Haptics`)
+  - Native plugin code must live in Django templates (not `mobile/src/`), since `server.url` loads remote pages and local JS is never executed
+- **Face ID / Touch ID Biometric Login** (`templates/accounts/login.html`):
+  - `@capgo/capacitor-native-biometric` v8.4.2 for Keychain credential storage
+  - Retry loop waits up to 2s for Capacitor plugin bridge to be ready
+  - On first manual login, credentials stored via `setCredentials()` (deferred with `setTimeout` to avoid blocking form POST)
+  - On subsequent logins, auto-prompts Face ID/Touch ID, auto-fills and submits form
+  - `NSFaceIDUsageDescription` in `Info.plist` for Face ID permission
+  - Console logging with `[ARIA]` prefix for Safari Web Inspector debugging
+- **Haptic Feedback** (`templates/base.html`):
+  - `@capacitor/haptics` provides light impact on all tappable elements (links, buttons, nav items)
+  - Uses `Capacitor.Plugins.Haptics.impact({ style: 'LIGHT' })` — only works on physical devices, not simulator
+- **Capacitor Native Detection** (`templates/base.html`):
+  - Detects native app via `Capacitor.isNativePlatform()` or `Capacitor.Plugins.SplashScreen` presence
+  - Adds `capacitor-native` CSS class for safe-area status bar padding
+  - Does NOT hide sidebar/hamburger menu (web nav is the primary nav in remote-page architecture)
+- **Demo Account** (`core/management/commands/create_demo_account.py`):
+  - Management command for App Store review: `python manage.py create_demo_account`
+  - Creates `demo@aria.church` / `AppReview2026!` with sample org, volunteers, interactions, follow-ups
 - **Backend: NativePushToken Model** (`core/models.py`):
   - Stores FCM/APNs device tokens per user with platform (ios/android) and device name
   - `unique_together` on user + token prevents duplicate registrations
@@ -1875,19 +1897,15 @@ Result: **370 tests passing, 0 failures, 0 errors**.
   - `_send_fcm()` uses `firebase-admin` SDK with `FIREBASE_CREDENTIALS_JSON` env var support
   - Extended `send_notification_to_user()` to include native push tokens alongside web push
   - Inactive tokens (`is_active=False`) are skipped
-- **Backend: App-Mode Detection** (`core/context_processors.py`, `templates/base.html`):
-  - Detects `aria_app=1` cookie or `?app=1` query parameter
-  - `is_app_mode` template variable conditionally hides sidebar, mobile header
-  - `body.app-mode-hidden` CSS class adds safe-area padding for status bar and tab bar
 - **Mobile App** (`mobile/`):
   - `capacitor.config.ts` — App ID `church.aria.app`, server URL `https://aria.church`
-  - `src/auth.js` — JWT login, refresh, token expiry check, Preferences storage
+  - `src/auth.js` — JWT login, refresh, biometric functions (used by local app, not remote pages)
   - `src/push.js` — FCM registration, push action handler with navigation events
-  - `src/app.js` — App init, tab bar, More menu overlay, external link handling
-  - `src/index.html` — Login form + 5-tab navigation bar
+  - `src/app.js` — App init, haptics, biometric flow (used by local app, not remote pages)
+  - `src/index.html` — Login form + 5-tab navigation bar (local fallback)
   - `src/styles.css` — Dark theme (#0f0f0f background, #c9a227 gold accent)
 - **Native Platforms**:
-  - `mobile/ios/` — Xcode project with 7 Capacitor plugins, Firebase iOS SDK (FirebaseCore + FirebaseMessaging), app icons, splash screens
+  - `mobile/ios/` — Xcode project with Capacitor plugins + NativeBiometric, Firebase iOS SDK, app icons, splash screens
   - `mobile/android/` — Android Studio project with generated icons and splash screens
   - Platform-specific assets generated via `@capacitor/assets`
 - **App Store Preparation** (`mobile/store-listing.md`):
@@ -1897,6 +1915,9 @@ Result: **370 tests passing, 0 failures, 0 errors**.
 - **Dependencies Added** (`requirements.txt`):
   - `djangorestframework>=3.14.0`, `djangorestframework-simplejwt>=5.3.0`
   - `django-cors-headers>=4.3.0`, `firebase-admin>=6.0.0`
+- **Mobile npm Dependencies** (`mobile/package.json`):
+  - `@capgo/capacitor-native-biometric` ^8.4.2 — Face ID / Touch ID with Keychain storage
+  - `@capacitor/haptics` ^8.0.1 — Native haptic feedback
 - **Settings Changes** (`config/settings.py`):
   - Added `rest_framework` and `corsheaders` to INSTALLED_APPS
   - `CorsMiddleware` added to MIDDLEWARE
@@ -1910,6 +1931,16 @@ Result: **370 tests passing, 0 failures, 0 errors**.
   - Native push notification delivery with FCM mocking
   - App-mode template detection (sidebar hidden vs shown)
   - Full suite: **441 tests passing, 0 failures, 0 errors**
+
+#### Capacitor Remote-Page Architecture Notes
+> **Critical**: When `server.url` is set in `capacitor.config.ts`, the WebView loads pages from the remote server. Local files in `mobile/src/` are bundled but never displayed. This means:
+> - All native plugin calls must be in **Django templates** (not local JS files)
+> - Use `window.Capacitor.Plugins.PluginName` to access plugins (NOT `Capacitor.registerPlugin()`)
+> - `window.Capacitor.Plugins` contains all installed plugins on remote pages
+> - Native bridge calls during form submission must be deferred (`setTimeout`) to avoid cancelling the POST navigation (`NSURLErrorDomain -999`)
+> - The web sidebar/hamburger menu is the primary navigation (no native tab bar on remote pages)
+> - Haptics only work on physical devices (not in the iOS Simulator)
+> - Face ID in Simulator requires: Features → Face ID → Enrolled
 
 ---
 
