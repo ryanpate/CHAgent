@@ -87,19 +87,28 @@ Last Updated: February 26, 2026
   - Push token registration/unregistration REST endpoints
   - Native push notification delivery via Firebase Cloud Messaging (both platforms)
   - Firebase iOS SDK (FirebaseCore + FirebaseMessaging) with APNs token forwarding
+  - AppDelegate FCM token injection: MessagingDelegate receives FCM token, injects into WebView via `evaluateJavaScript` custom event
+  - Proactive FCM token fetch on `applicationDidBecomeActive` as fallback
   - Firebase service account credentials loaded from `FIREBASE_CREDENTIALS_JSON` env var (Railway)
-  - Capacitor native detection via `Capacitor.Plugins.SplashScreen` presence (adds safe-area padding)
-  - Web sidebar navigation preserved in native app (no native tab bar on remote pages)
+  - App-mode detection via `aria_app=1` cookie or `?app=1` query param (hides sidebar/header)
+  - Native app users skip beta landing page, redirect straight to login when unauthenticated
+  - Login page "Request Beta Access" link for new users
   - Login screen with JWT token storage via Capacitor Preferences
   - Face ID / Touch ID biometric authentication via `@capgo/capacitor-native-biometric`
   - Haptic feedback on all tappable elements via `@capacitor/haptics`
   - iOS (Xcode) and Android (Gradle) platform projects with app icons and splash screens
+  - Custom splash screen (2732x2732 source, gold logo on #0f0f0f, LaunchScreen.storyboard with scaleAspectFill)
   - App Store/Play Store listing content and pre-submission checklist
   - Demo account management command (`create_demo_account`) for App Store review
   - App icon badge count for unread push notifications (per-device tracking via `unread_badge_count` field)
   - Badge count included in FCM payload (`apns.payload.aps.badge`) — iOS updates badge automatically
+  - Badge clear on app open: native `applicationIconBadgeNumber = 0`, JS `setBadgeCount(0)`, server API
   - Badge clear API endpoint (`POST /api/push/badge-clear/`) resets count when app opens
+  - Push notification tap navigation: JS `pushNotificationActionPerformed` handler navigates to notification URL
+  - Cold-start notification handling: AppDelegate stores pending URL from `launchOptions`, injects into WebView after load
+  - Background notification tap: `didReceiveRemoteNotification` navigates WebView to notification URL
   - Pull-to-refresh gesture on all pages (touch event handler, 60px threshold, gold spinner)
+  - Push entitlements (`App.entitlements` with `aps-environment: development`)
   - 25 new tests (model, auth API, push registration, notifications, badge count, badge clear, app-mode) — 449 total passing
 - ✅ **Privacy Policy Page** (`/privacy/`) - Public privacy policy for App Store compliance
   - 10 sections: data collection, AI processing, data sharing, security, retention, user rights, children's privacy
