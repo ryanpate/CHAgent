@@ -44,6 +44,27 @@ class TestNativePushTokenModel:
                 platform='ios',
             )
 
+    def test_badge_count_default_zero(self, user_alpha_owner, org_alpha):
+        token = NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='badge-test-token',
+            platform='ios',
+        )
+        assert token.unread_badge_count == 0
+
+    def test_badge_count_increment(self, user_alpha_owner, org_alpha):
+        token = NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='badge-inc-token',
+            platform='ios',
+        )
+        token.unread_badge_count += 1
+        token.save()
+        token.refresh_from_db()
+        assert token.unread_badge_count == 1
+
     def test_tenant_isolation(self, user_alpha_owner, org_alpha, user_beta_owner, org_beta):
         NativePushToken.objects.create(
             user=user_alpha_owner,

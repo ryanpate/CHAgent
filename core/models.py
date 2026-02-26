@@ -3173,6 +3173,7 @@ class NativePushToken(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    unread_badge_count = models.PositiveIntegerField(default=0)
 
     class Meta:
         unique_together = ['user', 'token']
