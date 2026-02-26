@@ -57,9 +57,9 @@
 
 <script>
 (function() {
-    if (!window.Capacitor || !window.Capacitor.registerPlugin) return;
+    if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.NativeBiometric) return;
 
-    var NativeBiometric = window.Capacitor.registerPlugin('NativeBiometric');
+    var NativeBiometric = window.Capacitor.Plugins.NativeBiometric;
     var SERVER = 'aria.church';
 
     async function tryBiometricLogin() {

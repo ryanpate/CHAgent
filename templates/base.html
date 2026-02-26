@@ -675,7 +675,11 @@
     <script>
         // Auto-detect Capacitor native app and set app-mode cookie + hide sidebar
         (function() {
-            if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+            var isNative = window.Capacitor && (
+                (window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ||
+                (window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen)
+            );
+            if (isNative) {
                 if (document.cookie.indexOf('aria_app=1') === -1) {
                     document.cookie = 'aria_app=1; path=/; max-age=31536000; secure; samesite=lax';
                 }
@@ -687,9 +691,9 @@
     <script>
         // Native app haptic feedback via Capacitor bridge
         (function() {
-            if (!window.Capacitor || !window.Capacitor.registerPlugin) return;
+            if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.Haptics) return;
 
-            var Haptics = window.Capacitor.registerPlugin('Haptics');
+            var Haptics = window.Capacitor.Plugins.Haptics;
 
             document.addEventListener('click', function(e) {
                 var el = e.target.closest('a, button, .nav-link, [role="button"]');
