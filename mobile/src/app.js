@@ -30,14 +30,18 @@ async function hapticSuccess() {
 }
 
 async function setupNetworkMonitoring() {
-    Network.addListener('networkStatusChange', (status) => {
-        console.log('[ARIA] Network status:', status.connected);
-        if (status.connected) {
-            if (window.location.href.includes('offline.html')) {
-                window.location.reload();
+    try {
+        await Network.addListener('networkStatusChange', (status) => {
+            console.log('[ARIA] Network status:', status.connected);
+            if (status.connected) {
+                if (window.location.pathname.endsWith('/offline.html')) {
+                    window.location.reload();
+                }
             }
-        }
-    });
+        });
+    } catch (e) {
+        console.log('[ARIA] Network monitoring unavailable:', e);
+    }
 }
 
 async function init() {
