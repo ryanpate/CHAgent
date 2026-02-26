@@ -2218,6 +2218,20 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             if days_until_sunday == 0:
                 days_until_sunday = 7
             target_date = today + timedelta(days=days_until_sunday)
+        elif 'last weekend' in date_lower:
+            # Last weekend = last Sunday
+            days_since_sunday = (today.weekday() + 1) % 7
+            if days_since_sunday == 0:
+                days_since_sunday = 7
+            target_date = today - timedelta(days=days_since_sunday)
+            logger.info(f"Parsed 'last weekend' as {target_date}")
+        elif 'weekend' in date_lower:
+            # This weekend / next weekend / weekend = upcoming Sunday
+            days_until_sunday = (6 - today.weekday()) % 7
+            if days_until_sunday == 0:
+                days_until_sunday = 7
+            target_date = today + timedelta(days=days_until_sunday)
+            logger.info(f"Parsed 'weekend' as {target_date}")
         elif 'yesterday' in date_lower:
             target_date = today - timedelta(days=1)
         elif 'today' in date_lower:
