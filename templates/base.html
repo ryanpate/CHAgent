@@ -880,5 +880,27 @@
             });
         })();
     </script>
+    <script>
+    // Native Share Sheet (app mode only)
+    (function() {
+        if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.Share) return;
+        var Share = window.Capacitor.Plugins.Share;
+
+        document.querySelectorAll('[data-share-title]').forEach(function(btn) {
+            btn.addEventListener('click', async function(e) {
+                e.preventDefault();
+                try {
+                    await Share.share({
+                        title: btn.getAttribute('data-share-title') || '',
+                        text: btn.getAttribute('data-share-text') || '',
+                        url: btn.getAttribute('data-share-url') || '',
+                    });
+                } catch(err) {
+                    // User cancelled share — ignore
+                }
+            });
+        });
+    })();
+    </script>
 </body>
 </html>
