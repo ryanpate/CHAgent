@@ -47,5 +47,7 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>ARIA uses Face ID for quick and secure sign-in.</string>
 </dict>
 </plist>
