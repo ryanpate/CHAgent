@@ -1,6 +1,9 @@
 import { Preferences } from '@capacitor/preferences';
+import { NativeBiometric } from '@capgo/capacitor-native-biometric';
+import { Capacitor } from '@capacitor/core';
 
 const API_BASE = 'https://aria.church';
+const BIOMETRIC_SERVER = 'aria.church';
 
 export async function getStoredToken() {
     const { value } = await Preferences.get({ key: 'auth_token' });
@@ -20,6 +23,11 @@ export async function storeTokens(access, refresh) {
 export async function clearTokens() {
     await Preferences.remove({ key: 'auth_token' });
     await Preferences.remove({ key: 'refresh_token' });
+    try {
+        await NativeBiometric.deleteCredentials({ server: BIOMETRIC_SERVER });
+    } catch {
+        // Credentials may not exist yet — ignore
+    }
 }
 
 export async function login(email, password) {
@@ -72,6 +80,59 @@ export async function isAuthenticated() {
             return !!newToken;
         }
         return true;
+    } catch {
+        return false;
+    }
+}
+
+// --- Biometric Authentication ---
+
+export async function isBiometricAvailable() {
+    if (!Capacitor.isNativePlatform()) return false;
+    try {
+        const result = await NativeBiometric.isAvailable();
+        return result.isAvailable;
+    } catch {
+        return false;
+    }
+}
+
+export async function storeBiometricCredentials(email, password) {
+    try {
+        const available = await isBiometricAvailable();
+        if (!available) return;
+        await NativeBiometric.setCredentials({
+            username: email,
+            password: password,
+            server: BIOMETRIC_SERVER,
+        });
+    } catch {
+        // Biometric storage failed — non-fatal, user can still log in normally
+    }
+}
+
+export async function loginWithBiometric() {
+    // Verify identity with Face ID / Touch ID
+    await NativeBiometric.verifyIdentity({
+        reason: 'Sign in to ARIA',
+        title: 'Sign In',
+    });
+
+    // Get stored credentials from Keychain
+    const credentials = await NativeBiometric.getCredentials({
+        server: BIOMETRIC_SERVER,
+    });
+
+    // Use credentials to get fresh JWT tokens
+    return await login(credentials.username, credentials.password);
+}
+
+export async function hasBiometricCredentials() {
+    try {
+        const credentials = await NativeBiometric.getCredentials({
+            server: BIOMETRIC_SERVER,
+        });
+        return !!(credentials && credentials.username);
     } catch {
         return false;
     }
