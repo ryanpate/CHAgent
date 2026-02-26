@@ -103,6 +103,26 @@ def should_start_new_conversation(message: str) -> bool:
     return False
 
 
+def app_entry(request):
+    """
+    Entry point for the native Capacitor app.
+    Sets the aria_app cookie and redirects to dashboard (authenticated) or login (unauthenticated).
+    """
+    if request.user.is_authenticated:
+        destination = redirect('dashboard')
+    else:
+        destination = redirect('login')
+    destination.set_cookie(
+        'aria_app', '1',
+        max_age=60 * 60 * 24 * 365,
+        path='/',
+        secure=True,
+        httponly=False,
+        samesite='Lax',
+    )
+    return destination
+
+
 def home(request):
     """
     Public landing page for unauthenticated users.

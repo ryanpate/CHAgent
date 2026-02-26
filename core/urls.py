@@ -2,6 +2,8 @@ from django.urls import path
 from . import views, admin_views
 
 urlpatterns = [
+    # Native app entry point
+    path('app/', views.app_entry, name='app_entry'),
     # Public pages
     path('', views.home, name='home'),
     path('pricing/', views.pricing, name='pricing'),
