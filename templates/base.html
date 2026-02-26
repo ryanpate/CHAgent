@@ -743,6 +743,68 @@
     </script>
 
     <script>
+        // Native push notification registration via Capacitor bridge
+        (function() {
+            if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
+            // Only register for authenticated users
+            if (!document.querySelector('[name=csrfmiddlewaretoken]')) return;
+
+            var Push = window.Capacitor.Plugins.PushNotifications;
+
+            Push.addListener('registration', function(token) {
+                console.log('[ARIA] FCM token received:', token.value.substring(0, 20) + '...');
+                var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+                var csrf = csrfToken ? csrfToken.value : '';
+                var platform = /iPhone|iPad|iPod/.test(navigator.userAgent) ? 'ios' : 'android';
+                fetch('/api/push/register/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrf,
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        token: token.value,
+                        platform: platform,
+                        device_name: navigator.userAgent.substring(0, 100),
+                    }),
+                }).then(function(r) {
+                    console.log('[ARIA] Push token registered:', r.status);
+                }).catch(function(e) {
+                    console.log('[ARIA] Push token registration failed:', e);
+                });
+            });
+
+            Push.addListener('registrationError', function(err) {
+                console.log('[ARIA] Push registration error:', JSON.stringify(err));
+            });
+
+            Push.addListener('pushNotificationReceived', function(notification) {
+                console.log('[ARIA] Push received:', notification.title);
+            });
+
+            Push.addListener('pushNotificationActionPerformed', function(action) {
+                console.log('[ARIA] Push action:', action.notification.data);
+                var url = action.notification.data && action.notification.data.url;
+                if (url) window.location.href = url;
+            });
+
+            // Request permission and register
+            Push.checkPermissions().then(function(result) {
+                if (result.receive === 'granted') {
+                    Push.register();
+                } else if (result.receive !== 'denied') {
+                    Push.requestPermissions().then(function(perm) {
+                        if (perm.receive === 'granted') {
+                            Push.register();
+                        }
+                    });
+                }
+            });
+        })();
+    </script>
+
+    <script>
         // Pull-to-refresh for native app
         (function() {
             if (!window.Capacitor || !window.Capacitor.Plugins) return;
