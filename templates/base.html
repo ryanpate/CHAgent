@@ -386,15 +386,14 @@
         {% endif %}
     </div>
     {% endif %}
-    {% if not is_app_mode %}
     <!-- Mobile Header -->
-    <header class="md:hidden fixed top-0 left-0 right-0 z-40 bg-ch-dark border-b border-gray-800 px-4 py-3 flex items-center justify-between" style="padding-top: env(safe-area-inset-top, 0px);">
-        <button @click="sidebarOpen = true" class="mobile-menu-btn p-2 rounded-lg hover:bg-ch-gray transition">
+    <header class="{% if not is_app_mode %}md:hidden{% endif %} fixed top-0 left-0 right-0 z-40 bg-ch-dark border-b border-gray-800 px-4 py-3 flex items-center justify-between" style="padding-top: env(safe-area-inset-top, 0px);">
+        <button @click="sidebarOpen = true" class="mobile-menu-btn p-2 rounded-lg hover:bg-ch-gray transition" style="{% if is_app_mode %}display:flex{% endif %}">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
             </svg>
         </button>
-        <h1 class="text-lg font-bold text-ch-gold">Aria WA</h1>
+        <h1 class="text-lg font-bold text-ch-gold">Aria</h1>
         <div class="w-10"></div>
     </header>
 
@@ -532,6 +531,7 @@
         </div>
     </aside>
 
+    {% if not is_app_mode %}
     <!-- Desktop Sidebar Navigation -->
     <aside class="desktop-sidebar hidden md:flex fixed left-0 top-0 h-full w-64 bg-ch-dark border-r border-gray-800 p-6 flex-col">
         <div class="mb-8">
@@ -640,7 +640,7 @@
     {% endif %}
 
     <!-- Main Content -->
-    <main class="{% if not is_app_mode %}md:ml-64 md:pt-8{% endif %} p-4 md:p-8 min-h-screen" style="{% if not is_app_mode %}padding-top: calc(4rem + env(safe-area-inset-top, 0px));{% endif %}">
+    <main class="{% if not is_app_mode %}md:ml-64 md:pt-8{% endif %} p-4 md:p-8 min-h-screen" style="padding-top: calc(4rem + env(safe-area-inset-top, 0px));">
         {% if messages %}
         <div class="mb-4">
             {% for message in messages %}
