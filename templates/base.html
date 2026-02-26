@@ -420,7 +420,7 @@
            x-transition:leave-start="translate-x-0"
            x-transition:leave-end="-translate-x-full"
            class="md:hidden fixed left-0 top-0 h-full w-72 bg-ch-dark border-r border-gray-800 p-6 flex flex-col z-50 transform"
-           style="display: none;">
+           style="display: none; padding-top: calc(1.5rem + env(safe-area-inset-top, 0px));">
         <div class="flex items-center justify-between mb-8">
             <div>
                 <h1 class="text-xl font-bold text-ch-gold tracking-wide">{% if organization %}{{ organization.name }}{% else %}Aria{% endif %}</h1>
