@@ -440,6 +440,28 @@ class TwoFactorMiddleware(MiddlewareMixin):
         return redirect('totp_login_verify')
 
 
+class AppModeMiddleware(MiddlewareMixin):
+    """
+    Persists native app mode detection via cookie.
+
+    When ?app=1 is seen in any request, sets the aria_app cookie server-side
+    so subsequent page navigations (which don't have the query param) still
+    detect app mode and hide the sidebar/header.
+    """
+
+    def process_response(self, request, response):
+        if request.GET.get('app') == '1' and request.COOKIES.get('aria_app') != '1':
+            response.set_cookie(
+                'aria_app', '1',
+                max_age=60 * 60 * 24 * 365,  # 1 year
+                path='/',
+                secure=True,
+                httponly=False,
+                samesite='Lax',
+            )
+        return response
+
+
 class SecurityHeadersMiddleware(MiddlewareMixin):
     """
     Adds security headers not covered by Django's SecurityMiddleware.

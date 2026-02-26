@@ -371,7 +371,7 @@
     {% endif %}
     {% if not is_app_mode %}
     <!-- Mobile Header -->
-    <header class="md:hidden fixed top-0 left-0 right-0 z-40 bg-ch-dark border-b border-gray-800 px-4 py-3 flex items-center justify-between safe-top">
+    <header class="md:hidden fixed top-0 left-0 right-0 z-40 bg-ch-dark border-b border-gray-800 px-4 py-3 flex items-center justify-between" style="padding-top: env(safe-area-inset-top, 0px);">
         <button @click="sidebarOpen = true" class="mobile-menu-btn p-2 rounded-lg hover:bg-ch-gray transition">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
@@ -623,7 +623,7 @@
     {% endif %}
 
     <!-- Main Content -->
-    <main class="{% if not is_app_mode %}md:ml-64 pt-16 md:pt-8{% endif %} p-4 md:p-8 min-h-screen">
+    <main class="{% if not is_app_mode %}md:ml-64 md:pt-8{% endif %} p-4 md:p-8 min-h-screen" style="{% if not is_app_mode %}padding-top: calc(4rem + env(safe-area-inset-top, 0px));{% endif %}">
         {% if messages %}
         <div class="mb-4">
             {% for message in messages %}

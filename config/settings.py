@@ -86,6 +86,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
     'core.middleware.SecurityHeadersMiddleware',
+    'core.middleware.AppModeMiddleware',  # Persist native app mode cookie
 ]
 
 # REST Framework Configuration (for mobile app API)
