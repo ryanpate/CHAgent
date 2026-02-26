@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'ARIA',
   webDir: 'src',
   server: {
-    url: 'https://aria.church',
+    url: 'https://aria.church?app=1',
     cleartext: false,
   },
   plugins: {
