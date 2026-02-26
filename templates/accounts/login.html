@@ -49,9 +49,13 @@
             </button>
         </form>
 
-        <p class="text-center text-gray-500 text-sm mt-6">
-            Contact your administrator for access.
-        </p>
+        <div class="text-center mt-6 space-y-2">
+            <p class="text-gray-500 text-sm">Don't have an account?</p>
+            <a href="{% url 'onboarding_signup' %}"
+               class="inline-block text-ch-gold hover:text-yellow-400 text-sm font-medium transition">
+                Request Beta Access
+            </a>
+        </div>
     </div>
 </div>
 
