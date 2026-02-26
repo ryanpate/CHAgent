@@ -902,5 +902,52 @@
         });
     })();
     </script>
+    <script>
+    // Local Follow-up Reminders (app mode only)
+    (function() {
+        if (!window.Capacitor || !window.Capacitor.Plugins) return;
+        var LocalNotifications = window.Capacitor.Plugins.LocalNotifications;
+        if (!LocalNotifications) return;
+
+        LocalNotifications.requestPermissions().catch(function() {});
+
+        document.querySelectorAll('[data-followup-id]').forEach(function(el) {
+            var id = parseInt(el.getAttribute('data-followup-id'));
+            var title = el.getAttribute('data-followup-title') || 'Follow-up Reminder';
+            var dateStr = el.getAttribute('data-followup-date');
+            var status = el.getAttribute('data-followup-status') || 'pending';
+
+            if (!dateStr || !id) return;
+            if (status === 'completed' || status === 'cancelled') {
+                LocalNotifications.cancel({ notifications: [{ id: id }] }).catch(function() {});
+                return;
+            }
+
+            var scheduleDate = new Date(dateStr + 'T09:00:00');
+            if (scheduleDate <= new Date()) return;
+
+            LocalNotifications.schedule({
+                notifications: [{
+                    id: id,
+                    title: 'Follow-up Reminder',
+                    body: title,
+                    schedule: { at: scheduleDate },
+                    extra: { url: '/followups/' + id + '/' },
+                }]
+            }).then(function() {
+                console.log('[ARIA] Scheduled local reminder for follow-up #' + id);
+            }).catch(function(e) {
+                console.log('[ARIA] Failed to schedule reminder:', e);
+            });
+        });
+
+        LocalNotifications.addListener('localNotificationActionPerformed', function(action) {
+            var url = action.notification.extra && action.notification.extra.url;
+            if (url && url.startsWith('/')) {
+                window.location.href = 'https://aria.church' + url + '?app=1';
+            }
+        });
+    })();
+    </script>
 </body>
 </html>

@@ -1,4 +1,8 @@
-<tr id="followup-{{ followup.id }}" class="border-b border-gray-800 hover:bg-ch-gray/50 transition">
+<tr id="followup-{{ followup.id }}" class="border-b border-gray-800 hover:bg-ch-gray/50 transition"
+    data-followup-id="{{ followup.id }}"
+    data-followup-title="{{ followup.title }}"
+    data-followup-date="{{ followup.follow_up_date|date:'Y-m-d' }}"
+    data-followup-status="{{ followup.status }}">
     <td class="p-4">
         <a href="{% url 'followup_detail' followup.id %}" class="hover:text-ch-gold transition">
             <span class="{% if followup.is_overdue %}text-red-400{% elif followup.is_due_soon %}text-yellow-400{% endif %}">
