@@ -3,6 +3,7 @@ import { StatusBar } from '@capacitor/status-bar';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { Network } from '@capacitor/network';
 import {
     login,
     isAuthenticated,
@@ -28,7 +29,20 @@ async function hapticSuccess() {
     }
 }
 
+async function setupNetworkMonitoring() {
+    Network.addListener('networkStatusChange', (status) => {
+        console.log('[ARIA] Network status:', status.connected);
+        if (status.connected) {
+            if (window.location.href.includes('offline.html')) {
+                window.location.reload();
+            }
+        }
+    });
+}
+
 async function init() {
+    await setupNetworkMonitoring();
+
     // Set dark status bar
     if (Capacitor.isNativePlatform()) {
         try {

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>ARIA - Offline</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f0f;
+            color: #e5e5e5;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: env(safe-area-inset-top, 0px) 2rem env(safe-area-inset-bottom, 0px) 2rem;
+        }
+
+        .offline-container {
+            text-align: center;
+            max-width: 320px;
+            width: 100%;
+        }
+
+        .wifi-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1.5rem;
+            color: #c9a227;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            color: #c9a227;
+            margin-bottom: 0.75rem;
+        }
+
+        .message {
+            color: #999;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 2rem;
+        }
+
+        .retry-btn {
+            background: #c9a227;
+            color: #0f0f0f;
+            border: none;
+            border-radius: 8px;
+            padding: 0.875rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            max-width: 240px;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .retry-btn:active {
+            opacity: 0.8;
+        }
+
+        .status {
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .status.reconnected {
+            color: #c9a227;
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <svg class="wifi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9z"/>
+            <path d="M5 13l2 2c2.76-2.76 7.24-2.76 10 0l2-2C14.14 8.14 9.87 8.14 5 13z"/>
+            <path d="M9 17l3 3 3-3c-1.65-1.66-4.34-1.66-6 0z"/>
+            <line x1="1" y1="1" x2="23" y2="23" stroke="#ef4444" stroke-width="2"/>
+        </svg>
+
+        <h1>You're Offline</h1>
+        <p class="message">ARIA needs an internet connection to load. Check your Wi-Fi or cellular connection and try again.</p>
+
+        <button class="retry-btn" onclick="window.location.reload()">Try Again</button>
+
+        <p id="status" class="status">Waiting for connection...</p>
+    </div>
+
+    <script>
+        window.addEventListener('online', function() {
+            var statusEl = document.getElementById('status');
+            statusEl.textContent = 'Connection restored! Reloading...';
+            statusEl.classList.add('reconnected');
+            setTimeout(function() {
+                window.location.reload();
+            }, 500);
+        });
+    </script>
+</body>
+</html>
