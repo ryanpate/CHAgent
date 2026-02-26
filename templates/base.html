@@ -750,21 +750,21 @@
 
     <script>
         // Native push notification registration via Capacitor bridge
+        // The Capacitor PushNotifications plugin returns the APNs token on iOS,
+        // but we need the FCM token for Firebase Admin SDK. The AppDelegate injects
+        // the FCM token via a custom 'fcmToken' event from the MessagingDelegate.
         (function() {
             if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
 
             function getCsrf() {
-                // Try hidden form field first, then cookie
                 var el = document.querySelector('[name=csrfmiddlewaretoken]');
                 if (el) return el.value;
                 var match = document.cookie.match(/csrftoken=([^;]+)/);
                 return match ? match[1] : '';
             }
 
-            var Push = window.Capacitor.Plugins.PushNotifications;
-
-            Push.addListener('registration', function(token) {
-                console.log('[ARIA] FCM token received:', token.value.substring(0, 20) + '...');
+            function registerToken(fcmToken) {
+                console.log('[ARIA] Registering FCM token:', fcmToken.substring(0, 20) + '...');
                 var csrf = getCsrf();
                 var platform = /iPhone|iPad|iPod/.test(navigator.userAgent) ? 'ios' : 'android';
                 fetch('/api/push/register/', {
@@ -775,7 +775,7 @@
                     },
                     credentials: 'same-origin',
                     body: JSON.stringify({
-                        token: token.value,
+                        token: fcmToken,
                         platform: platform,
                         device_name: navigator.userAgent.substring(0, 100),
                     }),
@@ -784,7 +784,15 @@
                 }).catch(function(e) {
                     console.log('[ARIA] Push token registration failed:', e);
                 });
+            }
+
+            // Listen for FCM token injected by AppDelegate's MessagingDelegate
+            window.addEventListener('fcmToken', function(e) {
+                console.log('[ARIA] FCM token received from native:', e.detail.substring(0, 20) + '...');
+                registerToken(e.detail);
             });
+
+            var Push = window.Capacitor.Plugins.PushNotifications;
 
             Push.addListener('registrationError', function(err) {
                 console.log('[ARIA] Push registration error:', JSON.stringify(err));
@@ -800,8 +808,9 @@
                 if (url) window.location.href = url;
             });
 
-            // Request permission and register
+            // Request permission and register for APNs (triggers Firebase to get FCM token)
             Push.checkPermissions().then(function(result) {
+                console.log('[ARIA] Push permissions:', result.receive);
                 if (result.receive === 'granted') {
                     Push.register();
                 } else if (result.receive !== 'denied') {

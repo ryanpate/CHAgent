@@ -1,4 +1,5 @@
 import UIKit
+import WebKit
 import Capacitor
 import FirebaseCore
 import FirebaseMessaging
@@ -60,7 +61,30 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 // MARK: - Firebase Messaging Delegate
 extension AppDelegate: MessagingDelegate {
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        // FCM token is available — the Capacitor push plugin will handle sending it to JS
-        print("FCM registration token: \(String(describing: fcmToken))")
+        guard let token = fcmToken else { return }
+        print("FCM registration token: \(token)")
+
+        // Inject FCM token into WebView so JS can register it with the server
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            guard let rootVC = self.window?.rootViewController else { return }
+            if let webView = self.findWebView(in: rootVC.view) {
+                let js = "window.dispatchEvent(new CustomEvent('fcmToken', {detail: '\(token)'}));"
+                webView.evaluateJavaScript(js) { _, error in
+                    if let error = error {
+                        print("FCM token injection error: \(error)")
+                    } else {
+                        print("FCM token injected into WebView")
+                    }
+                }
+            }
+        }
+    }
+
+    private func findWebView(in view: UIView) -> WKWebView? {
+        if let webView = view as? WKWebView { return webView }
+        for subview in view.subviews {
+            if let found = findWebView(in: subview) { return found }
+        }
+        return nil
     }
 }
