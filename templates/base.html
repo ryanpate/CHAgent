@@ -671,5 +671,25 @@
             document.body.classList.add('pwa-mode');
         }
     </script>
+
+    {% if is_app_mode %}
+    <script>
+        // Native app haptic feedback via Capacitor bridge
+        (function() {
+            function haptic(style) {
+                try {
+                    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics) {
+                        window.Capacitor.Plugins.Haptics.impact({ style: style || 'Light' });
+                    }
+                } catch(e) {}
+            }
+
+            document.addEventListener('click', function(e) {
+                var el = e.target.closest('a, button, .nav-link, [role="button"]');
+                if (el) haptic('Light');
+            });
+        })();
+    </script>
+    {% endif %}
 </body>
 </html>
