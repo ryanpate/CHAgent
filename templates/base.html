@@ -672,34 +672,32 @@
         }
     </script>
 
-    {% if is_app_mode %}
+    <script>
+        // Auto-detect Capacitor native app and set app-mode cookie + hide sidebar
+        (function() {
+            if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+                if (document.cookie.indexOf('aria_app=1') === -1) {
+                    document.cookie = 'aria_app=1; path=/; max-age=31536000; secure; samesite=lax';
+                }
+                document.body.classList.add('app-mode-hidden');
+            }
+        })();
+    </script>
+
     <script>
         // Native app haptic feedback via Capacitor bridge
         (function() {
-            var Haptics = null;
+            if (!window.Capacitor || !window.Capacitor.registerPlugin) return;
 
-            function initHaptics() {
-                if (Haptics) return true;
-                try {
-                    if (window.Capacitor && window.Capacitor.registerPlugin) {
-                        Haptics = window.Capacitor.registerPlugin('Haptics');
-                        return true;
-                    }
-                } catch(e) {}
-                return false;
-            }
-
-            function haptic() {
-                if (!initHaptics()) return;
-                try { Haptics.impact({ style: 'LIGHT' }); } catch(e) {}
-            }
+            var Haptics = window.Capacitor.registerPlugin('Haptics');
 
             document.addEventListener('click', function(e) {
                 var el = e.target.closest('a, button, .nav-link, [role="button"]');
-                if (el) haptic();
+                if (el) {
+                    try { Haptics.impact({ style: 'LIGHT' }); } catch(e) {}
+                }
             });
         })();
     </script>
-    {% endif %}
 </body>
 </html>

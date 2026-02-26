@@ -55,7 +55,6 @@
     </div>
 </div>
 
-{% if is_app_mode %}
 <script>
 (function() {
     if (!window.Capacitor || !window.Capacitor.registerPlugin) return;
@@ -116,5 +115,4 @@
     tryBiometricLogin();
 })();
 </script>
-{% endif %}
 {% endblock %}
