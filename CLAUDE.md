@@ -4,15 +4,15 @@
 
 **🎯 Overall Completion: ~95%** | **📊 Production-Ready Core Features** | **🔒 Closed Beta**
 
-Last Updated: February 25, 2026
+Last Updated: February 26, 2026
 
 ### Quick Stats
 - **40+ Database Models** across all domains (including blog, beta requests, security, knowledge base)
 - **130+ View Functions** with full CRUD operations
 - **105+ Templates** for complete user journeys
-- **10 Test Files** with 441 passing test cases (0 failures)
-- **33+ Migrations** tracking schema evolution
-- **Recent Focus**: Native mobile app (Capacitor) with Face ID biometric auth and haptics, Knowledge Base image support, document upload, test suite stability, two-factor authentication, audit logging
+- **10 Test Files** with 449 passing test cases (0 failures)
+- **34+ Migrations** tracking schema evolution
+- **Recent Focus**: Native mobile app (Capacitor) with Face ID biometric auth, haptics, app badge count, pull-to-refresh, Knowledge Base image support, document upload, test suite stability, two-factor authentication, audit logging
 
 ### Current Sprint (February 2026)
 - ✅ **Closed Beta System** - Full beta request and approval workflow
@@ -96,7 +96,11 @@ Last Updated: February 25, 2026
   - iOS (Xcode) and Android (Gradle) platform projects with app icons and splash screens
   - App Store/Play Store listing content and pre-submission checklist
   - Demo account management command (`create_demo_account`) for App Store review
-  - 17 new tests (model, auth API, push registration, notifications, app-mode) — 441 total passing
+  - App icon badge count for unread push notifications (per-device tracking via `unread_badge_count` field)
+  - Badge count included in FCM payload (`apns.payload.aps.badge`) — iOS updates badge automatically
+  - Badge clear API endpoint (`POST /api/push/badge-clear/`) resets count when app opens
+  - Pull-to-refresh gesture on all pages (touch event handler, 60px threshold, gold spinner)
+  - 25 new tests (model, auth API, push registration, notifications, badge count, badge clear, app-mode) — 449 total passing
 - ✅ **Privacy Policy Page** (`/privacy/`) - Public privacy policy for App Store compliance
   - 10 sections: data collection, AI processing, data sharing, security, retention, user rights, children's privacy
   - Legal entity: Ryan Pate operating as ARIA, contact: support@aria.church
@@ -661,7 +665,7 @@ Aria understands many date formats:
 | `Document` | Uploaded documents (PDF/TXT/Image) with extracted text and metadata |
 | `DocumentChunk` | Chunked document text with embeddings for semantic search |
 | `DocumentImage` | Images (from PDF extraction or standalone upload) with AI descriptions, OCR text, and embeddings |
-| `NativePushToken` | Native app push tokens (iOS APNs / Android FCM) per user |
+| `NativePushToken` | Native app push tokens (iOS APNs / Android FCM) per user with badge count |
 
 ---
 
@@ -762,6 +766,7 @@ path('api/auth/token/', api_views.EmailTokenObtainPairView.as_view(), name='api_
 path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='api_token_refresh')
 path('api/push/register/', api_views.register_push_token, name='api_push_register')
 path('api/push/unregister/', api_views.unregister_push_token, name='api_push_unregister')
+path('api/push/badge-clear/', api_views.clear_badge_count, name='api_push_badge_clear')
 ```
 
 ---
@@ -1661,7 +1666,7 @@ The following features have been implemented:
 - [x] **Dependency Scanning**: Dependabot configuration for weekly vulnerability scanning
 - [x] **Knowledge Base**: Document upload with RAG search, Aria integration, and citation support
 - [x] **Knowledge Base Image Support**: PDF image extraction, standalone image uploads, Claude Vision descriptions, inline image display in chat
-- [x] **Native Mobile App**: iOS and Android apps via Capacitor with JWT auth, Face ID/Touch ID biometric login, haptic feedback, and FCM push notifications
+- [x] **Native Mobile App**: iOS and Android apps via Capacitor with JWT auth, Face ID/Touch ID biometric login, haptic feedback, app badge count, pull-to-refresh, and FCM push notifications
 
 ---
 
@@ -1893,10 +1898,22 @@ Result: **370 tests passing, 0 failures, 0 errors**.
   - CORS configured for `capacitor://localhost` and `http://localhost`
   - 100/minute user rate throttle
 - **Backend: Native Push Delivery** (`core/notifications.py`):
-  - `send_native_push()` sends to FCM for both Android and iOS (APNs via FCM SDK)
-  - `_send_fcm()` uses `firebase-admin` SDK with `FIREBASE_CREDENTIALS_JSON` env var support
+  - `send_native_push()` increments `unread_badge_count` and sends to FCM for both Android and iOS
+  - `_send_fcm()` includes `apns.payload.aps.badge` for iOS app icon badge count
   - Extended `send_notification_to_user()` to include native push tokens alongside web push
   - Inactive tokens (`is_active=False`) are skipped
+- **Backend: Badge Clear API** (`core/api_views.py`):
+  - `POST /api/push/badge-clear/` — resets `unread_badge_count` to 0 for all authenticated user's tokens
+  - Called automatically on page load in native app to clear badge when app opens
+- **Badge Clear on App Open** (`templates/base.html`):
+  - Calls `PushNotifications.removeAllDeliveredNotifications()` to clear notification center
+  - Fires `fetch('/api/push/badge-clear/')` to reset server-side badge counter
+- **Pull-to-Refresh** (`templates/base.html`):
+  - Pure JS touch gesture handler — detects touchstart/touchmove/touchend events
+  - Only activates at scroll position 0 (top of page) and when Capacitor is detected
+  - Gold spinner indicator appears during pull gesture (60px threshold)
+  - On release past threshold: triggers `window.location.reload()`
+  - CSS: `.ptr-indicator` with `.pulling` and `.refreshing` animation states
 - **Mobile App** (`mobile/`):
   - `capacitor.config.ts` — App ID `church.aria.app`, server URL `https://aria.church`
   - `src/auth.js` — JWT login, refresh, biometric functions (used by local app, not remote pages)
@@ -1924,13 +1941,15 @@ Result: **370 tests passing, 0 failures, 0 errors**.
   - REST_FRAMEWORK config with JWT + Session auth, 100/min throttle
   - SIMPLE_JWT config: 1-hour access, 30-day refresh, rotation enabled
   - CORS_ALLOWED_ORIGINS for Capacitor WebView origins
-- **17 new tests** in `tests/test_native_push.py` across 5 test classes:
-  - NativePushToken model CRUD, uniqueness, and tenant isolation
+- **25 new tests** in `tests/test_native_push.py` across 8 test classes:
+  - NativePushToken model CRUD, uniqueness, tenant isolation, and badge count field
   - JWT auth token obtain and refresh via email credentials
   - Push token register, update, unregister, and auth requirement
   - Native push notification delivery with FCM mocking
+  - Badge count increment in push payload and across multiple sends
+  - Badge clear API endpoint (resets count, resets all user tokens, requires auth)
   - App-mode template detection (sidebar hidden vs shown)
-  - Full suite: **441 tests passing, 0 failures, 0 errors**
+  - Full suite: **449 tests passing, 0 failures, 0 errors**
 
 #### Capacitor Remote-Page Architecture Notes
 > **Critical**: When `server.url` is set in `capacitor.config.ts`, the WebView loads pages from the remote server. Local files in `mobile/src/` are bundled but never displayed. This means:
