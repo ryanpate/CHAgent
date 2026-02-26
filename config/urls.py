@@ -82,7 +82,7 @@ def apple_app_site_association(request):
             "details": [
                 {
                     "appIDs": [
-                        "XXXXXXXXXX.church.aria.app"
+                        "454YNT65J3.church.aria.app"
                     ],
                     "components": [
                         {"/" : "/chat/*"},
