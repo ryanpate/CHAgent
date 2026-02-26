@@ -746,15 +746,20 @@
         // Native push notification registration via Capacitor bridge
         (function() {
             if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
-            // Only register for authenticated users
-            if (!document.querySelector('[name=csrfmiddlewaretoken]')) return;
+
+            function getCsrf() {
+                // Try hidden form field first, then cookie
+                var el = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (el) return el.value;
+                var match = document.cookie.match(/csrftoken=([^;]+)/);
+                return match ? match[1] : '';
+            }
 
             var Push = window.Capacitor.Plugins.PushNotifications;
 
             Push.addListener('registration', function(token) {
                 console.log('[ARIA] FCM token received:', token.value.substring(0, 20) + '...');
-                var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-                var csrf = csrfToken ? csrfToken.value : '';
+                var csrf = getCsrf();
                 var platform = /iPhone|iPad|iPod/.test(navigator.userAgent) ? 'ios' : 'android';
                 fetch('/api/push/register/', {
                     method: 'POST',
