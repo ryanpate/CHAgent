@@ -28,16 +28,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             pendingNotificationURL = url
         }
 
-        // Register for remote notifications explicitly
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            print("[ARIA] Notification authorization: granted=\(granted), error=\(error?.localizedDescription ?? "none")")
-            if granted {
-                DispatchQueue.main.async {
-                    application.registerForRemoteNotifications()
-                    print("[ARIA] Called registerForRemoteNotifications()")
-                }
-            }
-        }
+        // NOTE: Do NOT request notification permission here — it fires before login.
+        // The JS in base.html handles permission request + Push.register() after authentication.
 
         return true
     }
@@ -60,8 +52,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Clear badge count when app becomes active
         application.applicationIconBadgeNumber = 0
 
-        // Proactively fetch FCM token as fallback in case delegate didn't fire
-        fetchFCMTokenIfNeeded()
+        // Fetch FCM token if permission was already granted (e.g. returning user)
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            if settings.authorizationStatus == .authorized {
+                self.fetchFCMTokenIfNeeded()
+            }
+        }
 
         // If launched from notification tap (cold start), navigate after WebView loads
         if let url = pendingNotificationURL {
