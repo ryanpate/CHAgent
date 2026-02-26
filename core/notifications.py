@@ -312,11 +312,16 @@ def send_notification_to_users(
 
 def send_native_push(token_obj, title, body, url='/', data=None):
     """Send a push notification to a native iOS/Android device."""
+    # Increment badge count
+    token_obj.unread_badge_count += 1
+    token_obj.save(update_fields=['unread_badge_count'])
+
     payload = {
         'title': title,
         'body': body,
         'url': url,
         'data': data or {},
+        'badge': token_obj.unread_badge_count,
     }
 
     try:
@@ -346,6 +351,8 @@ def _send_fcm(token, payload):
             else:
                 firebase_admin.initialize_app()
 
+        badge_count = payload.get('badge', 0)
+
         message = messaging.Message(
             notification=messaging.Notification(
                 title=payload['title'],
@@ -355,6 +362,11 @@ def _send_fcm(token, payload):
                 'url': payload.get('url', '/'),
                 **{k: str(v) for k, v in payload.get('data', {}).items()},
             },
+            apns=messaging.APNSConfig(
+                payload=messaging.APNSPayload(
+                    aps=messaging.Aps(badge=badge_count),
+                ),
+            ),
             token=token,
         )
         messaging.send(message)

@@ -251,3 +251,55 @@ class TestAppModeDetection:
         assert response.status_code == 200
         content = response.content.decode()
         assert 'app-mode-hidden' not in content
+
+
+@pytest.mark.django_db
+class TestBadgeCountInPush:
+    def test_send_native_push_increments_badge(self, user_alpha_owner, org_alpha):
+        token = NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='badge-push-token',
+            platform='ios',
+        )
+        assert token.unread_badge_count == 0
+
+        with patch('core.notifications._send_fcm', return_value=True) as mock_fcm:
+            from core.notifications import send_native_push
+            send_native_push(token, 'Test Title', 'Test Body', '/')
+
+        token.refresh_from_db()
+        assert token.unread_badge_count == 1
+
+    def test_send_native_push_passes_badge_to_fcm(self, user_alpha_owner, org_alpha):
+        token = NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='badge-payload-token',
+            platform='ios',
+        )
+
+        with patch('core.notifications._send_fcm', return_value=True) as mock_fcm:
+            from core.notifications import send_native_push
+            send_native_push(token, 'Test', 'Body', '/')
+
+        mock_fcm.assert_called_once()
+        call_payload = mock_fcm.call_args[0][1]
+        assert call_payload['badge'] == 1
+
+    def test_badge_count_increments_across_sends(self, user_alpha_owner, org_alpha):
+        token = NativePushToken.objects.create(
+            user=user_alpha_owner,
+            organization=org_alpha,
+            token='badge-multi-token',
+            platform='ios',
+        )
+
+        with patch('core.notifications._send_fcm', return_value=True):
+            from core.notifications import send_native_push
+            send_native_push(token, 'First', 'Body', '/')
+            send_native_push(token, 'Second', 'Body', '/')
+            send_native_push(token, 'Third', 'Body', '/')
+
+        token.refresh_from_db()
+        assert token.unread_badge_count == 3
