@@ -699,6 +699,12 @@
             if (isNative) {
                 document.body.classList.add('capacitor-native');
             }
+            // Debug: log Capacitor state
+            console.log('[ARIA] Capacitor object:', !!window.Capacitor);
+            if (window.Capacitor) {
+                console.log('[ARIA] isNativePlatform:', window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+                console.log('[ARIA] Plugins:', window.Capacitor.Plugins ? Object.keys(window.Capacitor.Plugins) : 'none');
+            }
         })();
     </script>
 
