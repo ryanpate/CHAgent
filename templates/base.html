@@ -676,17 +676,27 @@
     <script>
         // Native app haptic feedback via Capacitor bridge
         (function() {
-            function haptic(style) {
+            var Haptics = null;
+
+            function initHaptics() {
+                if (Haptics) return true;
                 try {
-                    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics) {
-                        window.Capacitor.Plugins.Haptics.impact({ style: style || 'Light' });
+                    if (window.Capacitor && window.Capacitor.registerPlugin) {
+                        Haptics = window.Capacitor.registerPlugin('Haptics');
+                        return true;
                     }
                 } catch(e) {}
+                return false;
+            }
+
+            function haptic() {
+                if (!initHaptics()) return;
+                try { Haptics.impact({ style: 'LIGHT' }); } catch(e) {}
             }
 
             document.addEventListener('click', function(e) {
                 var el = e.target.closest('a, button, .nav-link, [role="button"]');
-                if (el) haptic('Light');
+                if (el) haptic();
             });
         })();
     </script>
