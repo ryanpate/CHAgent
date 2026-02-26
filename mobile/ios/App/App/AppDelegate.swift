@@ -9,6 +9,8 @@ import FirebaseMessaging
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
+    /// URL from notification tap that launched the app (cold start)
+    var pendingNotificationURL: String?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         print("[ARIA] Configuring Firebase...")
@@ -16,6 +18,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         print("[ARIA] Firebase configured. Setting messaging delegate...")
         Messaging.messaging().delegate = self
         print("[ARIA] Messaging delegate set. Firebase app: \(FirebaseApp.app()?.name ?? "nil")")
+
+        // Check if launched from a notification tap (cold start)
+        if let remoteNotification = launchOptions?[.remoteNotification] as? [String: Any],
+           let url = remoteNotification["url"] as? String {
+            print("[ARIA] Cold start from notification, pending URL: \(url)")
+            pendingNotificationURL = url
+        }
 
         // Register for remote notifications explicitly
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
@@ -46,9 +55,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
+        // Clear badge count when app becomes active
+        application.applicationIconBadgeNumber = 0
+
         // Proactively fetch FCM token as fallback in case delegate didn't fire
-        print("[ARIA] App became active, fetching FCM token...")
         fetchFCMTokenIfNeeded()
+
+        // If launched from notification tap (cold start), navigate after WebView loads
+        if let url = pendingNotificationURL {
+            print("[ARIA] Injecting pending notification URL: \(url)")
+            pendingNotificationURL = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                guard let rootVC = self.window?.rootViewController else { return }
+                if let webView = self.findWebView(in: rootVC.view) {
+                    let js = "window.location.href = '\(url)';"
+                    webView.evaluateJavaScript(js, completionHandler: nil)
+                    print("[ARIA] Navigated WebView to \(url)")
+                }
+            }
+        }
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
@@ -80,6 +105,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         print("[ARIA] APNs registration FAILED: \(error.localizedDescription)")
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
+    // Handle notification tap when app is in background (not killed)
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        print("[ARIA] didReceiveRemoteNotification: \(userInfo)")
+        if application.applicationState == .inactive,
+           let url = userInfo["url"] as? String {
+            print("[ARIA] Notification tap from background, navigating to: \(url)")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                guard let rootVC = self.window?.rootViewController else { return }
+                if let webView = self.findWebView(in: rootVC.view) {
+                    webView.evaluateJavaScript("window.location.href = '\(url)';", completionHandler: nil)
+                }
+            }
+        }
+        completionHandler(.newData)
     }
 
 }

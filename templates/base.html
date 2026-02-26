@@ -718,14 +718,23 @@
                 PushNotifications.removeAllDeliveredNotifications().catch(function() {});
             }
 
+            // Also clear the native badge icon
+            if (PushNotifications && PushNotifications.setBadgeCount) {
+                PushNotifications.setBadgeCount({ count: 0 }).catch(function() {});
+            }
+
             // Reset server-side badge counter
-            var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-            var token = csrfToken ? csrfToken.value : '';
+            function getCsrfForBadge() {
+                var el = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (el) return el.value;
+                var match = document.cookie.match(/csrftoken=([^;]+)/);
+                return match ? match[1] : '';
+            }
             fetch('/api/push/badge-clear/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': token,
+                    'X-CSRFToken': getCsrfForBadge(),
                 },
                 credentials: 'same-origin',
             }).catch(function() {});
