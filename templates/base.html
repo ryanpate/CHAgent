@@ -686,6 +686,30 @@
     </script>
 
     <script>
+        // Clear app badge count when page loads in native app
+        (function() {
+            if (!window.Capacitor || !window.Capacitor.Plugins) return;
+
+            var PushNotifications = window.Capacitor.Plugins.PushNotifications;
+            if (PushNotifications && PushNotifications.removeAllDeliveredNotifications) {
+                PushNotifications.removeAllDeliveredNotifications().catch(function() {});
+            }
+
+            // Reset server-side badge counter
+            var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+            var token = csrfToken ? csrfToken.value : '';
+            fetch('/api/push/badge-clear/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': token,
+                },
+                credentials: 'same-origin',
+            }).catch(function() {});
+        })();
+    </script>
+
+    <script>
         // Native app haptic feedback via Capacitor bridge
         (function() {
             if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.Haptics) return;
