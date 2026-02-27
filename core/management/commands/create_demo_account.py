@@ -33,7 +33,7 @@ class Command(BaseCommand):
         user, created = User.objects.update_or_create(
             email=self.DEMO_EMAIL,
             defaults={
-                'username': 'demo-reviewer',
+                'username': self.DEMO_EMAIL,
                 'display_name': 'App Reviewer',
                 'first_name': 'App',
                 'last_name': 'Reviewer',
