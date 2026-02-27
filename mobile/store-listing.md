@@ -72,14 +72,69 @@ Same 5 screenshots at iPad resolution.
 ### Android Phone — Required
 Same 5 screenshots, captured on Pixel emulator.
 
-## Pre-Submission Checklist
+## App Store Submission Checklist
 
-- [ ] Apple Developer account created and provisioning profiles set up
-- [ ] Google Play Developer account created
-- [ ] Firebase project created with FCM enabled
-- [ ] APNs certificates uploaded to Firebase
-- [ ] Privacy policy page live at aria.church/privacy/
-- [ ] App Store screenshots captured on required device sizes
-- [ ] App description and keywords finalized
-- [ ] TestFlight build distributed for internal testing
-- [ ] Google Play internal testing track configured
+### Step 1: Create Distribution Certificate
+- [ ] Go to developer.apple.com → Certificates, Identifiers & Profiles → Certificates
+- [ ] Click + → Select "Apple Distribution"
+- [ ] Create CSR from Keychain Access (Certificate Assistant → Request a Certificate from a Certificate Authority → Save to disk)
+- [ ] Upload CSR, download .cer file, double-click to install
+
+### Step 2: Create App Store Provisioning Profile
+- [ ] Go to Profiles → Click +
+- [ ] Select "App Store Connect" (under Distribution)
+- [ ] Select App ID: church.aria.app
+- [ ] Select Distribution certificate
+- [ ] Name it "ARIA App Store", download, double-click to install
+
+### Step 3: Register App in App Store Connect
+- [ ] Go to appstoreconnect.apple.com → My Apps → + → New App
+- [ ] Platform: iOS
+- [ ] Name: ARIA
+- [ ] Primary Language: English (U.S.)
+- [ ] Bundle ID: church.aria.app
+- [ ] SKU: aria-church
+
+### Step 4: Fill in App Store Listing
+- [ ] Subtitle: AI Worship Team Management
+- [ ] Category: Productivity
+- [ ] Privacy Policy URL: https://aria.church/privacy/
+- [ ] Support URL: https://aria.church
+- [ ] Description: Copy from this file's Description section above
+- [ ] Keywords: worship, church, volunteer, team management, planning center, worship arts, church management, volunteer scheduling, worship team, church app
+- [ ] Marketing URL: https://aria.church
+- [ ] Copyright: 2026 ARIA
+- [ ] Age Rating: Fill out questionnaire (answer No to everything → 4+)
+
+### Step 5: Take Screenshots
+- [ ] 6.7" iPhone (iPhone 15 Pro Max) — required
+- [ ] 5.5" iPhone (iPhone 8 Plus) — required if supporting older devices
+
+Capture these 5 screens:
+1. Chat with Aria (showing a conversation)
+2. Volunteer list
+3. Follow-up management
+4. Communication hub
+5. Analytics dashboard
+
+### Step 6: Set Up App Review Demo Account
+- [ ] Run: `python3 manage.py create_demo_account` on production
+- [ ] In App Store Connect → App Review Information:
+  - Sign-in required: Yes
+  - Username: demo@aria.church
+  - Password: AppReview2026!
+  - Notes: "This app requires a server connection. The demo account has sample data pre-loaded."
+
+### Step 7: Archive and Upload
+- [ ] Open project in Xcode: `open mobile/ios/App/App.xcodeproj`
+- [ ] Select "Any iOS Device" as build destination
+- [ ] Set signing to Distribution profile under Signing & Capabilities
+- [ ] Product → Archive
+- [ ] In Organizer: Select archive → Distribute App → App Store Connect → Upload
+
+### Step 8: Submit for Review
+- [ ] Wait for build to appear in App Store Connect (5-15 minutes)
+- [ ] Select the build under version 1.0
+- [ ] Review all listing details
+- [ ] Click "Submit for Review"
+- [ ] Apple review typically takes 24-48 hours
