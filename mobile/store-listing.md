@@ -132,9 +132,9 @@ Capture these 5 screens:
 - [x] Product → Archive
 - [x] In Organizer: Select archive → Distribute App → App Store Connect → Upload
 
-### Step 8: Submit for Review
-- [ ] Wait for build to appear in App Store Connect (5-15 minutes)
-- [ ] Select the build under version 1.0
-- [ ] Review all listing details
-- [ ] Click "Submit for Review"
-- [ ] Apple review typically takes 24-48 hours
+### Step 8: Submit for Review ✅
+- [x] Wait for build to appear in App Store Connect (5-15 minutes)
+- [x] Select the build under version 1.0
+- [x] Review all listing details
+- [x] Click "Submit for Review"
+- [x] Submitted February 28, 2026 — Apple review typically takes 24-48 hours
