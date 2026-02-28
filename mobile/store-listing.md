@@ -74,41 +74,41 @@ Same 5 screenshots, captured on Pixel emulator.
 
 ## App Store Submission Checklist
 
-### Step 1: Create Distribution Certificate
-- [ ] Go to developer.apple.com → Certificates, Identifiers & Profiles → Certificates
-- [ ] Click + → Select "Apple Distribution"
-- [ ] Create CSR from Keychain Access (Certificate Assistant → Request a Certificate from a Certificate Authority → Save to disk)
-- [ ] Upload CSR, download .cer file, double-click to install
+### Step 1: Create Distribution Certificate ✅
+- [x] Go to developer.apple.com → Certificates, Identifiers & Profiles → Certificates
+- [x] Click + → Select "Apple Distribution"
+- [x] Create CSR from Keychain Access (Certificate Assistant → Request a Certificate from a Certificate Authority → Save to disk)
+- [x] Upload CSR, download .cer file, double-click to install
 
-### Step 2: Create App Store Provisioning Profile
-- [ ] Go to Profiles → Click +
-- [ ] Select "App Store Connect" (under Distribution)
-- [ ] Select App ID: church.aria.app
-- [ ] Select Distribution certificate
-- [ ] Name it "ARIA App Store", download, double-click to install
+### Step 2: Create App Store Provisioning Profile ✅
+- [x] Go to Profiles → Click +
+- [x] Select "App Store Connect" (under Distribution)
+- [x] Select App ID: church.aria.app
+- [x] Select Distribution certificate
+- [x] Name it "ARIA App Store", download, double-click to install
 
-### Step 3: Register App in App Store Connect
-- [ ] Go to appstoreconnect.apple.com → My Apps → + → New App
-- [ ] Platform: iOS
-- [ ] Name: ARIA
-- [ ] Primary Language: English (U.S.)
-- [ ] Bundle ID: church.aria.app
-- [ ] SKU: aria-church
+### Step 3: Register App in App Store Connect ✅
+- [x] Go to appstoreconnect.apple.com → My Apps → + → New App
+- [x] Platform: iOS
+- [x] Name: ARIA
+- [x] Primary Language: English (U.S.)
+- [x] Bundle ID: church.aria.app
+- [x] SKU: aria-church
 
-### Step 4: Fill in App Store Listing
-- [ ] Subtitle: AI Worship Team Management
-- [ ] Category: Productivity
-- [ ] Privacy Policy URL: https://aria.church/privacy/
-- [ ] Support URL: https://aria.church
-- [ ] Description: Copy from this file's Description section above
-- [ ] Keywords: worship, church, volunteer, team management, planning center, worship arts, church management, volunteer scheduling, worship team, church app
-- [ ] Marketing URL: https://aria.church
-- [ ] Copyright: 2026 ARIA
-- [ ] Age Rating: Fill out questionnaire (answer No to everything → 4+)
+### Step 4: Fill in App Store Listing ✅
+- [x] Subtitle: AI Worship Team Management
+- [x] Category: Productivity
+- [x] Privacy Policy URL: https://aria.church/privacy/
+- [x] Support URL: https://aria.church
+- [x] Description: Copy from this file's Description section above
+- [x] Keywords: worship, church, volunteer, team management, planning center, worship arts, church management, volunteer scheduling, worship team, church app
+- [x] Marketing URL: https://aria.church
+- [x] Copyright: 2026 ARIA
+- [x] Age Rating: Fill out questionnaire (answer No to everything → 4+)
 
 ### Step 5: Take Screenshots
-- [ ] 6.7" iPhone (iPhone 15 Pro Max) — required
-- [ ] 5.5" iPhone (iPhone 8 Plus) — required if supporting older devices
+- [x] 6.9" iPhone (iPhone 16 Pro Max) — required
+- [x] 6.5" iPhone (iPhone 15 Plus / 14 Plus) — required
 
 Capture these 5 screens:
 1. Chat with Aria (showing a conversation)
@@ -117,20 +117,20 @@ Capture these 5 screens:
 4. Communication hub
 5. Analytics dashboard
 
-### Step 6: Set Up App Review Demo Account
-- [ ] Run: `python3 manage.py create_demo_account` on production
-- [ ] In App Store Connect → App Review Information:
+### Step 6: Set Up App Review Demo Account ✅
+- [x] Run: `python3 manage.py create_demo_account` on production
+- [x] In App Store Connect → App Review Information:
   - Sign-in required: Yes
   - Username: demo@aria.church
   - Password: AppReview2026!
   - Notes: "This app requires a server connection. The demo account has sample data pre-loaded."
 
-### Step 7: Archive and Upload
-- [ ] Open project in Xcode: `open mobile/ios/App/App.xcodeproj`
-- [ ] Select "Any iOS Device" as build destination
-- [ ] Set signing to Distribution profile under Signing & Capabilities
-- [ ] Product → Archive
-- [ ] In Organizer: Select archive → Distribute App → App Store Connect → Upload
+### Step 7: Archive and Upload ✅
+- [x] Open project in Xcode: `open mobile/ios/App/App.xcodeproj`
+- [x] Select "Any iOS Device" as build destination
+- [x] Set signing to Distribution profile under Signing & Capabilities
+- [x] Product → Archive
+- [x] In Organizer: Select archive → Distribute App → App Store Connect → Upload
 
 ### Step 8: Submit for Review
 - [ ] Wait for build to appear in App Store Connect (5-15 minutes)

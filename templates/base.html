@@ -406,7 +406,7 @@
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
          @click="sidebarOpen = false"
-         class="md:hidden fixed inset-0 z-40 sidebar-overlay"
+         class="{% if not is_app_mode %}md:hidden{% endif %} fixed inset-0 z-40 sidebar-overlay"
          style="display: none;">
     </div>
 
@@ -418,7 +418,7 @@
            x-transition:leave="transition ease-in duration-200"
            x-transition:leave-start="translate-x-0"
            x-transition:leave-end="-translate-x-full"
-           class="md:hidden fixed left-0 top-0 h-full w-72 bg-ch-dark border-r border-gray-800 p-6 flex flex-col z-50 transform"
+           class="{% if not is_app_mode %}md:hidden{% endif %} fixed left-0 top-0 h-full w-72 bg-ch-dark border-r border-gray-800 p-6 flex flex-col z-50 transform"
            style="display: none; padding-top: calc(1.5rem + env(safe-area-inset-top, 0px));">
         <div class="flex items-center justify-between mb-8">
             <div>
