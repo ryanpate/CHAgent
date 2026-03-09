@@ -18,7 +18,7 @@
     "@type": "SoftwareApplication",
     "name": "Aria",
     "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Web",
+    "operatingSystem": "Web, iOS",
     "description": "AI-powered worship team management software with Planning Center integration. Manage volunteers, track interactions, access schedules, songs, and chord charts instantly.",
     "url": "https://aria.church",
     "offers": {
@@ -35,6 +35,7 @@
         "Follow-up management",
         "Team communication hub",
         "Push notifications",
+        "Native iOS app",
         "Analytics dashboard",
         "Proactive care insights"
     ],
@@ -95,7 +96,7 @@
     <p class="text-lg text-gray-400 mb-8 max-w-2xl mx-auto">
         Get instant answers about schedules, volunteers, and songs. Track volunteer relationships, manage follow-ups, and build stronger connections with your team - all in one place.
     </p>
-    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+    <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
         <a href="{% url 'onboarding_signup' %}"
            class="bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-4 px-8 rounded-lg text-lg transition-colors">
             Request Beta Access
@@ -103,6 +104,12 @@
         <a href="{% url 'pricing' %}"
            class="bg-ch-gray hover:bg-ch-gray/80 text-white font-semibold py-4 px-8 rounded-lg text-lg transition-colors">
             View Pricing
+        </a>
+    </div>
+    <div class="mt-6">
+        <a href="https://apps.apple.com/us/app/aria-wa-assistant/id6759796456" target="_blank" rel="noopener noreferrer"
+           class="inline-block hover:opacity-80 transition-opacity">
+            <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" alt="Download on the App Store" style="height: 44px;">
         </a>
     </div>
     <p class="text-gray-500 text-sm mt-4">14-day free trial. No credit card required.</p>
@@ -283,6 +290,47 @@
 
     <div class="text-center mt-8">
         <a href="{% url 'pricing' %}" class="text-ch-gold hover:underline">View full pricing details &rarr;</a>
+    </div>
+</div>
+
+<!-- iOS App Section -->
+<div class="py-16 bg-ch-dark rounded-2xl border border-ch-gray p-8 my-16">
+    <div class="flex flex-col md:flex-row items-center gap-8">
+        <div class="flex-1 text-center md:text-left">
+            <h2 class="text-3xl font-bold text-white mb-4">Now Available on iOS</h2>
+            <p class="text-gray-400 mb-4">
+                Take Aria with you. The native iOS app brings the full power of your worship team portal to your iPhone and iPad with Face ID login, push notifications, and offline access.
+            </p>
+            <ul class="text-gray-400 text-sm space-y-2 mb-6">
+                <li class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Face ID / Touch ID biometric login
+                </li>
+                <li class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Native push notifications
+                </li>
+                <li class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Follow-up reminders & quick actions
+                </li>
+                <li class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Offline access & native sharing
+                </li>
+            </ul>
+            <a href="https://apps.apple.com/us/app/aria-wa-assistant/id6759796456" target="_blank" rel="noopener noreferrer"
+               class="inline-block hover:opacity-80 transition-opacity">
+                <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" alt="Download on the App Store" style="height: 44px;">
+            </a>
+        </div>
+        <div class="flex-shrink-0">
+            <div class="w-48 h-48 bg-ch-gold/10 rounded-3xl border border-ch-gold/30 flex items-center justify-center">
+                <svg class="w-20 h-20 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                </svg>
+            </div>
+        </div>
     </div>
 </div>
 

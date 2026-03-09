@@ -30,6 +30,8 @@ ARIA is the AI-powered platform built for worship arts teams. Chat with Aria, yo
 
 ARIA is designed exclusively for worship arts teams and church volunteer management. Your data is encrypted, isolated per organization, and never used to train AI models.
 
+Available now on the App Store: https://apps.apple.com/us/app/aria-wa-assistant/id6759796456
+
 Currently in closed beta. Request access at https://aria.church
 
 ## Keywords
@@ -137,4 +139,5 @@ Capture these 5 screens:
 - [x] Select the build under version 1.0
 - [x] Review all listing details
 - [x] Click "Submit for Review"
-- [x] Submitted February 28, 2026 — Apple review typically takes 24-48 hours
+- [x] Submitted February 28, 2026
+- [x] Approved and live on the App Store — March 2026
