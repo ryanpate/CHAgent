@@ -456,11 +456,8 @@ class CapacitorCsrfExemptMiddleware(MiddlewareMixin):
         origin = request.META.get('HTTP_ORIGIN', '')
         is_capacitor_origin = origin.startswith('capacitor://')
         is_app_cookie = request.COOKIES.get('aria_app') == '1'
-        is_capacitor_ua = 'capacitor' in request.META.get(
-            'HTTP_USER_AGENT', ''
-        ).lower()
 
-        if is_capacitor_origin or (is_app_cookie and is_capacitor_ua):
+        if is_capacitor_origin or is_app_cookie:
             request._dont_enforce_csrf_checks = True
 
 

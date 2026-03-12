@@ -95,6 +95,7 @@
             console.log('[ARIA] Face ID verified, submitting login form');
             document.getElementById('id_username').value = creds.username;
             document.getElementById('id_password').value = creds.password;
+            window._ariaLoginSubmitted = true;
             document.getElementById('login-form').submit();
 
         } catch(e) {
@@ -106,6 +107,12 @@
     function setupCredentialStorage(NativeBiometric) {
         var form = document.getElementById('login-form');
         form.addEventListener('submit', function(e) {
+            // Prevent duplicate submissions (biometric already submitted)
+            if (window._ariaLoginSubmitted) {
+                e.preventDefault();
+                return;
+            }
+            window._ariaLoginSubmitted = true;
             var username = document.getElementById('id_username').value;
             var password = document.getElementById('id_password').value;
             if (username && password) {
