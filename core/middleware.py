@@ -440,6 +440,30 @@ class TwoFactorMiddleware(MiddlewareMixin):
         return redirect('totp_login_verify')
 
 
+class CapacitorCsrfExemptMiddleware(MiddlewareMixin):
+    """
+    Exempts Capacitor native app requests from CSRF verification.
+
+    The Capacitor WebView on iPad/iOS can send origins that Django's CSRF
+    middleware doesn't recognize (e.g., null origin, or missing Referer).
+    Requests are identified as native app by the capacitor://localhost origin
+    or the aria_app cookie set during app initialization.
+
+    Must be placed BEFORE django.middleware.csrf.CsrfViewMiddleware in MIDDLEWARE.
+    """
+
+    def process_request(self, request):
+        origin = request.META.get('HTTP_ORIGIN', '')
+        is_capacitor_origin = origin.startswith('capacitor://')
+        is_app_cookie = request.COOKIES.get('aria_app') == '1'
+        is_capacitor_ua = 'capacitor' in request.META.get(
+            'HTTP_USER_AGENT', ''
+        ).lower()
+
+        if is_capacitor_origin or (is_app_cookie and is_capacitor_ua):
+            request._dont_enforce_csrf_checks = True
+
+
 class AppModeMiddleware(MiddlewareMixin):
     """
     Persists native app mode detection via cookie.
