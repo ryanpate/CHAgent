@@ -4868,6 +4868,73 @@ def security_settings(request):
 
 
 @login_required
+def account_delete(request):
+    """Account deletion confirmation and processing."""
+    from .models import OrganizationMembership, AuditLog
+    from core.admin_views import get_client_ip
+
+    user = request.user
+
+    # Check if user is sole owner of any org
+    sole_owner_orgs = []
+    owner_memberships = OrganizationMembership.objects.filter(
+        user=user, role='owner'
+    ).select_related('organization')
+    for membership in owner_memberships:
+        other_owners = OrganizationMembership.objects.filter(
+            organization=membership.organization, role='owner'
+        ).exclude(user=user).count()
+        if other_owners == 0:
+            sole_owner_orgs.append(membership.organization)
+
+    if request.method == 'POST':
+        confirmation = request.POST.get('confirmation', '').strip()
+        delete_org = request.POST.get('delete_org') == '1'
+
+        if confirmation != user.username:
+            from django.contrib import messages
+            messages.error(request, 'Username did not match. Account was not deleted.')
+            return render(request, 'core/settings/account_delete.html', {
+                'sole_owner_orgs': sole_owner_orgs,
+            })
+
+        # Block deletion if sole owner and didn't confirm org deletion
+        if sole_owner_orgs and not delete_org:
+            from django.contrib import messages
+            messages.error(request, 'You must confirm deletion of your organization(s) or transfer ownership first.')
+            return render(request, 'core/settings/account_delete.html', {
+                'sole_owner_orgs': sole_owner_orgs,
+            })
+
+        # Audit log before deletion (user will be SET_NULL)
+        AuditLog.objects.create(
+            user=user,
+            action='account_deleted',
+            ip_address=get_client_ip(request),
+            details={
+                'username': user.username,
+                'email': user.email,
+                'deleted_orgs': [org.name for org in sole_owner_orgs],
+            },
+        )
+
+        # Delete orgs where user is sole owner
+        for org in sole_owner_orgs:
+            org.delete()
+
+        # Log out and delete account
+        from django.contrib.auth import logout
+        logout(request)
+        user.delete()
+
+        return redirect('home')
+
+    return render(request, 'core/settings/account_delete.html', {
+        'sole_owner_orgs': sole_owner_orgs,
+    })
+
+
+@login_required
 def totp_setup(request):
     """Set up TOTP 2FA - show QR code."""
     import pyotp

@@ -3363,6 +3363,7 @@ class AuditLog(models.Model):
         ('invitation_sent', 'Invitation Sent'),
         ('invitation_cancelled', 'Invitation Cancelled'),
         ('settings_updated', 'Settings Updated'),
+        ('account_deleted', 'Account Deleted'),
     ]
 
     user = models.ForeignKey(

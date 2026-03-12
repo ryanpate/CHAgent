@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Account{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="mb-8">
+        <a href="{% url 'security_settings' %}" class="text-gray-400 hover:text-white text-sm transition">&larr; Back to Security Settings</a>
+        <h1 class="text-2xl font-bold text-red-500 mt-4">Delete Account</h1>
+        <p class="text-gray-400 mt-1">Permanently delete your account and all associated data.</p>
+    </div>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="bg-ch-dark rounded-lg p-6 border border-red-900/50">
+        <div class="mb-6">
+            <h2 class="text-lg font-semibold text-red-400 mb-3">This action is permanent</h2>
+            <p class="text-gray-300 text-sm mb-4">Deleting your account will permanently remove:</p>
+            <ul class="text-gray-400 text-sm space-y-2 ml-4 list-disc">
+                <li>Your user profile and login credentials</li>
+                <li>All chat conversations with Aria</li>
+                <li>All interactions and volunteer notes you've logged</li>
+                <li>All follow-ups you've created</li>
+                <li>Your notification preferences and push subscriptions</li>
+                <li>Your organization membership(s)</li>
+            </ul>
+        </div>
+
+        {% if sole_owner_orgs %}
+        <div class="bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-4 mb-6">
+            <h3 class="text-yellow-400 font-medium mb-2">You are the sole owner of:</h3>
+            <ul class="text-yellow-200 text-sm space-y-1 ml-4 list-disc">
+                {% for org in sole_owner_orgs %}
+                <li>{{ org.name }}</li>
+                {% endfor %}
+            </ul>
+            <p class="text-yellow-200/80 text-sm mt-3">
+                These organization(s) and all their data will also be deleted, since there are no other owners.
+                To keep the organization, transfer ownership to another admin before deleting your account.
+            </p>
+        </div>
+        {% endif %}
+
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+
+            <div>
+                <label for="confirmation" class="block text-sm font-medium text-gray-300 mb-2">
+                    Type <strong class="text-white">{{ user.username }}</strong> to confirm
+                </label>
+                <input type="text"
+                       name="confirmation"
+                       id="confirmation"
+                       autocomplete="off"
+                       required
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-red-500 transition"
+                       placeholder="Enter your username">
+            </div>
+
+            {% if sole_owner_orgs %}
+            <div class="flex items-start gap-3">
+                <input type="checkbox"
+                       name="delete_org"
+                       value="1"
+                       id="delete_org"
+                       required
+                       class="mt-1 rounded border-gray-600 bg-ch-gray text-red-600 focus:ring-red-500">
+                <label for="delete_org" class="text-sm text-gray-300">
+                    I understand that my organization(s) and all associated data will be permanently deleted.
+                </label>
+            </div>
+            {% endif %}
+
+            <button type="submit"
+                    class="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition">
+                Permanently Delete My Account
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

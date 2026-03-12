@@ -145,6 +145,7 @@ urlpatterns = [
     path('settings/billing/', views.org_settings_billing, name='org_settings_billing'),
     # Security Settings & 2FA
     path('settings/security/', views.security_settings, name='security_settings'),
+    path('settings/security/delete-account/', views.account_delete, name='account_delete'),
     path('settings/security/2fa/setup/', views.totp_setup, name='totp_setup'),
     path('settings/security/2fa/verify-setup/', views.totp_verify_setup, name='totp_verify_setup'),
     path('settings/security/2fa/disable/', views.totp_disable, name='totp_disable'),
