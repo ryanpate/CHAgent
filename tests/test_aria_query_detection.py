@@ -14,6 +14,7 @@ from core.agent import (
     is_pco_data_query,
     is_blockout_query,
     is_song_or_setlist_query,
+    is_team_roster_query,
     check_ambiguous_song_or_person,
     check_disambiguation_response,
     detect_service_type_from_question,
@@ -64,6 +65,15 @@ class TestVolunteerContactQueries:
         ("How can I reach Mike?", "Mike"),
         ("Lisa's phone number", "Lisa"),
         ("Email for David Chen", "David Chen"),
+        # "What is [name] phone/email" without apostrophe
+        ("What is Lucas Jones phone number", "Lucas Jones"),
+        ("What is Sarah email address", "Sarah"),
+        ("What is Mike Johnson cell number", "Mike Johnson"),
+        ("What is Lisa address", "Lisa"),
+        ("What is David birthday", "David"),
+        # "What's [name] phone/email" contraction without apostrophe
+        ("What's Lucas Jones phone number", "Lucas Jones"),
+        ("What's Sarah email", "Sarah"),
     ])
     def test_name_extraction_from_contact_queries(self, query, expected_name):
         """Verify person names are correctly extracted from contact queries."""
@@ -551,3 +561,68 @@ class TestGenericNameRejection:
         assert person_name is not None, f"Should extract name from '{query}'"
         assert person_name.lower() == expected_name.lower(), \
             f"Expected '{expected_name}', got '{person_name}' from '{query}'"
+
+
+class TestTeamRosterQueries:
+    """Test detection of team roster queries (no date constraint)."""
+
+    @pytest.mark.parametrize("query,expected_keyword", [
+        # Vocalist/singer queries
+        ("Who are the vocalists?", "vocalists"),
+        ("Who are the singers?", "singers"),
+        ("Who are the female vocalists?", "female vocalists"),
+        ("Who are the male vocalists?", "male vocalists"),
+        ("Show me the vocalists", "vocalists"),
+        ("List the vocalists", "vocalists"),
+        ("List all vocalists", "vocalists"),
+        # Band/musician queries
+        ("Who is on the band team?", "band"),
+        ("Who are the band members?", "band"),
+        ("Show me the band", "band"),
+        ("List the musicians", "musicians"),
+        # Tech team queries
+        ("Who is on the tech team?", "tech"),
+        ("Who are the tech team members?", "tech"),
+        ("Show me the production team", "production"),
+        # Audio/video/lighting queries
+        ("Who are the audio team members?", "audio"),
+        ("Who is on the video team?", "video"),
+        ("List the lighting team", "lighting"),
+        # Other instrument-specific queries
+        ("Who are the drummers?", "drummer"),
+        ("Who are the guitar players?", "guitar"),
+        ("Show me the keyboard players", "keyboard"),
+        # General patterns
+        ("Who is on the worship team?", "worship"),
+        ("Everyone on the band team", "band"),
+        ("Get me the vocals team members", "vocals"),
+    ])
+    def test_team_roster_detection(self, query, expected_keyword):
+        """Verify team roster queries are correctly detected."""
+        is_roster, team_keyword = is_team_roster_query(query)
+        assert is_roster is True, f"Query '{query}' should be detected as team roster query"
+        assert team_keyword is not None, f"Should extract team keyword from '{query}'"
+        # The keyword should contain or match the expected keyword
+        assert expected_keyword.lower() in team_keyword.lower() or team_keyword.lower() in expected_keyword.lower(), \
+            f"Expected keyword containing '{expected_keyword}', got '{team_keyword}' from '{query}'"
+
+    @pytest.mark.parametrize("query", [
+        # Individual person queries - should NOT match
+        "What's John Smith's phone number?",
+        "Contact info for Sarah Johnson",
+        "When does Emma play next?",
+        # Date-specific team queries - should NOT match (handled by compound query)
+        "Who's serving this Sunday?",
+        # Song/setlist queries - should NOT match
+        "What songs did we play last Sunday?",
+        "Chord chart for Goodness of God",
+        # General non-team queries
+        "Hello",
+        "Thanks!",
+        "Log interaction: talked with Sarah",
+        "What are the most common prayer requests?",
+    ])
+    def test_non_roster_queries_not_matched(self, query):
+        """Verify non-roster queries are not detected as roster queries."""
+        is_roster, team_keyword = is_team_roster_query(query)
+        assert is_roster is False, f"Query '{query}' should NOT be detected as team roster query"

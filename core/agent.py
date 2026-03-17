@@ -400,8 +400,10 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
             r"when\s+(?:is|are|does|do|will)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:scheduled?|serving?|serve|play(?:ing)?|sing(?:ing)?|next)",
             # "what is [name]'s contact" - with apostrophe
             r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s",
-            # "what is [name] contact info" - without apostrophe (name before contact)
-            r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*?)\s+contact",
+            # "what is [name] phone/email/contact/etc" - without apostrophe (name before data type keyword)
+            r"what\s+is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*?)\s+(?:contact|phone|email|e-mail|cell|mobile|address|birthday|birth\s*date|anniversary)",
+            # "what's [name] phone/email/contact/etc" - contraction without possessive
+            r"what's\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*?)\s+(?:contact|phone|email|e-mail|cell|mobile|address|birthday|birth\s*date|anniversary)",
             # "what's [name]'s contact/email/phone" - contraction with possessive (must match at word start)
             r"what's\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)'s\s+(?:contact|email|phone|address|birthday|schedule|upcoming)",
             # "[name]'s contact/email/phone/schedule" - with apostrophe (must be at word start, not after "what's")
@@ -443,7 +445,9 @@ def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
                     continue
 
                 # Remove trailing 's' if it's a possessive without apostrophe (e.g., "strucks" -> "struck")
-                if extracted.lower().endswith('s') and len(extracted) > 2:
+                # Only apply for the "[name]s contact info" pattern (index 7) to avoid
+                # stripping 's' from names that naturally end in 's' (e.g., "Jones", "Lucas")
+                if i == 7 and extracted.lower().endswith('s') and len(extracted) > 2:
                     # Check if this looks like a possessive (followed by contact/email/phone in original)
                     if re.search(r'\b' + re.escape(extracted) + r'\s+(?:contact|email|phone)', message, re.IGNORECASE):
                         extracted = extracted[:-1]  # Remove trailing 's'
@@ -566,6 +570,97 @@ def is_compound_team_contact_query(message: str) -> Tuple[bool, str, Optional[st
         logger.info(f"Compound team contact query detected: type={contact_type}, date={date_reference}")
 
     return is_compound, contact_type, date_reference
+
+
+def is_team_roster_query(message: str) -> Tuple[bool, Optional[str]]:
+    """
+    Detect if a question is asking for the full roster of a specific team
+    (without a date constraint).
+
+    Handles queries like:
+    - "Who are the vocalists?"
+    - "Who is on the band team?"
+    - "List the tech team members"
+    - "Who are the female vocalists?"
+    - "Show me everyone on the worship team"
+
+    Args:
+        message: The user's question.
+
+    Returns:
+        Tuple of (is_roster_query, team_name) where:
+        - is_roster_query: True if asking for a team roster
+        - team_name: Extracted team name keyword if found
+    """
+    message_lower = message.lower().strip()
+
+    # Known team name keywords and their variations
+    team_keywords = {
+        'band': ['band', 'musicians', 'instrumentalists', 'instruments'],
+        'vocals': ['vocals', 'vocal', 'vocalists', 'vocalist', 'singers', 'singer', 'female vocalists', 'male vocalists', 'female vocalist', 'male vocalist'],
+        'tech': ['tech', 'technical', 'production'],
+        'audio': ['audio', 'sound'],
+        'video': ['video', 'camera', 'cameras'],
+        'lighting': ['lighting', 'lights'],
+        'worship': ['worship', 'praise'],
+        'av': ['av', 'a/v'],
+        'keys': ['keys', 'keyboard', 'keyboards', 'piano'],
+        'guitar': ['guitar', 'guitars', 'electric guitar', 'acoustic guitar'],
+        'drums': ['drums', 'drummer', 'drummers', 'percussion'],
+        'bass': ['bass', 'bassist'],
+    }
+
+    # Patterns that indicate a team roster query (no date required)
+    roster_patterns = [
+        # "who are the [team]" / "who are on the [team] team"
+        r'who\s+(?:are|is)\s+(?:the\s+)?(?:on\s+(?:the\s+)?)?(.+?)(?:\s+team)?(?:\s+members?)?\s*\??$',
+        # "list/show (me) the [team] team"
+        r'(?:list|show|give|get)\s+(?:me\s+)?(?:the\s+)?(?:all\s+)?(.+?)(?:\s+team)?(?:\s+members?)?\s*\??$',
+        # "who is on the [team] team"
+        r'who\s+(?:is|are)\s+on\s+(?:the\s+)?(.+?)(?:\s+team)?\s*\??$',
+        # "[team] team members" / "members of the [team] team"
+        r'members\s+of\s+(?:the\s+)?(.+?)(?:\s+team)?\s*\??$',
+        # "everyone on the [team] team"
+        r'everyone\s+(?:on|in)\s+(?:the\s+)?(.+?)(?:\s+team)?\s*\??$',
+        # "what [team] members do we have"
+        r'what\s+(.+?)(?:\s+team)?\s+members?\s+(?:do\s+we\s+have|are\s+there)\s*\??$',
+    ]
+
+    # First check if any known team keyword is in the message with a roster-asking pattern
+    for pattern in roster_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            extracted = match.group(1).strip()
+            # Check if extracted text contains a known team keyword
+            for team_name, variations in team_keywords.items():
+                for variation in variations:
+                    if variation in extracted:
+                        logger.info(f"Team roster query detected: team='{team_name}' from extracted='{extracted}'")
+                        return True, extracted
+            # Also check if the whole message mentions a team keyword even if regex didn't capture it cleanly
+            for team_name, variations in team_keywords.items():
+                for variation in variations:
+                    if variation in message_lower:
+                        logger.info(f"Team roster query detected (fallback): team='{team_name}' from message")
+                        return True, variation
+
+    # Direct patterns without complex regex - simple keyword combos
+    simple_patterns = [
+        # "who are the vocalists/singers/musicians/etc"
+        (r'who\s+(?:are|is)\s+(?:the\s+)?(?:all\s+)?(?:our\s+)?', team_keywords),
+        # "list all vocalists/singers/etc"
+        (r'(?:list|show|give|get)\s+(?:me\s+)?(?:the\s+)?(?:all\s+)?(?:our\s+)?', team_keywords),
+    ]
+
+    for prefix_pattern, kw_dict in simple_patterns:
+        for team_name, variations in kw_dict.items():
+            for variation in variations:
+                full_pattern = prefix_pattern + re.escape(variation)
+                if re.search(full_pattern, message_lower):
+                    logger.info(f"Team roster query detected (simple): team='{team_name}', variation='{variation}'")
+                    return True, variation
+
+    return False, None
 
 
 def is_blockout_query(message: str) -> Tuple[bool, str, Optional[str], Optional[str]]:
@@ -1156,6 +1251,115 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
 
     # Add instruction for AI
     parts.append(f"INSTRUCTION: Present this contact information to the user in a clear, organized format. Focus on {contact_type} information as requested. The markdown links for Text, Call, Email, and group actions should be preserved in your response so users can click them.")
+
+    return '\n'.join(parts)
+
+
+def handle_team_roster_query(team_keyword: str, organization=None) -> str:
+    """
+    Handle queries asking for the full roster of a specific team.
+
+    This function:
+    1. Fetches all teams from PCO Services
+    2. Matches the requested team by name
+    3. Gets all people assigned to that team
+    4. Formats the roster for display
+
+    Args:
+        team_keyword: The team name keyword from the user's query (e.g., "vocalists", "band")
+        organization: Optional organization for multi-tenant support
+
+    Returns:
+        Formatted string with team roster for Claude context.
+    """
+    from .planning_center import PlanningCenterServicesAPI
+
+    services_api = PlanningCenterServicesAPI()
+
+    if not services_api.is_configured:
+        return "\n[PLANNING CENTER: The Planning Center integration is not configured. Unable to look up team rosters.]\n"
+
+    # Get all teams
+    teams_response = services_api.get_teams()
+    teams_data = teams_response.get('data', []) if teams_response else []
+
+    if not teams_data:
+        return "\n[TEAM ROSTER: No teams found in Planning Center Services.]\n"
+
+    # Match team by keyword
+    team_keyword_lower = team_keyword.lower().strip()
+    matched_team = None
+    all_team_names = []
+
+    for team in teams_data:
+        team_attrs = team.get('attributes', {})
+        team_name = team_attrs.get('name', '')
+        all_team_names.append(team_name)
+
+        # Match if the team name contains the keyword or vice versa
+        team_name_lower = team_name.lower()
+        if (team_keyword_lower in team_name_lower or
+                team_name_lower in team_keyword_lower or
+                # Handle plurals and variations
+                team_keyword_lower.rstrip('s') in team_name_lower or
+                team_name_lower.rstrip('s') in team_keyword_lower):
+            matched_team = team
+            break
+
+    if not matched_team:
+        # Try a fuzzier match - check individual words
+        for team in teams_data:
+            team_attrs = team.get('attributes', {})
+            team_name = team_attrs.get('name', '')
+            team_words = team_name.lower().split()
+            keyword_words = team_keyword_lower.split()
+            # Check if any keyword word matches any team word
+            for kw in keyword_words:
+                for tw in team_words:
+                    if kw.rstrip('s') == tw.rstrip('s') or kw in tw or tw in kw:
+                        matched_team = team
+                        break
+                if matched_team:
+                    break
+            if matched_team:
+                break
+
+    if not matched_team:
+        team_list = ', '.join(all_team_names) if all_team_names else 'none found'
+        return f"\n[TEAM ROSTER: Could not find a team matching '{team_keyword}'. Available teams in Planning Center: {team_list}]\n"
+
+    matched_team_id = matched_team.get('id')
+    matched_team_name = matched_team.get('attributes', {}).get('name', 'Unknown')
+
+    # Get all people on this team
+    people = services_api.get_people(team_id=matched_team_id)
+
+    if not people:
+        return f"\n[TEAM ROSTER: No members found on the '{matched_team_name}' team.]\n"
+
+    # Format the roster
+    parts = ["\n[TEAM ROSTER]"]
+    parts.append(f"Team: {matched_team_name}")
+    parts.append(f"Total Members: {len(people)}")
+    parts.append("")
+
+    # Sort people by name
+    sorted_people = sorted(people, key=lambda p: (
+        p.get('attributes', {}).get('first_name', '') + ' ' +
+        p.get('attributes', {}).get('last_name', '')
+    ))
+
+    for person in sorted_people:
+        attrs = person.get('attributes', {})
+        first_name = attrs.get('first_name', '')
+        last_name = attrs.get('last_name', '')
+        name = f"{first_name} {last_name}".strip()
+        if name:
+            parts.append(f"  - {name}")
+
+    parts.append("")
+    parts.append("[END TEAM ROSTER]")
+    parts.append(f"\nINSTRUCTION: Present this team roster to the user. The user asked about '{team_keyword}' and this is the '{matched_team_name}' team from Planning Center. List all {len(people)} members. If the user asked about a specific subset (e.g., 'female vocalists'), note that Planning Center does not track gender — present the full list and let the user know you're showing all members of the team.")
 
     return '\n'.join(parts)
 
@@ -3817,6 +4021,59 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         except Exception as e:
             logger.error(f"Error generating analytics response: {e}")
             answer = "I encountered an error generating the analytics report. Please try visiting the [Analytics Dashboard](/analytics/) directly."
+
+        # Save assistant response to chat history
+        ChatMessage.objects.create(
+            user=user,
+            organization=organization,
+            session_id=session_id,
+            role='assistant',
+            content=answer
+        )
+
+        # Update conversation context
+        conversation_context.increment_message_count(2)
+        conversation_context.save()
+
+        return answer
+
+    # Check if this is a team roster query (e.g., "who are the vocalists", "who is on the band team")
+    # This must be checked BEFORE compound team contact queries and PCO queries
+    roster_query, roster_team_keyword = is_team_roster_query(question)
+
+    if roster_query:
+        logger.info(f"Team roster query detected: team='{roster_team_keyword}'")
+
+        roster_data_context = handle_team_roster_query(roster_team_keyword, organization)
+
+        # Save the user's question to chat history
+        ChatMessage.objects.create(
+            user=user,
+            organization=organization,
+            session_id=session_id,
+            role='user',
+            content=question
+        )
+
+        # Query Claude with the roster data
+        user_name = user.display_name if user.display_name else user.username
+        roster_messages = [{"role": "user", "content": question}]
+
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=2000,
+                system=SYSTEM_PROMPT.format(
+                    context=roster_data_context,
+                    current_date=datetime.now().strftime('%Y-%m-%d'),
+                    user_name=user_name
+                ),
+                messages=roster_messages
+            )
+            answer = response.content[0].text
+        except Exception as e:
+            logger.error(f"Error querying Claude for team roster: {e}")
+            answer = "I encountered an error retrieving the team roster. Please try again."
 
         # Save assistant response to chat history
         ChatMessage.objects.create(
