@@ -3,7 +3,7 @@
 {% block title %}{{ partner.display_name|default:partner.username }}{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto flex flex-col" style="height: calc(100dvh - 80px);">
+<div id="dm-wrapper" class="max-w-4xl mx-auto flex flex-col" style="height: calc(100vh - 80px);">
     <!-- Header -->
     <div class="bg-ch-dark rounded-lg p-3 mb-2 flex-shrink-0">
         <div class="flex items-center gap-3">
@@ -56,15 +56,15 @@
           hx-target="#messages-container"
           hx-swap="beforeend"
           hx-on::after-request="this.reset(); document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;"
-          class="bg-ch-dark rounded-lg p-4 flex-shrink-0">
+          class="bg-ch-dark rounded-lg p-3 flex-shrink-0">
         {% csrf_token %}
-        <div class="flex gap-4">
+        <div class="flex gap-2">
             <input type="text" name="content" id="dm-input"
                    placeholder="Write a message..."
                    autocomplete="off"
                    class="flex-1 bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold">
             <button type="submit"
-                    class="px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                    class="px-5 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
                 Send
             </button>
         </div>
@@ -72,35 +72,46 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const container = document.getElementById('messages-container');
-    const input = document.getElementById('dm-input');
+(function() {
+    var container = document.getElementById('messages-container');
+    var input = document.getElementById('dm-input');
+    var wrapper = document.getElementById('dm-wrapper');
+    var form = document.getElementById('dm-form');
 
-    // Scroll messages to bottom so most recent are visible
-    container.scrollTop = container.scrollHeight;
-
-    // Auto-focus input to open keyboard on mobile
-    setTimeout(function() {
-        input.focus();
-        // Re-scroll after keyboard opens
-        setTimeout(function() {
-            container.scrollTop = container.scrollHeight;
-        }, 400);
-    }, 100);
-
-    // Keep messages scrolled to bottom when keyboard resizes viewport
-    if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', function() {
-            container.scrollTop = container.scrollHeight;
-        });
+    function scrollToBottom() {
+        container.scrollTop = container.scrollHeight;
     }
 
-    // Also scroll on input focus
+    // Resize the wrapper to fit the visible viewport (accounts for keyboard)
+    function adjustLayout() {
+        if (window.visualViewport) {
+            var vh = window.visualViewport.height;
+            // Account for the top nav bar (~80px) and viewport offset
+            var topOffset = window.visualViewport.offsetTop;
+            wrapper.style.height = (vh - 80 + topOffset) + 'px';
+        }
+        scrollToBottom();
+    }
+
+    // Initial scroll
+    scrollToBottom();
+
+    // Listen for visual viewport changes (keyboard open/close)
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', adjustLayout);
+        window.visualViewport.addEventListener('scroll', adjustLayout);
+    }
+
+    // Auto-focus input to trigger keyboard
+    setTimeout(function() {
+        input.focus();
+        setTimeout(scrollToBottom, 400);
+    }, 100);
+
+    // Scroll on focus
     input.addEventListener('focus', function() {
-        setTimeout(function() {
-            container.scrollTop = container.scrollHeight;
-        }, 300);
+        setTimeout(adjustLayout, 300);
     });
-});
+})();
 </script>
 {% endblock %}
