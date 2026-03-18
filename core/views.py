@@ -2231,29 +2231,21 @@ def dm_list(request):
     """List direct message conversations."""
     from .models import DirectMessage
 
-    org = get_org(request)
-
-    # Get all DMs for user (scoped to organization)
+    # Get all DMs for user
     dms = DirectMessage.objects.filter(
         models.Q(sender=request.user) | models.Q(recipient=request.user)
-    )
-    if org:
-        dms = dms.filter(organization=org)
-    dms = dms.select_related('sender', 'recipient').order_by('-created_at')
+    ).select_related('sender', 'recipient').order_by('-created_at')
 
     # Group by conversation partner
     conversations = {}
     for dm in dms:
         partner = dm.recipient if dm.sender == request.user else dm.sender
         if partner and partner.id not in conversations:
-            unread_qs = DirectMessage.objects.filter(
+            unread_count = DirectMessage.objects.filter(
                 sender=partner,
                 recipient=request.user,
                 is_read=False
-            )
-            if org:
-                unread_qs = unread_qs.filter(organization=org)
-            unread_count = unread_qs.count()
+            ).count()
             conversations[partner.id] = {
                 'partner': partner,
                 'last_message': dm,
@@ -2272,28 +2264,20 @@ def dm_conversation(request, user_id):
     from .models import DirectMessage
     from accounts.models import User
 
-    org = get_org(request)
-
     partner = get_object_or_404(User, pk=user_id)
 
-    # Get messages in this conversation (scoped to organization)
+    # Get messages in this conversation
     messages = DirectMessage.objects.filter(
         models.Q(sender=request.user, recipient=partner) |
         models.Q(sender=partner, recipient=request.user)
-    )
-    if org:
-        messages = messages.filter(organization=org)
-    messages = messages.select_related('sender', 'recipient').order_by('created_at')[:100]
+    ).select_related('sender', 'recipient').order_by('created_at')[:100]
 
-    # Mark unread messages as read (scoped to organization)
-    unread_qs = DirectMessage.objects.filter(
+    # Mark unread messages as read
+    DirectMessage.objects.filter(
         sender=partner,
         recipient=request.user,
         is_read=False
-    )
-    if org:
-        unread_qs = unread_qs.filter(organization=org)
-    unread_qs.update(is_read=True, read_at=timezone.now())
+    ).update(is_read=True, read_at=timezone.now())
 
     context = {
         'partner': partner,
@@ -2309,14 +2293,11 @@ def dm_send(request, user_id):
     from .models import DirectMessage
     from accounts.models import User
 
-    org = get_org(request)
-
     recipient = get_object_or_404(User, pk=user_id)
     content = request.POST.get('content', '').strip()
 
     if content:
         message = DirectMessage.objects.create(
-            organization=org,
             sender=request.user,
             recipient=recipient,
             content=content
