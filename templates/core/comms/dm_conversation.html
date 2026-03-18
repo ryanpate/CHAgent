@@ -1,24 +1,21 @@
 {% extends 'base.html' %}
 
-{% block title %}Chat with {{ partner.display_name|default:partner.username }}{% endblock %}
+{% block title %}{{ partner.display_name|default:partner.username }}{% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto flex flex-col" style="height: calc(100dvh - 80px);">
     <!-- Header -->
-    <div class="bg-ch-dark rounded-lg p-4 mb-2 flex-shrink-0">
-        <div class="flex items-center gap-4">
+    <div class="bg-ch-dark rounded-lg p-3 mb-2 flex-shrink-0">
+        <div class="flex items-center gap-3">
             <a href="{% url 'dm_list' %}" class="text-gray-400 hover:text-white">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                 </svg>
             </a>
-            <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center text-lg font-medium text-ch-gold">
+            <div class="w-8 h-8 bg-ch-gold/20 rounded-full flex items-center justify-center text-sm font-medium text-ch-gold">
                 {{ partner.display_name|default:partner.username|slice:":1"|upper }}
             </div>
-            <div>
-                <h2 class="text-lg font-bold">{{ partner.display_name|default:partner.username }}</h2>
-                <p class="text-sm text-gray-400">Direct message</p>
-            </div>
+            <h2 class="font-bold">{{ partner.display_name|default:partner.username }}</h2>
         </div>
     </div>
 
@@ -79,18 +76,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('messages-container');
     const input = document.getElementById('dm-input');
 
-    // Scroll to bottom on load
+    // Scroll messages to bottom so most recent are visible
     container.scrollTop = container.scrollHeight;
 
-    // When the keyboard opens on mobile, the visual viewport shrinks.
-    // Re-scroll messages to bottom so the latest message stays visible.
+    // Auto-focus input to open keyboard on mobile
+    setTimeout(function() {
+        input.focus();
+        // Re-scroll after keyboard opens
+        setTimeout(function() {
+            container.scrollTop = container.scrollHeight;
+        }, 400);
+    }, 100);
+
+    // Keep messages scrolled to bottom when keyboard resizes viewport
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', function() {
             container.scrollTop = container.scrollHeight;
         });
     }
 
-    // Also scroll on input focus (catches iOS keyboard open)
+    // Also scroll on input focus
     input.addEventListener('focus', function() {
         setTimeout(function() {
             container.scrollTop = container.scrollHeight;
