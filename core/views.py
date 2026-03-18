@@ -2770,10 +2770,15 @@ def task_comment(request, pk):
 
     task = get_object_or_404(Task, pk=pk)
 
-    # Check access
+    # Check access - handle both project tasks and standalone tasks
     project = task.project
-    if project.owner != request.user and request.user not in project.members.all():
-        return HttpResponse('Access denied', status=403)
+    if project:
+        if project.owner != request.user and request.user not in project.members.all():
+            return HttpResponse('Access denied', status=403)
+    else:
+        # Standalone task - must be assignee or creator
+        if request.user not in task.assignees.all() and task.created_by != request.user:
+            return HttpResponse('Access denied', status=403)
 
     content = request.POST.get('content', '').strip()
     if content:
@@ -2783,11 +2788,20 @@ def task_comment(request, pk):
             content=content
         )
 
-        # Parse @mentions
-        mentioned_usernames = re.findall(r'@(\w+)', content)
-        if mentioned_usernames:
-            mentioned_users = User.objects.filter(username__in=mentioned_usernames)
-            comment.mentioned_users.set(mentioned_users)
+        # Parse @mentions - match @word patterns then search by display_name,
+        # first_name, or username since usernames are email addresses
+        mention_tokens = re.findall(r'@(\w+(?:\s+\w+)?)', content)
+        if mention_tokens:
+            mentioned_users = set()
+            for token in mention_tokens:
+                matches = User.objects.filter(
+                    models.Q(display_name__iexact=token) |
+                    models.Q(first_name__iexact=token) |
+                    models.Q(username__iexact=token)
+                )
+                mentioned_users.update(matches)
+            if mentioned_users:
+                comment.mentioned_users.set(mentioned_users)
 
         # Send notifications
         try:
@@ -2800,7 +2814,9 @@ def task_comment(request, pk):
         if request.headers.get('HX-Request'):
             return render(request, 'core/partials/task_comment.html', {'comment': comment})
 
-    return redirect('project_detail', pk=task.project.pk)
+    if project:
+        return redirect('project_detail', pk=project.pk)
+    return redirect('standalone_task_detail', pk=task.pk)
 
 
 @login_required
