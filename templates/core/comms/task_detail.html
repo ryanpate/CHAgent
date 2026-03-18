@@ -36,36 +36,51 @@
                 {% endif %}
             </div>
 
-            <!-- Status Dropdown -->
-            <div class="relative" x-data="{ open: false }">
-                <button @click="open = !open"
-                        class="px-3 py-2 rounded-lg text-sm
-                            {% if task.status == 'completed' %}bg-green-900/50 text-green-400
-                            {% elif task.status == 'in_progress' %}bg-blue-900/50 text-blue-400
-                            {% elif task.status == 'review' %}bg-yellow-900/50 text-yellow-400
-                            {% else %}bg-gray-700 text-gray-400{% endif %}">
-                    {{ task.get_status_display }}
-                    <svg class="w-4 h-4 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
-                </button>
-                <div x-show="open" @click.away="open = false"
-                     class="absolute right-0 mt-2 w-40 bg-ch-dark border border-gray-700 rounded-lg shadow-xl z-10">
-                    <form hx-post="{% url 'task_update_status' task.pk %}"
-                          hx-swap="none"
-                          hx-on::after-request="location.reload()"
-                          class="p-2">
-                        {% csrf_token %}
-                        <button type="submit" name="status" value="todo"
-                                class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">To Do</button>
-                        <button type="submit" name="status" value="in_progress"
-                                class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">In Progress</button>
-                        <button type="submit" name="status" value="review"
-                                class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">In Review</button>
-                        <button type="submit" name="status" value="completed"
-                                class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">Completed</button>
-                    </form>
+            <div class="flex items-center gap-2">
+                <!-- Status Dropdown -->
+                <div class="relative" x-data="{ open: false }">
+                    <button @click="open = !open"
+                            class="px-3 py-2 rounded-lg text-sm
+                                {% if task.status == 'completed' %}bg-green-900/50 text-green-400
+                                {% elif task.status == 'in_progress' %}bg-blue-900/50 text-blue-400
+                                {% elif task.status == 'review' %}bg-yellow-900/50 text-yellow-400
+                                {% else %}bg-gray-700 text-gray-400{% endif %}">
+                        {{ task.get_status_display }}
+                        <svg class="w-4 h-4 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false"
+                         class="absolute right-0 mt-2 w-40 bg-ch-dark border border-gray-700 rounded-lg shadow-xl z-10">
+                        <form hx-post="{% url 'task_update_status' task.pk %}"
+                              hx-swap="none"
+                              hx-on::after-request="location.reload()"
+                              class="p-2">
+                            {% csrf_token %}
+                            <button type="submit" name="status" value="todo"
+                                    class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">To Do</button>
+                            <button type="submit" name="status" value="in_progress"
+                                    class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">In Progress</button>
+                            <button type="submit" name="status" value="review"
+                                    class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">In Review</button>
+                            <button type="submit" name="status" value="completed"
+                                    class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">Completed</button>
+                        </form>
+                    </div>
                 </div>
+
+                <!-- Delete Button -->
+                <form hx-post="{% url 'task_delete' task.pk %}"
+                      hx-confirm="Delete this task? This cannot be undone."
+                      class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="p-2 text-gray-500 hover:text-red-400 rounded-lg hover:bg-red-900/20 transition"
+                            title="Delete task">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                    </button>
+                </form>
             </div>
         </div>
 

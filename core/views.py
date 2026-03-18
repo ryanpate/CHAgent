@@ -2180,6 +2180,91 @@ def dm_delete(request, message_id):
 
 
 @login_required
+@require_POST
+def project_delete(request, pk):
+    """Delete a project. Only the owner or admins can delete."""
+    from .models import Project
+
+    org = get_org(request)
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    project = get_object_or_404(queryset, pk=pk)
+
+    is_owner = project.owner == request.user
+    is_admin = getattr(request, 'membership', None) and request.membership.is_admin_or_above
+
+    if not is_owner and not is_admin:
+        return HttpResponse('Permission denied', status=403)
+
+    project.delete()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('')
+
+    return redirect('project_list')
+
+
+@login_required
+@require_POST
+def task_delete(request, pk):
+    """Delete a task. Creator, project owner, or admins can delete."""
+    from .models import Task
+
+    org = get_org(request)
+    queryset = Task.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    task = get_object_or_404(queryset, pk=pk)
+
+    is_creator = task.created_by == request.user
+    is_project_owner = task.project and task.project.owner == request.user
+    is_admin = getattr(request, 'membership', None) and request.membership.is_admin_or_above
+
+    if not is_creator and not is_project_owner and not is_admin:
+        return HttpResponse('Permission denied', status=403)
+
+    project = task.project
+    task.delete()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('')
+
+    if project:
+        return redirect('project_detail', pk=project.pk)
+    return redirect('my_tasks')
+
+
+@login_required
+@require_POST
+def channel_delete(request, slug):
+    """Delete a channel. Only the creator or admins can delete."""
+    from .models import Channel
+
+    org = get_org(request)
+    queryset = Channel.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    channel = get_object_or_404(queryset, slug=slug)
+
+    is_creator = channel.created_by == request.user
+    is_admin = getattr(request, 'membership', None) and request.membership.is_admin_or_above
+
+    if not is_creator and not is_admin:
+        return HttpResponse('Permission denied', status=403)
+
+    channel.delete()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('')
+
+    return redirect('channel_list')
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def channel_create(request):
     """Create a new channel."""

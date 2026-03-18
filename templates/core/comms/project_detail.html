@@ -55,6 +55,17 @@
                         </button>
                         {% endfor %}
                     </form>
+                    <div class="border-t border-gray-700 p-2">
+                        <form hx-post="{% url 'project_delete' project.pk %}"
+                              hx-confirm="Delete this project and all its tasks? This cannot be undone."
+                              class="inline w-full">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="w-full text-left px-2 py-1 text-sm text-red-400 hover:bg-red-900/30 rounded">
+                                Delete Project
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
             {% endif %}
