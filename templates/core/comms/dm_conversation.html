@@ -3,9 +3,9 @@
 {% block title %}Chat with {{ partner.display_name|default:partner.username }}{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto">
+<div class="max-w-4xl mx-auto flex flex-col" style="height: calc(100dvh - 80px);">
     <!-- Header -->
-    <div class="bg-ch-dark rounded-lg p-4 mb-4">
+    <div class="bg-ch-dark rounded-lg p-4 mb-2 flex-shrink-0">
         <div class="flex items-center gap-4">
             <a href="{% url 'dm_list' %}" class="text-gray-400 hover:text-white">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -23,7 +23,7 @@
     </div>
 
     <!-- Messages -->
-    <div id="messages-container" class="bg-ch-dark rounded-lg p-4 mb-4 h-[500px] overflow-y-auto space-y-4">
+    <div id="messages-container" class="bg-ch-dark rounded-lg p-4 mb-2 flex-1 min-h-0 overflow-y-auto space-y-4">
         {% for message in messages %}
         <div class="flex gap-3 group {% if message.sender == request.user %}flex-row-reverse{% endif %}" id="dm-{{ message.id }}">
             <div class="w-10 h-10 bg-{% if message.sender == request.user %}ch-gold{% else %}gray-600{% endif %}/20 rounded-full flex items-center justify-center text-sm font-medium {% if message.sender == request.user %}text-ch-gold{% else %}text-gray-400{% endif %} flex-shrink-0">
@@ -54,15 +54,15 @@
         {% endfor %}
     </div>
 
-    <!-- Message Input -->
-    <form hx-post="{% url 'dm_send' partner.id %}"
+    <!-- Message Input (pinned to bottom) -->
+    <form id="dm-form" hx-post="{% url 'dm_send' partner.id %}"
           hx-target="#messages-container"
           hx-swap="beforeend"
           hx-on::after-request="this.reset(); document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;"
-          class="bg-ch-dark rounded-lg p-4">
+          class="bg-ch-dark rounded-lg p-4 flex-shrink-0">
         {% csrf_token %}
         <div class="flex gap-4">
-            <input type="text" name="content"
+            <input type="text" name="content" id="dm-input"
                    placeholder="Write a message..."
                    autocomplete="off"
                    class="flex-1 bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold">
@@ -77,7 +77,25 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('messages-container');
+    const input = document.getElementById('dm-input');
+
+    // Scroll to bottom on load
     container.scrollTop = container.scrollHeight;
+
+    // When the keyboard opens on mobile, the visual viewport shrinks.
+    // Re-scroll messages to bottom so the latest message stays visible.
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function() {
+            container.scrollTop = container.scrollHeight;
+        });
+    }
+
+    // Also scroll on input focus (catches iOS keyboard open)
+    input.addEventListener('focus', function() {
+        setTimeout(function() {
+            container.scrollTop = container.scrollHeight;
+        }, 300);
+    });
 });
 </script>
 {% endblock %}
