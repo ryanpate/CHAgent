@@ -596,6 +596,15 @@ class TestTeamRosterQueries:
         ("Who is on the worship team?", "worship"),
         ("Everyone on the band team", "band"),
         ("Get me the vocals team members", "vocals"),
+        # "What [team] are on the team" patterns
+        ("What vocalists are on the team?", "vocalists"),
+        ("What singers are on the team?", "singers"),
+        ("What musicians are on the team?", "musicians"),
+        ("What vocalists do we have?", "vocalists"),
+        ("What drummers do we have?", "drummer"),
+        ("What guitar players do we have?", "guitar"),
+        ("Do we have any vocalists?", "vocalists"),
+        ("How many vocalists do we have?", "vocalists"),
     ])
     def test_team_roster_detection(self, query, expected_keyword):
         """Verify team roster queries are correctly detected."""

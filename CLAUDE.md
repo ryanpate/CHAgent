@@ -4,7 +4,7 @@
 
 **🎯 Overall Completion: ~95%** | **📊 Production-Ready Core Features** | **🔒 Closed Beta**
 
-Last Updated: February 26, 2026
+Last Updated: March 5, 2026
 
 ### Quick Stats
 - **40+ Database Models** across all domains (including blog, beta requests, security, knowledge base)
@@ -12,7 +12,7 @@ Last Updated: February 26, 2026
 - **105+ Templates** for complete user journeys
 - **11 Test Files** with 452 passing test cases (0 failures)
 - **34+ Migrations** tracking schema evolution
-- **Recent Focus**: Native mobile app Phase 3 (offline fallback, share sheet, universal links, local notifications, quick actions), Knowledge Base image support, document upload, test suite stability, two-factor authentication, audit logging
+- **Recent Focus**: Native mobile app approved and live on App Store, Phase 3 native APIs (offline fallback, share sheet, universal links, local notifications, quick actions), Knowledge Base image support, document upload, test suite stability, two-factor authentication, audit logging
 
 ### Current Sprint (February 2026)
 - ✅ **Closed Beta System** - Full beta request and approval workflow
@@ -120,6 +120,7 @@ Last Updated: February 26, 2026
   - Cold-start shortcut handling via `pendingShortcutURL` with deferred WebView injection
   - 12 total Capacitor plugins (up from 7)
   - 3 new AASA tests — 452 total passing
+- ✅ **App Store Approved & Live** - iOS app approved and published on the App Store (March 2026)
 - ✅ **Privacy Policy Page** (`/privacy/`) - Public privacy policy for App Store compliance
   - 10 sections: data collection, AI processing, data sharing, security, retention, user rights, children's privacy
   - Legal entity: Ryan Pate operating as ARIA, contact: support@aria.church
@@ -319,6 +320,12 @@ Aria is the AI assistant that powers the chat interface. She can handle many typ
 - **Personal Details**: "What are Mike's hobbies?" / "Does Lisa have kids?"
 - **Service History**: "When does Emma play next?" / "When did David last serve?"
 - **Availability**: "Is John blocked out on December 14th?" / "Who's available next Sunday?"
+
+### Team Roster Queries
+- **Full Roster**: "Who are the vocalists?" / "What vocalists are on the team?" / "List the band members"
+- **By Team**: "Who is on the tech team?" / "Show me the production team" / "What drummers do we have?"
+- **Various Phrasings**: "Do we have any vocalists?" / "How many guitar players do we have?" / "Everyone on the worship team"
+- Queries Planning Center directly for complete, up-to-date team rosters (not interaction history)
 
 ### Planning Center Schedule Queries
 - **Team Schedules**: "Who's on the team this Sunday?" / "Who served on Easter?"
@@ -1687,7 +1694,7 @@ The following features have been implemented:
 - [x] **Dependency Scanning**: Dependabot configuration for weekly vulnerability scanning
 - [x] **Knowledge Base**: Document upload with RAG search, Aria integration, and citation support
 - [x] **Knowledge Base Image Support**: PDF image extraction, standalone image uploads, Claude Vision descriptions, inline image display in chat
-- [x] **Native Mobile App**: iOS and Android apps via Capacitor with JWT auth, Face ID/Touch ID biometric login, haptic feedback, app badge count, pull-to-refresh, FCM push notifications, offline fallback, native share sheet, universal links, local notifications, and quick actions (12 native APIs)
+- [x] **Native Mobile App**: iOS app approved and live on App Store (March 2026) — Capacitor with JWT auth, Face ID/Touch ID biometric login, haptic feedback, app badge count, pull-to-refresh, FCM push notifications, offline fallback, native share sheet, universal links, local notifications, and quick actions (12 native APIs)
 
 ---
 
@@ -1946,10 +1953,10 @@ Result: **370 tests passing, 0 failures, 0 errors**.
   - `mobile/ios/` — Xcode project with Capacitor plugins + NativeBiometric, Firebase iOS SDK, app icons, splash screens
   - `mobile/android/` — Android Studio project with generated icons and splash screens
   - Platform-specific assets generated via `@capacitor/assets`
-- **App Store Preparation** (`mobile/store-listing.md`):
+- **App Store — Approved & Live** (`mobile/store-listing.md`):
   - App name, description, keywords, category, privacy/support URLs
   - Screenshot requirements for iPhone 6.7", 5.5", iPad Pro, and Android
-  - Pre-submission checklist (developer accounts, Firebase, APNs, screenshots)
+  - Submission checklist fully completed; approved and published March 2026
 - **Dependencies Added** (`requirements.txt`):
   - `djangorestframework>=3.14.0`, `djangorestframework-simplejwt>=5.3.0`
   - `django-cors-headers>=4.3.0`, `firebase-admin>=6.0.0`
@@ -2119,7 +2126,7 @@ Adds 5 more native iOS API integrations to strengthen the App Store case (12 tot
 ### 💡 Nice to Have (Q3-Q4 2026)
 10. **File Attachments**: Attach files to tasks, messages, and interactions
 11. **Voice Input**: Speech-to-text for quick interaction logging
-12. ~~**Mobile App**~~: ✅ Complete - Native iOS/Android app via Capacitor with 12 native APIs (JWT auth, biometric login, haptics, badge count, pull-to-refresh, push notifications, offline fallback, share sheet, universal links, local notifications, quick actions)
+12. ~~**Mobile App**~~: ✅ Complete & Live on App Store (March 2026) - Native iOS app via Capacitor with 12 native APIs (JWT auth, biometric login, haptics, badge count, pull-to-refresh, push notifications, offline fallback, share sheet, universal links, local notifications, quick actions)
 13. **Custom Domains**: Organizations can use their own domain (e.g., team.churchname.com)
 14. **White-labeling**: Full custom branding for Enterprise customers
 15. **Multi-campus**: Support for organizations with multiple campuses/locations

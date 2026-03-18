@@ -624,6 +624,11 @@ def is_team_roster_query(message: str) -> Tuple[bool, Optional[str]]:
         r'everyone\s+(?:on|in)\s+(?:the\s+)?(.+?)(?:\s+team)?\s*\??$',
         # "what [team] members do we have"
         r'what\s+(.+?)(?:\s+team)?\s+members?\s+(?:do\s+we\s+have|are\s+there)\s*\??$',
+        # "what [team] are on the team" / "what [team] do we have"
+        r'what\s+(.+?)\s+(?:are|is)\s+(?:on|in)\s+(?:the\s+)?team\s*\??$',
+        r'what\s+(.+?)\s+do\s+we\s+have\s*\??$',
+        # "do we have any [team]" / "how many [team] do we have"
+        r'(?:do\s+we\s+have\s+(?:any\s+)?|how\s+many\s+)(.+?)(?:\s+(?:on\s+(?:the\s+)?team|members?))?\s*\??$',
     ]
 
     # First check if any known team keyword is in the message with a roster-asking pattern
@@ -650,6 +655,8 @@ def is_team_roster_query(message: str) -> Tuple[bool, Optional[str]]:
         (r'who\s+(?:are|is)\s+(?:the\s+)?(?:all\s+)?(?:our\s+)?', team_keywords),
         # "list all vocalists/singers/etc"
         (r'(?:list|show|give|get)\s+(?:me\s+)?(?:the\s+)?(?:all\s+)?(?:our\s+)?', team_keywords),
+        # "what vocalists/singers/musicians are on the team"
+        (r'what\s+(?:are\s+(?:the|our|all)\s+)?', team_keywords),
     ]
 
     for prefix_pattern, kw_dict in simple_patterns:
