@@ -88,6 +88,8 @@ urlpatterns = [
     path('tasks/<int:pk>/status/', views.task_update_status, name='task_update_status'),
     path('tasks/<int:pk>/assign/', views.task_assign, name='task_assign'),
     path('tasks/<int:pk>/comment/', views.task_comment, name='task_comment'),
+    # Mention autocomplete
+    path('api/members/search/', views.member_search, name='member_search'),
     # My Tasks Dashboard
     path('my-tasks/', views.my_tasks, name='my_tasks'),
     # Knowledge Base Documents

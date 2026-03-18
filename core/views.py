@@ -2820,6 +2820,44 @@ def task_comment(request, pk):
 
 
 @login_required
+def member_search(request):
+    """Return org members matching a query, for @mention autocomplete."""
+    from .models import OrganizationMembership
+
+    org = get_org(request)
+    if not org:
+        return JsonResponse([], safe=False)
+
+    q = request.GET.get('q', '').strip()
+    members = OrganizationMembership.objects.filter(
+        organization=org
+    ).select_related('user')
+
+    if q:
+        members = members.filter(
+            Q(user__display_name__icontains=q) |
+            Q(user__first_name__icontains=q) |
+            Q(user__last_name__icontains=q)
+        )
+
+    results = []
+    seen = set()
+    for m in members[:10]:
+        user = m.user
+        if user.pk in seen:
+            continue
+        seen.add(user.pk)
+        name = user.display_name or f"{user.first_name} {user.last_name}".strip() or user.username
+        results.append({
+            'id': user.pk,
+            'name': name,
+            'role': m.get_role_display(),
+        })
+
+    return JsonResponse(results, safe=False)
+
+
+@login_required
 def task_detail(request, project_pk, pk):
     """View a task's details."""
     from .models import Project, Task

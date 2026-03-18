@@ -165,12 +165,18 @@
         <form hx-post="{% url 'task_comment' task.pk %}"
               hx-target="#task-comments"
               hx-swap="beforeend"
-              hx-on::after-request="this.reset()"
+              hx-on::after-request="this.reset(); document.getElementById('mention-dropdown').classList.add('hidden');"
               class="border-t border-gray-700 pt-4">
             {% csrf_token %}
-            <textarea name="content" rows="2" required
-                      placeholder="Add a comment... Use @name to mention someone"
-                      class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold mb-2"></textarea>
+            <div class="relative">
+                <textarea id="comment-input" name="content" rows="2" required
+                          placeholder="Add a comment... Use @name to mention someone"
+                          class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold mb-2"></textarea>
+                <!-- Mention autocomplete dropdown -->
+                <div id="mention-dropdown"
+                     class="hidden absolute left-0 bottom-full mb-1 w-64 max-h-48 overflow-y-auto bg-ch-dark border border-gray-700 rounded-lg shadow-xl z-50">
+                </div>
+            </div>
             <div class="flex justify-end">
                 <button type="submit"
                         class="px-4 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition text-sm">
@@ -178,6 +184,117 @@
                 </button>
             </div>
         </form>
+
+        <script>
+        (function() {
+            const input = document.getElementById('comment-input');
+            const dropdown = document.getElementById('mention-dropdown');
+            let mentionStart = -1;
+            let selectedIdx = 0;
+            let items = [];
+            let debounceTimer = null;
+
+            function getQuery() {
+                const pos = input.selectionStart;
+                const text = input.value.substring(0, pos);
+                const atIdx = text.lastIndexOf('@');
+                if (atIdx === -1) return null;
+                // @ must be at start or after whitespace
+                if (atIdx > 0 && !/\s/.test(text[atIdx - 1])) return null;
+                const query = text.substring(atIdx + 1);
+                // No spaces allowed after first word (keep it to "@FirstName" or "@First Last")
+                if ((query.match(/\s/g) || []).length > 1) return null;
+                mentionStart = atIdx;
+                return query;
+            }
+
+            function renderDropdown(results) {
+                items = results;
+                selectedIdx = 0;
+                if (!results.length) {
+                    dropdown.classList.add('hidden');
+                    return;
+                }
+                dropdown.innerHTML = results.map((r, i) =>
+                    `<div class="mention-item px-3 py-2 cursor-pointer flex items-center gap-2 ${i === 0 ? 'bg-ch-gray' : ''} hover:bg-ch-gray"
+                          data-idx="${i}">
+                        <div class="w-6 h-6 rounded-full bg-ch-gold text-black flex items-center justify-center text-xs font-medium flex-shrink-0">
+                            ${r.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-sm font-medium truncate">${r.name}</div>
+                            <div class="text-xs text-gray-500">${r.role}</div>
+                        </div>
+                    </div>`
+                ).join('');
+                dropdown.classList.remove('hidden');
+            }
+
+            function selectItem(idx) {
+                const item = items[idx];
+                if (!item) return;
+                const before = input.value.substring(0, mentionStart);
+                const after = input.value.substring(input.selectionStart);
+                const mention = '@' + item.name + ' ';
+                input.value = before + mention + after;
+                input.selectionStart = input.selectionEnd = before.length + mention.length;
+                dropdown.classList.add('hidden');
+                input.focus();
+            }
+
+            function highlightItem(idx) {
+                dropdown.querySelectorAll('.mention-item').forEach((el, i) => {
+                    el.classList.toggle('bg-ch-gray', i === idx);
+                });
+                selectedIdx = idx;
+            }
+
+            function fetchMembers(query) {
+                fetch(`{% url 'member_search' %}?q=${encodeURIComponent(query)}`)
+                    .then(r => r.json())
+                    .then(renderDropdown)
+                    .catch(() => dropdown.classList.add('hidden'));
+            }
+
+            input.addEventListener('input', function() {
+                const query = getQuery();
+                if (query === null) {
+                    dropdown.classList.add('hidden');
+                    return;
+                }
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => fetchMembers(query), 150);
+            });
+
+            input.addEventListener('keydown', function(e) {
+                if (dropdown.classList.contains('hidden') || !items.length) return;
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    highlightItem((selectedIdx + 1) % items.length);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    highlightItem((selectedIdx - 1 + items.length) % items.length);
+                } else if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    selectItem(selectedIdx);
+                } else if (e.key === 'Escape') {
+                    dropdown.classList.add('hidden');
+                }
+            });
+
+            dropdown.addEventListener('mousedown', function(e) {
+                e.preventDefault(); // Keep focus on textarea
+                const item = e.target.closest('.mention-item');
+                if (item) selectItem(parseInt(item.dataset.idx));
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        })();
+        </script>
     </div>
 </div>
 {% endblock %}
