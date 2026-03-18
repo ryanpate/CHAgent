@@ -1184,8 +1184,9 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
         teams[team_name].append(member)
 
     # Process each team member and get their contact info
-    # Using lightweight get_person_contact_info_only to minimize API calls (2 per person vs 10+)
-    contact_info_cache = {}  # Cache to avoid duplicate lookups
+    # NOTE: person_id from Services API is a Services person ID, NOT a People person ID.
+    # We must resolve the People person ID by name search before fetching contact info.
+    contact_info_cache = {}  # Cache by name to avoid duplicate lookups
 
     # Collect all phones and emails for group action links
     all_phones = []  # List of (name, clean_phone) tuples
@@ -1197,22 +1198,21 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
             name = member.get('name', 'Unknown')
             position = member.get('position', '')
             status = member.get('status', 'Unknown')
-            person_id = member.get('person_id')
 
             member_line = f"    - {name}"
             if position:
                 member_line += f" ({position})"
             member_line += f" - {status}"
 
-            # Get contact info if we have a person_id and PCO People API is configured
-            # Use lightweight function to minimize API calls
+            # Resolve People API person ID by name (Services person IDs != People person IDs)
             contact_info = None
-            if person_id and people_api.is_configured:
-                if person_id in contact_info_cache:
-                    contact_info = contact_info_cache[person_id]
+            if name and name != 'Unknown' and people_api.is_configured:
+                if name in contact_info_cache:
+                    contact_info = contact_info_cache[name]
                 else:
-                    # Use lightweight function - only 2 API calls per person
-                    contact_info = people_api.get_person_contact_info_only(person_id)
+                    people_person_id = people_api.find_people_person_id_by_name(name)
+                    if people_person_id:
+                        contact_info = people_api.get_person_contact_info_only(people_person_id)
                     if contact_info:
                         # Filter based on contact_type requested
                         if contact_type == 'phone':
@@ -1220,7 +1220,7 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
                         elif contact_type == 'email':
                             contact_info = {'emails': contact_info.get('emails', [])}
                         # 'contact' type keeps both
-                        contact_info_cache[person_id] = contact_info
+                        contact_info_cache[name] = contact_info
 
             # Add contact info to the member line with inline action links
             if contact_info:
@@ -1235,7 +1235,7 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
                     member_line += f"\n        Email: {email}  [Email](mailto:{email})"
                     # Collect for group actions
                     all_emails.append((name, email))
-            elif person_id:
+            elif name and name != 'Unknown':
                 member_line += "\n        (No contact info available)"
 
             parts.append(member_line)

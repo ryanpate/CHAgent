@@ -496,6 +496,46 @@ class PlanningCenterAPI:
         logger.info(f"No Services person found for {first_name} {last_name}")
         return None
 
+    def find_people_person_id_by_name(self, full_name: str) -> Optional[str]:
+        """
+        Find a People API person ID by searching by name.
+
+        This is used when you have a person's name (e.g., from the Services API
+        team member list) and need their People API ID for contact info lookups.
+
+        Args:
+            full_name: Full name of the person (e.g., "John Smith").
+
+        Returns:
+            People API person ID string, or None if not found.
+        """
+        if not self.is_configured or not full_name:
+            return None
+
+        results = self.search_people(full_name)
+        if not results:
+            return None
+
+        # If only one result, return it
+        if len(results) == 1:
+            return results[0].get('id')
+
+        # Multiple results — find exact match
+        name_lower = full_name.lower().strip()
+        for person in results:
+            attrs = person.get('attributes', {})
+            first = (attrs.get('first_name') or '').strip()
+            last = (attrs.get('last_name') or '').strip()
+            candidate = f"{first} {last}".lower()
+            if candidate == name_lower:
+                return person.get('id')
+
+        # No exact match — return first result as best guess
+        if results:
+            return results[0].get('id')
+
+        return None
+
     def _get_all_services_people(self, max_pages: int = 10) -> list:
         """
         Fetch all services people with pagination.
