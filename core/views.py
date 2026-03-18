@@ -2352,7 +2352,9 @@ def dm_conversation(request, user_id):
     partner = get_object_or_404(User, pk=user_id)
 
     # Get messages in this conversation
-    messages = DirectMessage.objects.filter(
+    # Named 'conversation' to avoid collision with Django's messages framework
+    # which base.html iterates to show flash messages
+    conversation = DirectMessage.objects.filter(
         models.Q(sender=request.user, recipient=partner) |
         models.Q(sender=partner, recipient=request.user)
     ).select_related('sender', 'recipient').order_by('created_at')[:100]
@@ -2366,7 +2368,7 @@ def dm_conversation(request, user_id):
 
     context = {
         'partner': partner,
-        'messages': messages,
+        'conversation': conversation,
     }
     return render(request, 'core/comms/dm_conversation.html', context)
 
