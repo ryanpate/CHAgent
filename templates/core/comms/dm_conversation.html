@@ -117,15 +117,19 @@
     }, 100);
 })();
 
-function previewFiles(input) {
+function previewFiles(fileInput) {
     var preview = document.getElementById('file-preview');
     preview.innerHTML = '';
-    Array.from(input.files).forEach(function(file) {
+    Array.from(fileInput.files).forEach(function(file) {
         var tag = document.createElement('span');
         tag.className = 'inline-flex items-center gap-1 px-2 py-1 bg-ch-gray rounded text-xs text-gray-300';
         tag.textContent = file.name.length > 25 ? file.name.substring(0, 22) + '...' : file.name;
         preview.appendChild(tag);
     });
+    // Re-focus the text input so keyboard stays visible
+    setTimeout(function() {
+        document.getElementById('dm-input').focus();
+    }, 100);
 }
 </script>
 {% endblock %}
