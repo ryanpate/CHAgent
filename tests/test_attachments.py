@@ -61,3 +61,44 @@ def test_attachment_is_image(org_alpha):
     )
     assert img.is_image is True
     assert doc.is_image is False
+
+
+@pytest.mark.django_db
+def test_dm_send_with_attachment(client_alpha, org_alpha, user_alpha_owner):
+    """Sending a DM with a file creates a MessageAttachment."""
+    from accounts.models import User
+    from core.models import DirectMessage, MessageAttachment, OrganizationMembership
+
+    recipient = User.objects.create_user(username='recv@test.com', password='test')
+    OrganizationMembership.objects.create(user=recipient, organization=org_alpha, role='member')
+
+    fake_file = SimpleUploadedFile('photo.png', b'\x89PNG\r\n\x1a\n' + b'\x00' * 100, content_type='image/png')
+    response = client_alpha.post(
+        f'/comms/messages/{recipient.pk}/send/',
+        {'content': 'Check this out', 'attachments': fake_file},
+    )
+    assert DirectMessage.objects.filter(recipient=recipient).exists()
+    dm = DirectMessage.objects.filter(recipient=recipient).first()
+    assert dm.attachments.count() == 1
+    att = dm.attachments.first()
+    assert att.filename == 'photo.png'
+    assert att.file_type == 'image'
+
+
+@pytest.mark.django_db
+def test_dm_send_attachment_only(client_alpha, org_alpha, user_alpha_owner):
+    """Sending a DM with only a file (no text) should work."""
+    from accounts.models import User
+    from core.models import DirectMessage, MessageAttachment, OrganizationMembership
+
+    recipient = User.objects.create_user(username='recv2@test.com', password='test')
+    OrganizationMembership.objects.create(user=recipient, organization=org_alpha, role='member')
+
+    fake_file = SimpleUploadedFile('doc.pdf', b'%PDF-1.4 fake', content_type='application/pdf')
+    response = client_alpha.post(
+        f'/comms/messages/{recipient.pk}/send/',
+        {'content': '', 'attachments': fake_file},
+    )
+    assert DirectMessage.objects.filter(recipient=recipient).exists()
+    dm = DirectMessage.objects.filter(recipient=recipient).first()
+    assert dm.attachments.count() == 1

@@ -1,0 +1,19 @@
+{% for attachment in attachments %}
+<div class="mt-2">
+    {% if attachment.is_image %}
+    <a href="{{ attachment.file.url }}" target="_blank" class="block">
+        <img src="{{ attachment.file.url }}" alt="{{ attachment.filename }}"
+             class="max-w-xs max-h-48 rounded-lg border border-gray-700 hover:border-ch-gold transition">
+    </a>
+    {% else %}
+    <a href="{{ attachment.file.url }}" target="_blank"
+       class="inline-flex items-center gap-2 px-3 py-2 bg-ch-gray rounded-lg hover:bg-gray-600 transition text-sm">
+        <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+        </svg>
+        <span class="truncate max-w-[200px]">{{ attachment.filename }}</span>
+        <span class="text-xs text-gray-500">{{ attachment.file_size|filesizeformat }}</span>
+    </a>
+    {% endif %}
+</div>
+{% endfor %}

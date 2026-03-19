@@ -3,9 +3,14 @@
         {{ message.sender.display_name|default:message.sender.username|slice:":1"|upper }}
     </div>
     <div class="max-w-[70%]">
+        {% if message.content %}
         <div class="{% if is_sender %}bg-ch-gold/20 text-white{% else %}bg-ch-gray{% endif %} rounded-lg px-4 py-2">
             <p class="break-words">{{ message.content }}</p>
         </div>
+        {% endif %}
+        {% with attachments=message.attachments.all %}
+        {% include 'core/partials/attachment_display.html' %}
+        {% endwith %}
         <p class="text-xs text-gray-500 mt-1 {% if is_sender %}text-right{% endif %}">
             {{ message.created_at|date:"g:i A" }}
         </p>

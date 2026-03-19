@@ -2376,33 +2376,54 @@ def dm_conversation(request, user_id):
 @login_required
 @require_POST
 def dm_send(request, user_id):
-    """Send a direct message to a user."""
-    from .models import DirectMessage
+    """Send a direct message to a user, optionally with file attachments."""
+    from .models import DirectMessage, MessageAttachment
     from accounts.models import User
 
+    org = get_org(request)
     recipient = get_object_or_404(User, pk=user_id)
     content = request.POST.get('content', '').strip()
+    files = request.FILES.getlist('attachments')
 
-    if content:
-        message = DirectMessage.objects.create(
-            sender=request.user,
-            recipient=recipient,
-            content=content
+    # Must have content or at least one file
+    if not content and not files:
+        return redirect('dm_conversation', user_id=user_id)
+
+    message = DirectMessage.objects.create(
+        sender=request.user,
+        recipient=recipient,
+        content=content
+    )
+
+    # Handle file attachments
+    for f in files:
+        file_type, error = MessageAttachment.validate_file(f)
+        if error:
+            continue  # Skip invalid files
+        MessageAttachment.objects.create(
+            organization=org,
+            uploaded_by=request.user,
+            file=f,
+            filename=f.name,
+            file_size=f.size,
+            file_type=file_type,
+            content_type=f.content_type or 'application/octet-stream',
+            direct_message=message,
         )
 
-        # Send push notification
-        try:
-            from .notifications import notify_new_dm
-            notify_new_dm(message)
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Failed to send DM notification: {e}")
+    # Send push notification
+    try:
+        from .notifications import notify_new_dm
+        notify_new_dm(message)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to send DM notification: {e}")
 
-        if request.headers.get('HX-Request'):
-            return render(request, 'core/partials/dm_message.html', {
-                'message': message,
-                'is_sender': True,
-            })
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/dm_message.html', {
+            'message': message,
+            'is_sender': True,
+        })
 
     return redirect('dm_conversation', user_id=user_id)
 
