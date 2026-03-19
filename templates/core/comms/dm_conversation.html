@@ -3,9 +3,24 @@
 {% block title %}{{ partner.display_name|default:partner.username }}{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto">
+<!--
+  Keyboard handling: Capacitor Keyboard plugin uses resize:'body' which shrinks
+  the body element when the keyboard opens. This flex layout fills the body height
+  so the form naturally sits above the keyboard. No position:fixed or JS needed.
+-->
+<style>
+    /* Make the content area fill exactly the available body height */
+    .dm-page { display: flex; flex-direction: column; height: calc(100vh - 80px); max-width: 56rem; margin: 0 auto; overflow: hidden; }
+    .dm-messages { flex: 1; min-height: 0; overflow-y: auto; }
+    .dm-input-bar { flex-shrink: 0; }
+    /* When Capacitor keyboard resize:'body' kicks in, body shrinks and 100vh follows */
+    @supports (height: 100dvh) {
+        .dm-page { height: calc(100dvh - 80px); }
+    }
+</style>
+<div class="dm-page">
     <!-- Header -->
-    <div class="bg-ch-dark rounded-lg p-3 mb-2">
+    <div class="bg-ch-dark rounded-lg p-3 mb-2" style="flex-shrink:0;">
         <div class="flex items-center gap-3">
             <a href="{% url 'dm_list' %}" class="text-gray-400 hover:text-white">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -19,8 +34,8 @@
         </div>
     </div>
 
-    <!-- Messages (bottom padding reserves space for the fixed input form) -->
-    <div id="messages-container" class="bg-ch-dark rounded-lg p-4 overflow-y-auto space-y-4" style="padding-bottom: 80px;">
+    <!-- Messages -->
+    <div id="messages-container" class="dm-messages bg-ch-dark rounded-lg p-4 mb-2 space-y-4">
         {% for message in conversation %}
         <div class="flex gap-3 group {% if message.sender == request.user %}flex-row-reverse{% endif %}" id="dm-{{ message.id }}">
             <div class="w-10 h-10 bg-{% if message.sender == request.user %}ch-gold{% else %}gray-600{% endif %}/20 rounded-full flex items-center justify-center text-sm font-medium {% if message.sender == request.user %}text-ch-gold{% else %}text-gray-400{% endif %} flex-shrink-0">
@@ -53,16 +68,14 @@
         </div>
         {% endfor %}
     </div>
-</div>
 
-<!-- Message Input - fixed to bottom of visible viewport -->
-<div id="dm-form-wrapper" class="fixed bottom-0 left-0 right-0 bg-ch-black z-40" style="padding-bottom: env(safe-area-inset-bottom, 0px);">
+    <!-- Message Input -->
     <form id="dm-form" hx-post="{% url 'dm_send' partner.id %}"
           hx-target="#messages-container"
           hx-swap="beforeend"
           hx-encoding="multipart/form-data"
           hx-on::after-request="this.reset(); document.getElementById('file-preview').innerHTML = ''; document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;"
-          class="max-w-4xl mx-auto bg-ch-dark p-3">
+          class="dm-input-bar bg-ch-dark rounded-lg p-3">
         {% csrf_token %}
         <div id="file-preview" class="flex flex-wrap gap-2 mb-2"></div>
         <div class="flex gap-2 items-center">
@@ -89,45 +102,24 @@
 (function() {
     var container = document.getElementById('messages-container');
     var input = document.getElementById('dm-input');
-    var formWrapper = document.getElementById('dm-form-wrapper');
 
     function scrollToBottom() {
         container.scrollTop = container.scrollHeight;
     }
 
-    // On iOS, when the keyboard opens the visualViewport shrinks but the
-    // layout viewport stays the same. position:fixed elements stay relative
-    // to the layout viewport, so the form gets hidden behind the keyboard.
-    // Fix: move the form up by the difference between layout and visual viewport.
-    function repositionForm() {
-        if (window.visualViewport) {
-            var offset = window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop;
-            formWrapper.style.transform = 'translateY(-' + Math.max(0, offset) + 'px)';
-        }
-        scrollToBottom();
-    }
-
-    // Initial scroll
+    // Scroll to latest messages on load
     scrollToBottom();
 
-    if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', repositionForm);
-        window.visualViewport.addEventListener('scroll', repositionForm);
-    }
+    // When body resizes (Capacitor keyboard resize:'body'), re-scroll
+    var ro = new ResizeObserver(function() {
+        scrollToBottom();
+    });
+    ro.observe(document.body);
 
     // Auto-focus input
     setTimeout(function() {
         input.focus();
-        setTimeout(scrollToBottom, 400);
     }, 100);
-
-    input.addEventListener('focus', function() {
-        setTimeout(repositionForm, 300);
-    });
-
-    input.addEventListener('blur', function() {
-        formWrapper.style.transform = 'translateY(0)';
-    });
 })();
 
 function previewFiles(input) {
