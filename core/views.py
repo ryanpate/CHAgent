@@ -2402,8 +2402,12 @@ def dm_send(request, user_id):
     content = request.POST.get('content', '').strip()
     files = request.FILES.getlist('attachments')
 
+    is_htmx = request.headers.get('HX-Request')
+
     # Must have content or at least one file
     if not content and not files:
+        if is_htmx:
+            return HttpResponse('')
         return redirect('dm_conversation', user_id=user_id)
 
     message = DirectMessage.objects.create(
@@ -2436,7 +2440,7 @@ def dm_send(request, user_id):
         import logging
         logging.getLogger(__name__).error(f"Failed to send DM notification: {e}")
 
-    if request.headers.get('HX-Request'):
+    if is_htmx:
         return render(request, 'core/partials/dm_message.html', {
             'message': message,
             'is_sender': True,
