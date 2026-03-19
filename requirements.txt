@@ -64,6 +64,9 @@ django-axes>=7.0.0
 pyotp>=2.9.0
 qrcode[pil]>=7.4.0
 
+# Date utilities (for recurring tasks)
+python-dateutil>=2.8.0
+
 # Error Monitoring
 sentry-sdk[django]>=1.40.0
 

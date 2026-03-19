@@ -3661,3 +3661,83 @@ class MessageAttachment(models.Model):
         if ext not in all_extensions:
             return None, f'Unsupported file type. Allowed: images and PDF/DOC/TXT files.'
         return cls.get_file_type(uploaded_file.name), None
+
+
+class RecurrenceRule(models.Model):
+    """
+    Schedule for recurring tasks or projects.
+    Links to a source task/project as a template. A daily cron job
+    checks for due rules and clones the source.
+    """
+    FREQUENCY_CHOICES = [
+        ('weekly', 'Weekly'),
+        ('biweekly', 'Every 2 Weeks'),
+        ('monthly', 'Monthly'),
+        ('quarterly', 'Quarterly'),
+    ]
+
+    organization = models.ForeignKey(
+        'Organization',
+        on_delete=models.CASCADE,
+        related_name='recurrence_rules',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+    )
+
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
+    day_of_week = models.IntegerField(
+        null=True, blank=True,
+        help_text='0=Monday, 6=Sunday. Used for weekly/biweekly.'
+    )
+    day_of_month = models.IntegerField(
+        null=True, blank=True,
+        help_text='1-28. Used for monthly/quarterly.'
+    )
+    next_due = models.DateField(help_text='Next date to create an instance.')
+    is_active = models.BooleanField(default=True)
+
+    source_task = models.OneToOneField(
+        'Task',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='recurrence_rule',
+    )
+    source_project = models.OneToOneField(
+        'Project',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='recurrence_rule',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['next_due']
+
+    def __str__(self):
+        name = ''
+        if self.source_task:
+            name = self.source_task.title
+        elif self.source_project:
+            name = self.source_project.name
+        return f'{self.get_frequency_display()}: {name}'
+
+    def advance_next_due(self):
+        """Calculate and set the next due date based on frequency."""
+        from datetime import timedelta
+        from dateutil.relativedelta import relativedelta
+
+        if self.frequency == 'weekly':
+            self.next_due += timedelta(days=7)
+        elif self.frequency == 'biweekly':
+            self.next_due += timedelta(days=14)
+        elif self.frequency == 'monthly':
+            self.next_due += relativedelta(months=1)
+        elif self.frequency == 'quarterly':
+            self.next_due += relativedelta(months=3)
