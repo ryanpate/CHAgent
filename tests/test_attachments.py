@@ -102,3 +102,50 @@ def test_dm_send_attachment_only(client_alpha, org_alpha, user_alpha_owner):
     assert DirectMessage.objects.filter(recipient=recipient).exists()
     dm = DirectMessage.objects.filter(recipient=recipient).first()
     assert dm.attachments.count() == 1
+
+
+@pytest.mark.django_db
+def test_validate_file_rejects_large_file():
+    """Files over 10MB should be rejected."""
+    large_file = SimpleUploadedFile('big.png', b'\x00' * (11 * 1024 * 1024), content_type='image/png')
+    file_type, error = MessageAttachment.validate_file(large_file)
+    assert file_type is None
+    assert 'too large' in error.lower()
+
+
+@pytest.mark.django_db
+def test_validate_file_rejects_bad_extension():
+    """Unsupported file types should be rejected."""
+    exe_file = SimpleUploadedFile('virus.exe', b'\x00' * 100, content_type='application/octet-stream')
+    file_type, error = MessageAttachment.validate_file(exe_file)
+    assert file_type is None
+    assert 'unsupported' in error.lower()
+
+
+@pytest.mark.django_db
+def test_validate_file_accepts_image():
+    """Image files should be accepted."""
+    img = SimpleUploadedFile('photo.jpg', b'\xff\xd8\xff\xe0' + b'\x00' * 100, content_type='image/jpeg')
+    file_type, error = MessageAttachment.validate_file(img)
+    assert file_type == 'image'
+    assert error is None
+
+
+@pytest.mark.django_db
+def test_validate_file_accepts_pdf():
+    """PDF files should be accepted."""
+    pdf = SimpleUploadedFile('report.pdf', b'%PDF-1.4', content_type='application/pdf')
+    file_type, error = MessageAttachment.validate_file(pdf)
+    assert file_type == 'document'
+    assert error is None
+
+
+@pytest.mark.django_db
+def test_get_file_type_classmethod():
+    """get_file_type returns correct type for various extensions."""
+    assert MessageAttachment.get_file_type('photo.png') == 'image'
+    assert MessageAttachment.get_file_type('photo.JPG') == 'image'
+    assert MessageAttachment.get_file_type('doc.pdf') == 'document'
+    assert MessageAttachment.get_file_type('notes.txt') == 'document'
+    assert MessageAttachment.get_file_type('file.exe') == 'other'
+    assert MessageAttachment.get_file_type('archive.zip') == 'other'
