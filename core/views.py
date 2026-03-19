@@ -2038,7 +2038,7 @@ def channel_detail(request, slug):
     if not channel.can_access(request.user):
         return redirect('channel_list')
 
-    messages = channel.messages.select_related('author').order_by('-created_at')[:50]
+    messages = channel.messages.select_related('author', 'parent', 'parent__author').order_by('-created_at')[:50]
     messages = list(reversed(messages))  # Show oldest first
 
     context = {
@@ -2066,12 +2066,14 @@ def channel_send_message(request, slug):
         return HttpResponse('Access denied', status=403)
 
     content = request.POST.get('content', '').strip()
+    parent_id = request.POST.get('parent_id')
     files = request.FILES.getlist('attachments')
     if content or files:
         message = ChannelMessage.objects.create(
             channel=channel,
             author=request.user,
-            content=content
+            content=content,
+            parent_id=parent_id if parent_id else None,
         )
 
         # Handle file attachments

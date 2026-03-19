@@ -1,4 +1,4 @@
-<div class="flex gap-3" id="message-{{ message.id }}">
+<div class="flex gap-3 group" id="message-{{ message.id }}">
     <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center text-sm font-medium text-ch-gold flex-shrink-0">
         {{ message.author.display_name|default:message.author.username|slice:":1"|upper }}
     </div>
@@ -6,7 +6,22 @@
         <div class="flex items-baseline gap-2">
             <span class="font-medium">{{ message.author.display_name|default:message.author.username }}</span>
             <span class="text-xs text-gray-500">{{ message.created_at|date:"M j, g:i A" }}</span>
+            <button type="button"
+                    onclick="setChannelReply({{ message.id }}, '{{ message.author.display_name|default:message.author.username|escapejs }}', '{{ message.content|truncatewords:10|escapejs }}')"
+                    class="text-xs text-gray-500 hover:text-ch-gold opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Reply">
+                <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                </svg>
+            </button>
         </div>
+        {% if message.parent %}
+        <div class="mb-1 px-3 py-1 bg-gray-800 rounded-lg border-l-2 border-ch-gold/50 text-xs text-gray-400 cursor-pointer"
+             onclick="document.getElementById('message-{{ message.parent.id }}')?.scrollIntoView({behavior:'smooth', block:'center'})">
+            <span class="font-medium text-gray-300">{{ message.parent.author.display_name|default:message.parent.author.username }}</span>
+            <p class="truncate">{{ message.parent.content|truncatewords:12 }}</p>
+        </div>
+        {% endif %}
         <p class="text-gray-300 break-words">{{ message.content }}</p>
         {% with attachments=message.attachments.all %}
         {% include 'core/partials/attachment_display.html' %}

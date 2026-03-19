@@ -55,6 +55,14 @@
                     {% if message.is_edited %}
                     <span class="text-xs text-gray-600">(edited)</span>
                     {% endif %}
+                    <button type="button"
+                            onclick="setChannelReply({{ message.id }}, '{{ message.author.display_name|default:message.author.username|escapejs }}', '{{ message.content|truncatewords:10|escapejs }}')"
+                            class="text-xs text-gray-500 hover:text-ch-gold opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Reply">
+                        <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                        </svg>
+                    </button>
                     {% if message.author == request.user or membership.is_admin_or_above %}
                     <button hx-post="{% url 'channel_message_delete' message.id %}"
                             hx-target="#message-{{ message.id }}"
@@ -65,6 +73,13 @@
                     </button>
                     {% endif %}
                 </div>
+                {% if message.parent %}
+                <div class="mb-1 px-3 py-1 bg-gray-800 rounded-lg border-l-2 border-ch-gold/50 text-xs text-gray-400 cursor-pointer"
+                     onclick="document.getElementById('message-{{ message.parent.id }}')?.scrollIntoView({behavior:'smooth', block:'center'})">
+                    <span class="font-medium text-gray-300">{{ message.parent.author.display_name|default:message.parent.author.username }}</span>
+                    <p class="truncate">{{ message.parent.content|truncatewords:12 }}</p>
+                </div>
+                {% endif %}
                 <p class="text-gray-300 break-words">{{ message.content }}</p>
                 {% with attachments=message.attachments.all %}
                 {% include 'core/partials/attachment_display.html' %}
@@ -78,14 +93,28 @@
         {% endfor %}
     </div>
 
+    <!-- Reply Preview Bar -->
+    <div id="channel-reply-preview" class="hidden bg-ch-gray rounded-t-lg px-4 py-2 flex items-center justify-between">
+        <div class="flex-1 min-w-0">
+            <span class="text-xs text-ch-gold font-medium" id="channel-reply-name"></span>
+            <p class="text-xs text-gray-400 truncate" id="channel-reply-text"></p>
+        </div>
+        <button type="button" onclick="clearChannelReply()" class="text-gray-500 hover:text-white ml-2 flex-shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    </div>
+
     <!-- Message Input -->
     <form hx-post="{% url 'channel_send_message' channel.slug %}"
           hx-target="#messages-container"
           hx-swap="beforeend"
           hx-encoding="multipart/form-data"
-          hx-on::after-request="this.reset(); document.getElementById('file-preview').innerHTML = ''; document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;"
+          hx-on::after-request="this.reset(); clearChannelReply(); document.getElementById('file-preview').innerHTML = ''; document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;"
           class="bg-ch-dark rounded-lg p-4">
         {% csrf_token %}
+        <input type="hidden" name="parent_id" id="channel-parent-id" value="">
         <div id="file-preview" class="flex flex-wrap gap-2 mb-2"></div>
         <div class="flex gap-4">
             <label class="cursor-pointer p-2 text-gray-400 hover:text-ch-gold transition rounded-lg hover:bg-ch-gray flex-shrink-0 self-center" title="Attach file">
@@ -123,6 +152,20 @@ function previewFiles(input) {
         tag.textContent = file.name.length > 25 ? file.name.substring(0, 22) + '...' : file.name;
         preview.appendChild(tag);
     });
+}
+
+function setChannelReply(messageId, senderName, preview) {
+    document.getElementById('channel-parent-id').value = messageId;
+    document.getElementById('channel-reply-name').textContent = senderName;
+    document.getElementById('channel-reply-text').textContent = preview;
+    document.getElementById('channel-reply-preview').classList.remove('hidden');
+    var input = document.querySelector('form input[name="content"]');
+    if (input) input.focus();
+}
+
+function clearChannelReply() {
+    document.getElementById('channel-parent-id').value = '';
+    document.getElementById('channel-reply-preview').classList.add('hidden');
 }
 </script>
 {% endblock %}
