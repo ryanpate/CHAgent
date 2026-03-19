@@ -3,9 +3,9 @@
 {% block title %}{{ partner.display_name|default:partner.username }}{% endblock %}
 
 {% block content %}
-<div id="dm-wrapper" class="max-w-4xl mx-auto flex flex-col" style="height: calc(100vh - 80px);">
+<div class="max-w-4xl mx-auto">
     <!-- Header -->
-    <div class="bg-ch-dark rounded-lg p-3 mb-2 flex-shrink-0">
+    <div class="bg-ch-dark rounded-lg p-3 mb-2">
         <div class="flex items-center gap-3">
             <a href="{% url 'dm_list' %}" class="text-gray-400 hover:text-white">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -19,8 +19,8 @@
         </div>
     </div>
 
-    <!-- Messages -->
-    <div id="messages-container" class="bg-ch-dark rounded-lg p-4 mb-2 flex-1 min-h-0 overflow-y-auto space-y-4">
+    <!-- Messages (bottom padding reserves space for the fixed input form) -->
+    <div id="messages-container" class="bg-ch-dark rounded-lg p-4 overflow-y-auto space-y-4" style="padding-bottom: 80px;">
         {% for message in conversation %}
         <div class="flex gap-3 group {% if message.sender == request.user %}flex-row-reverse{% endif %}" id="dm-{{ message.id }}">
             <div class="w-10 h-10 bg-{% if message.sender == request.user %}ch-gold{% else %}gray-600{% endif %}/20 rounded-full flex items-center justify-center text-sm font-medium {% if message.sender == request.user %}text-ch-gold{% else %}text-gray-400{% endif %} flex-shrink-0">
@@ -53,14 +53,16 @@
         </div>
         {% endfor %}
     </div>
+</div>
 
-    <!-- Message Input (pinned to bottom) -->
+<!-- Message Input - fixed to bottom of visible viewport -->
+<div id="dm-form-wrapper" class="fixed bottom-0 left-0 right-0 bg-ch-black z-40" style="padding-bottom: env(safe-area-inset-bottom, 0px);">
     <form id="dm-form" hx-post="{% url 'dm_send' partner.id %}"
           hx-target="#messages-container"
           hx-swap="beforeend"
           hx-encoding="multipart/form-data"
           hx-on::after-request="this.reset(); document.getElementById('file-preview').innerHTML = ''; document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;"
-          class="bg-ch-dark rounded-lg p-3 flex-shrink-0">
+          class="max-w-4xl mx-auto bg-ch-dark p-3">
         {% csrf_token %}
         <div id="file-preview" class="flex flex-wrap gap-2 mb-2"></div>
         <div class="flex gap-2 items-center">
@@ -87,20 +89,20 @@
 (function() {
     var container = document.getElementById('messages-container');
     var input = document.getElementById('dm-input');
-    var wrapper = document.getElementById('dm-wrapper');
-    var form = document.getElementById('dm-form');
+    var formWrapper = document.getElementById('dm-form-wrapper');
 
     function scrollToBottom() {
         container.scrollTop = container.scrollHeight;
     }
 
-    // Resize the wrapper to fit the visible viewport (accounts for keyboard)
-    function adjustLayout() {
+    // On iOS, when the keyboard opens the visualViewport shrinks but the
+    // layout viewport stays the same. position:fixed elements stay relative
+    // to the layout viewport, so the form gets hidden behind the keyboard.
+    // Fix: move the form up by the difference between layout and visual viewport.
+    function repositionForm() {
         if (window.visualViewport) {
-            var vh = window.visualViewport.height;
-            // Account for the top nav bar (~80px) and viewport offset
-            var topOffset = window.visualViewport.offsetTop;
-            wrapper.style.height = (vh - 80 + topOffset) + 'px';
+            var offset = window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop;
+            formWrapper.style.transform = 'translateY(-' + Math.max(0, offset) + 'px)';
         }
         scrollToBottom();
     }
@@ -108,21 +110,23 @@
     // Initial scroll
     scrollToBottom();
 
-    // Listen for visual viewport changes (keyboard open/close)
     if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', adjustLayout);
-        window.visualViewport.addEventListener('scroll', adjustLayout);
+        window.visualViewport.addEventListener('resize', repositionForm);
+        window.visualViewport.addEventListener('scroll', repositionForm);
     }
 
-    // Auto-focus input to trigger keyboard
+    // Auto-focus input
     setTimeout(function() {
         input.focus();
         setTimeout(scrollToBottom, 400);
     }, 100);
 
-    // Scroll on focus
     input.addEventListener('focus', function() {
-        setTimeout(adjustLayout, 300);
+        setTimeout(repositionForm, 300);
+    });
+
+    input.addEventListener('blur', function() {
+        formWrapper.style.transform = 'translateY(0)';
     });
 })();
 
