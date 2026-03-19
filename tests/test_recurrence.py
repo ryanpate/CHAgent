@@ -1,5 +1,6 @@
 import pytest
 from datetime import date, timedelta
+from django.core.management import call_command
 from core.models import RecurrenceRule, Task, Project
 from core.recurrence import clone_task, clone_project
 
@@ -144,3 +145,62 @@ def test_clone_project_with_tasks(user_alpha_owner, org_alpha):
     assert cloned_task.status == 'todo'
     assert user in cloned_task.assignees.all()
     assert cloned_task.checklists.count() == 1
+
+
+@pytest.mark.django_db
+def test_management_command_creates_task(user_alpha_owner, org_alpha):
+    """create_recurring_tasks command clones due tasks."""
+    user = user_alpha_owner
+    source = Task.objects.create(
+        organization=org_alpha, title='Weekly Checkin',
+        created_by=user, priority='medium',
+    )
+    rule = RecurrenceRule.objects.create(
+        organization=org_alpha, created_by=user,
+        source_task=source, frequency='weekly',
+        day_of_week=0, next_due=date.today(),
+    )
+
+    initial_count = Task.objects.filter(title='Weekly Checkin').count()
+    call_command('create_recurring_tasks')
+
+    assert Task.objects.filter(title='Weekly Checkin').count() == initial_count + 1
+    rule.refresh_from_db()
+    assert rule.next_due == date.today() + timedelta(days=7)
+
+
+@pytest.mark.django_db
+def test_management_command_skips_inactive(user_alpha_owner, org_alpha):
+    """create_recurring_tasks skips inactive rules."""
+    user = user_alpha_owner
+    source = Task.objects.create(
+        organization=org_alpha, title='Paused Task', created_by=user,
+    )
+    RecurrenceRule.objects.create(
+        organization=org_alpha, created_by=user,
+        source_task=source, frequency='weekly',
+        day_of_week=0, next_due=date.today(),
+        is_active=False,
+    )
+
+    initial_count = Task.objects.filter(title='Paused Task').count()
+    call_command('create_recurring_tasks')
+    assert Task.objects.filter(title='Paused Task').count() == initial_count
+
+
+@pytest.mark.django_db
+def test_management_command_skips_future(user_alpha_owner, org_alpha):
+    """create_recurring_tasks skips rules not yet due."""
+    user = user_alpha_owner
+    source = Task.objects.create(
+        organization=org_alpha, title='Future Task', created_by=user,
+    )
+    RecurrenceRule.objects.create(
+        organization=org_alpha, created_by=user,
+        source_task=source, frequency='weekly',
+        day_of_week=0, next_due=date.today() + timedelta(days=5),
+    )
+
+    initial_count = Task.objects.filter(title='Future Task').count()
+    call_command('create_recurring_tasks')
+    assert Task.objects.filter(title='Future Task').count() == initial_count
