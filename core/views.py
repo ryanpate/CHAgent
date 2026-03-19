@@ -2887,7 +2887,8 @@ def task_comment(request, pk):
             return HttpResponse('Access denied', status=403)
 
     content = request.POST.get('content', '').strip()
-    if content:
+    files = request.FILES.getlist('attachments')
+    if content or files:
         comment = TaskComment.objects.create(
             task=task,
             author=request.user,
@@ -2908,6 +2909,23 @@ def task_comment(request, pk):
                 mentioned_users.update(matches)
             if mentioned_users:
                 comment.mentioned_users.set(mentioned_users)
+
+        # Handle file attachments
+        from .models import MessageAttachment
+        for f in files:
+            file_type, error = MessageAttachment.validate_file(f)
+            if error:
+                continue
+            MessageAttachment.objects.create(
+                organization=get_org(request),
+                uploaded_by=request.user,
+                file=f,
+                filename=f.name,
+                file_size=f.size,
+                file_type=file_type,
+                content_type=f.content_type or 'application/octet-stream',
+                task_comment=comment,
+            )
 
         # Send notifications
         try:

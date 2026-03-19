@@ -180,11 +180,13 @@
         <form hx-post="{% url 'task_comment' task.pk %}"
               hx-target="#task-comments"
               hx-swap="beforeend"
-              hx-on::after-request="this.reset(); document.getElementById('mention-dropdown').classList.add('hidden');"
+              hx-encoding="multipart/form-data"
+              hx-on::after-request="this.reset(); document.getElementById('mention-dropdown').classList.add('hidden'); document.getElementById('comment-file-preview').innerHTML = '';"
               class="border-t border-gray-700 pt-4">
             {% csrf_token %}
+            <div id="comment-file-preview" class="flex flex-wrap gap-2 mb-2"></div>
             <div class="relative">
-                <textarea id="comment-input" name="content" rows="2" required
+                <textarea id="comment-input" name="content" rows="2"
                           placeholder="Add a comment... Use @name to mention someone"
                           class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold mb-2"></textarea>
                 <!-- Mention autocomplete dropdown -->
@@ -192,7 +194,14 @@
                      class="hidden absolute left-0 bottom-full mb-1 w-64 max-h-48 overflow-y-auto bg-ch-dark border border-gray-700 rounded-lg shadow-xl z-50">
                 </div>
             </div>
-            <div class="flex justify-end">
+            <div class="flex justify-between items-center">
+                <label class="cursor-pointer p-2 text-gray-400 hover:text-ch-gold transition rounded-lg hover:bg-ch-gray" title="Attach file">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                    </svg>
+                    <input type="file" name="attachments" multiple accept="image/*,.pdf,.doc,.docx,.txt" class="hidden"
+                           onchange="previewCommentFiles(this)">
+                </label>
                 <button type="submit"
                         class="px-4 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition text-sm">
                     Post Comment
@@ -309,6 +318,17 @@
                 }
             });
         })();
+
+        function previewCommentFiles(input) {
+            var preview = document.getElementById('comment-file-preview');
+            preview.innerHTML = '';
+            Array.from(input.files).forEach(function(file) {
+                var tag = document.createElement('span');
+                tag.className = 'inline-flex items-center gap-1 px-2 py-1 bg-ch-gray rounded text-xs text-gray-300';
+                tag.textContent = file.name.length > 25 ? file.name.substring(0, 22) + '...' : file.name;
+                preview.appendChild(tag);
+            });
+        }
         </script>
     </div>
 </div>
