@@ -3,19 +3,9 @@
 {% block title %}{{ partner.display_name|default:partner.username }}{% endblock %}
 
 {% block content %}
-<!--
-  Keyboard handling: Native Swift code in AppDelegate resizes the WKWebView frame
-  when the keyboard opens/closes. This flex layout fills the WebView height so
-  the input form naturally stays visible above the keyboard.
--->
-<style>
-    .dm-page { display: flex; flex-direction: column; height: calc(100vh - 80px); max-width: 56rem; margin: 0 auto; overflow: hidden; }
-    .dm-messages { flex: 1; min-height: 0; overflow-y: auto; }
-    .dm-input-bar { flex-shrink: 0; }
-</style>
-<div class="dm-page">
+<div class="max-w-4xl mx-auto">
     <!-- Header -->
-    <div class="bg-ch-dark rounded-lg p-3 mb-2" style="flex-shrink:0;">
+    <div class="bg-ch-dark rounded-lg p-3 mb-2">
         <div class="flex items-center gap-3">
             <a href="{% url 'dm_list' %}" class="text-gray-400 hover:text-white">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -30,7 +20,7 @@
     </div>
 
     <!-- Messages -->
-    <div id="messages-container" class="dm-messages bg-ch-dark rounded-lg p-4 mb-2 space-y-4">
+    <div id="messages-container" class="bg-ch-dark rounded-lg p-4 mb-2 space-y-4">
         {% for message in conversation %}
         <div class="flex gap-3 group {% if message.sender == request.user %}flex-row-reverse{% endif %}" id="dm-{{ message.id }}">
             <div class="w-10 h-10 bg-{% if message.sender == request.user %}ch-gold{% else %}gray-600{% endif %}/20 rounded-full flex items-center justify-center text-sm font-medium {% if message.sender == request.user %}text-ch-gold{% else %}text-gray-400{% endif %} flex-shrink-0">
@@ -64,13 +54,13 @@
         {% endfor %}
     </div>
 
-    <!-- Message Input -->
+    <!-- Message Input (sticky to bottom - always visible when scrolling) -->
     <form id="dm-form" hx-post="{% url 'dm_send' partner.id %}"
           hx-target="#messages-container"
           hx-swap="beforeend"
           hx-encoding="multipart/form-data"
-          hx-on::after-request="this.reset(); document.getElementById('file-preview').innerHTML = ''; document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;"
-          class="dm-input-bar bg-ch-dark rounded-lg p-3">
+          hx-on::after-request="this.reset(); document.getElementById('file-preview').innerHTML = ''; scrollToBottom();"
+          class="sticky bottom-0 bg-ch-dark rounded-lg p-3 z-10">
         {% csrf_token %}
         <div id="file-preview" class="flex flex-wrap gap-2 mb-2"></div>
         <div class="flex gap-2 items-center">
@@ -94,26 +84,19 @@
 </div>
 
 <script>
+function scrollToBottom() {
+    // Scroll the page to the bottom so latest messages + input are visible
+    window.scrollTo(0, document.body.scrollHeight);
+}
+
 (function() {
-    var container = document.getElementById('messages-container');
-    var input = document.getElementById('dm-input');
-
-    function scrollToBottom() {
-        container.scrollTop = container.scrollHeight;
-    }
-
     // Scroll to latest messages on load
     scrollToBottom();
 
-    // When body resizes (Capacitor keyboard resize:'body'), re-scroll
-    var ro = new ResizeObserver(function() {
-        scrollToBottom();
-    });
-    ro.observe(document.body);
-
     // Auto-focus input
     setTimeout(function() {
-        input.focus();
+        document.getElementById('dm-input').focus();
+        setTimeout(scrollToBottom, 300);
     }, 100);
 })();
 
