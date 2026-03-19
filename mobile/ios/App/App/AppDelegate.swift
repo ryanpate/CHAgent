@@ -31,7 +31,46 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // NOTE: Do NOT request notification permission here — it fires before login.
         // The JS in base.html handles permission request + Push.register() after authentication.
 
+        // Observe keyboard show/hide to resize the WebView frame.
+        // Capacitor's Keyboard plugin resize:'body' doesn't work on remote pages,
+        // so we manually shrink the WebView when the keyboard appears.
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow(_:)), name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
+
         return true
+    }
+
+    // MARK: - Keyboard Handling for WebView
+    private var originalWebViewFrame: CGRect?
+
+    @objc func keyboardWillShow(_ notification: Notification) {
+        guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+              let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double,
+              let rootVC = window?.rootViewController,
+              let webView = findWebView(in: rootVC.view) else { return }
+
+        if originalWebViewFrame == nil {
+            originalWebViewFrame = webView.frame
+        }
+
+        let keyboardHeight = keyboardFrame.height
+        var newFrame = originalWebViewFrame!
+        newFrame.size.height -= keyboardHeight
+
+        UIView.animate(withDuration: duration) {
+            webView.frame = newFrame
+        }
+    }
+
+    @objc func keyboardWillHide(_ notification: Notification) {
+        guard let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double,
+              let rootVC = window?.rootViewController,
+              let webView = findWebView(in: rootVC.view),
+              let original = originalWebViewFrame else { return }
+
+        UIView.animate(withDuration: duration) {
+            webView.frame = original
+        }
     }
 
     func applicationWillResignActive(_ application: UIApplication) {

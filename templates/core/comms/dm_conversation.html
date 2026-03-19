@@ -4,19 +4,14 @@
 
 {% block content %}
 <!--
-  Keyboard handling: Capacitor Keyboard plugin uses resize:'body' which shrinks
-  the body element when the keyboard opens. This flex layout fills the body height
-  so the form naturally sits above the keyboard. No position:fixed or JS needed.
+  Keyboard handling: Native Swift code in AppDelegate resizes the WKWebView frame
+  when the keyboard opens/closes. This flex layout fills the WebView height so
+  the input form naturally stays visible above the keyboard.
 -->
 <style>
-    /* Make the content area fill exactly the available body height */
     .dm-page { display: flex; flex-direction: column; height: calc(100vh - 80px); max-width: 56rem; margin: 0 auto; overflow: hidden; }
     .dm-messages { flex: 1; min-height: 0; overflow-y: auto; }
     .dm-input-bar { flex-shrink: 0; }
-    /* When Capacitor keyboard resize:'body' kicks in, body shrinks and 100vh follows */
-    @supports (height: 100dvh) {
-        .dm-page { height: calc(100dvh - 80px); }
-    }
 </style>
 <div class="dm-page">
     <!-- Header -->
