@@ -26,7 +26,7 @@
             <div class="w-10 h-10 bg-{% if message.sender == request.user %}ch-gold{% else %}gray-600{% endif %}/20 rounded-full flex items-center justify-center text-sm font-medium {% if message.sender == request.user %}text-ch-gold{% else %}text-gray-400{% endif %} flex-shrink-0">
                 {{ message.sender.display_name|default:message.sender.username|slice:":1"|upper }}
             </div>
-            <div class="max-w-[70%]">
+            <div class="max-w-[70%] relative">
                 {% if message.reply_to %}
                 <div class="mb-1 px-3 py-1 bg-gray-800 rounded-lg border-l-2 border-ch-gold/50 text-xs text-gray-400 cursor-pointer"
                      onclick="document.getElementById('dm-{{ message.reply_to.id }}')?.scrollIntoView({behavior:'smooth', block:'center'})">
@@ -34,24 +34,25 @@
                     <p class="truncate">{{ message.reply_to.content|truncatewords:12 }}</p>
                 </div>
                 {% endif %}
+                <div class="reactions-container absolute -top-3 {% if message.sender == request.user %}left-0{% else %}right-0{% endif %} z-10" id="reactions-dm-{{ message.id }}">
+                    {% include 'core/partials/reaction_bar.html' with reactions=message.reaction_list dm_id=message.id reaction_emoji_choices=reaction_emoji_choices %}
+                </div>
                 <div class="{% if message.sender == request.user %}bg-ch-gold/20 text-white{% else %}bg-ch-gray{% endif %} rounded-lg px-4 py-2">
                     <p class="break-words">{{ message.content }}</p>
                 </div>
                 {% with attachments=message.attachments.all %}
                 {% include 'core/partials/attachment_display.html' %}
                 {% endwith %}
-                <div class="reactions-container" id="reactions-dm-{{ message.id }}">
-                    {% include 'core/partials/reaction_bar.html' with reactions=message.reaction_list dm_id=message.id reaction_emoji_choices=reaction_emoji_choices %}
-                </div>
                 <div class="flex items-center gap-2 mt-1 {% if message.sender == request.user %}justify-end{% endif %}">
                     <span class="text-xs text-gray-500">{{ message.created_at|date:"g:i A" }}</span>
                     <button type="button"
                             onclick="setReplyTo({{ message.id }}, '{{ message.sender.display_name|default:message.sender.username|escapejs }}', '{{ message.content|truncatewords:10|escapejs }}')"
-                            class="text-xs text-gray-500 hover:text-ch-gold opacity-0 group-hover:opacity-100 transition-opacity"
+                            class="text-xs text-gray-500 hover:text-ch-gold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
                             title="Reply">
-                        <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
                         </svg>
+                        Reply
                     </button>
                     {% if message.sender == request.user %}
                     <button hx-post="{% url 'dm_delete' message.id %}"

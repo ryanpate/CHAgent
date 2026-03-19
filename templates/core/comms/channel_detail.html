@@ -48,7 +48,10 @@
             <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center text-sm font-medium text-ch-gold flex-shrink-0">
                 {{ message.author.display_name|default:message.author.username|slice:":1"|upper }}
             </div>
-            <div class="flex-1 min-w-0">
+            <div class="flex-1 min-w-0 relative">
+                <div class="reactions-container absolute -top-3 right-0 z-10" id="reactions-cm-{{ message.id }}">
+                    {% include 'core/partials/reaction_bar.html' with reactions=message.reaction_list cm_id=message.id reaction_emoji_choices=reaction_emoji_choices %}
+                </div>
                 <div class="flex items-baseline gap-2">
                     <span class="font-medium">{{ message.author.display_name|default:message.author.username }}</span>
                     <span class="text-xs text-gray-500">{{ message.created_at|date:"M j, g:i A" }}</span>
@@ -57,11 +60,12 @@
                     {% endif %}
                     <button type="button"
                             onclick="setChannelReply({{ message.id }}, '{{ message.author.display_name|default:message.author.username|escapejs }}', '{{ message.content|truncatewords:10|escapejs }}')"
-                            class="text-xs text-gray-500 hover:text-ch-gold opacity-0 group-hover:opacity-100 transition-opacity"
+                            class="text-xs text-gray-500 hover:text-ch-gold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
                             title="Reply">
-                        <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
                         </svg>
+                        Reply
                     </button>
                     {% if message.author == request.user or membership.is_admin_or_above %}
                     <button hx-post="{% url 'channel_message_delete' message.id %}"
@@ -84,9 +88,6 @@
                 {% with attachments=message.attachments.all %}
                 {% include 'core/partials/attachment_display.html' %}
                 {% endwith %}
-                <div class="reactions-container" id="reactions-cm-{{ message.id }}">
-                    {% include 'core/partials/reaction_bar.html' with reactions=message.reaction_list cm_id=message.id reaction_emoji_choices=reaction_emoji_choices %}
-                </div>
             </div>
         </div>
         {% empty %}
