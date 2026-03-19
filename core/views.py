@@ -68,6 +68,23 @@ def get_org(request):
     return getattr(request, 'organization', None)
 
 
+def _build_reaction_list(reactions_qs, current_user, emoji_map):
+    """Build aggregated reaction list from a queryset of MessageReaction objects.
+
+    Returns a list of dicts: [{'emoji': 'heart', 'char': '...', 'count': 2, 'user_reacted': True}, ...]
+    """
+    from collections import defaultdict
+    grouped = defaultdict(lambda: {'count': 0, 'user_reacted': False})
+    for r in reactions_qs:
+        grouped[r.emoji]['count'] += 1
+        if r.user_id == current_user.pk:
+            grouped[r.emoji]['user_reacted'] = True
+    return [
+        {'emoji': emoji, 'char': emoji_map.get(emoji, emoji), 'count': data['count'], 'user_reacted': data['user_reacted']}
+        for emoji, data in sorted(grouped.items())
+    ]
+
+
 def should_start_new_conversation(message: str) -> bool:
     """
     Determine if this message should start a fresh conversation.
@@ -2024,7 +2041,7 @@ def channel_list(request):
 @login_required
 def channel_detail(request, slug):
     """View a channel and its messages."""
-    from .models import Channel, ChannelMessage
+    from .models import Channel, ChannelMessage, MessageReaction
 
     org = get_org(request)
 
@@ -2038,12 +2055,18 @@ def channel_detail(request, slug):
     if not channel.can_access(request.user):
         return redirect('channel_list')
 
-    messages = channel.messages.select_related('author', 'parent', 'parent__author').order_by('-created_at')[:50]
+    messages = channel.messages.select_related('author', 'parent', 'parent__author').prefetch_related('reactions').order_by('-created_at')[:50]
     messages = list(reversed(messages))  # Show oldest first
+
+    # Attach reaction summaries to each message
+    emoji_map = dict(MessageReaction.EMOJI_CHOICES)
+    for msg in messages:
+        msg.reaction_list = _build_reaction_list(msg.reactions.all(), request.user, emoji_map)
 
     context = {
         'channel': channel,
         'messages': messages,
+        'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
     }
     return render(request, 'core/comms/channel_detail.html', context)
 
@@ -2110,9 +2133,12 @@ def channel_send_message(request, slug):
             logging.getLogger(__name__).error(f"Failed to send channel message notification: {e}")
 
         if request.headers.get('HX-Request'):
+            from .models import MessageReaction
+            message.reaction_list = []  # New message, no reactions yet
             return render(request, 'core/partials/channel_message.html', {
                 'message': message,
                 'request': request,
+                'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
             })
 
     return redirect('channel_detail', slug=slug)
@@ -2498,7 +2524,7 @@ def dm_list(request):
 @login_required
 def dm_conversation(request, user_id):
     """View conversation with a specific user."""
-    from .models import DirectMessage
+    from .models import DirectMessage, MessageReaction
     from accounts.models import User
 
     partner = get_object_or_404(User, pk=user_id)
@@ -2509,7 +2535,12 @@ def dm_conversation(request, user_id):
     conversation = DirectMessage.objects.filter(
         models.Q(sender=request.user, recipient=partner) |
         models.Q(sender=partner, recipient=request.user)
-    ).select_related('sender', 'recipient', 'reply_to', 'reply_to__sender').order_by('created_at')[:100]
+    ).select_related('sender', 'recipient', 'reply_to', 'reply_to__sender').prefetch_related('reactions').order_by('created_at')[:100]
+
+    # Attach reaction summaries to each message
+    emoji_map = dict(MessageReaction.EMOJI_CHOICES)
+    for msg in conversation:
+        msg.reaction_list = _build_reaction_list(msg.reactions.all(), request.user, emoji_map)
 
     # Mark unread messages as read
     DirectMessage.objects.filter(
@@ -2521,6 +2552,7 @@ def dm_conversation(request, user_id):
     context = {
         'partner': partner,
         'conversation': conversation,
+        'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
     }
     return render(request, 'core/comms/dm_conversation.html', context)
 
@@ -2578,9 +2610,12 @@ def dm_send(request, user_id):
         logging.getLogger(__name__).error(f"Failed to send DM notification: {e}")
 
     if is_htmx:
+        from .models import MessageReaction
+        message.reaction_list = []  # New message, no reactions yet
         return render(request, 'core/partials/dm_message.html', {
             'message': message,
             'is_sender': True,
+            'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
         })
 
     return redirect('dm_conversation', user_id=user_id)
@@ -3082,6 +3117,73 @@ def task_comment(request, pk):
     if project:
         return redirect('project_detail', pk=project.pk)
     return redirect('standalone_task_detail', pk=task.pk)
+
+
+@login_required
+@require_POST
+def toggle_reaction(request):
+    """Toggle an emoji reaction on a message. Adds if not present, removes if already reacted."""
+    from .models import MessageReaction
+
+    emoji = request.POST.get('emoji')
+    dm_id = request.POST.get('dm_id')
+    cm_id = request.POST.get('cm_id')
+
+    if not emoji:
+        return HttpResponse('Missing emoji', status=400)
+
+    valid_emojis = dict(MessageReaction.EMOJI_CHOICES)
+    if emoji not in valid_emojis:
+        return HttpResponse('Invalid emoji', status=400)
+
+    # Find existing reaction
+    filters = {'user': request.user, 'emoji': emoji}
+    if dm_id:
+        filters['direct_message_id'] = dm_id
+    elif cm_id:
+        filters['channel_message_id'] = cm_id
+    else:
+        return HttpResponse('Missing message ID', status=400)
+
+    existing = MessageReaction.objects.filter(**filters).first()
+    if existing:
+        existing.delete()
+    else:
+        MessageReaction.objects.create(**filters)
+
+    # Return updated reactions HTML for this message
+    if dm_id:
+        from .models import DirectMessage
+        msg = DirectMessage.objects.get(pk=dm_id)
+        reactions = msg.reactions.values('emoji').annotate(
+            count=Count('id'),
+            user_reacted=Count('id', filter=Q(user=request.user))
+        ).order_by('emoji')
+    else:
+        from .models import ChannelMessage
+        msg = ChannelMessage.objects.get(pk=cm_id)
+        reactions = msg.reactions.values('emoji').annotate(
+            count=Count('id'),
+            user_reacted=Count('id', filter=Q(user=request.user))
+        ).order_by('emoji')
+
+    emoji_map = dict(MessageReaction.EMOJI_CHOICES)
+    reaction_data = [
+        {
+            'emoji': r['emoji'],
+            'char': emoji_map.get(r['emoji'], r['emoji']),
+            'count': r['count'],
+            'user_reacted': r['user_reacted'] > 0,
+        }
+        for r in reactions
+    ]
+
+    return render(request, 'core/partials/reaction_bar.html', {
+        'reactions': reaction_data,
+        'dm_id': dm_id,
+        'cm_id': cm_id,
+        'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
+    })
 
 
 @login_required

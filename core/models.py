@@ -3764,3 +3764,55 @@ class RecurrenceRule(models.Model):
             self.next_due += relativedelta(months=1)
         elif self.frequency == 'quarterly':
             self.next_due += relativedelta(months=3)
+
+
+class MessageReaction(models.Model):
+    """
+    Emoji reaction on a message (iMessage-style).
+    One reaction per user per emoji per message.
+    """
+    EMOJI_CHOICES = [
+        ('thumbsup', '\U0001F44D'),
+        ('thumbsdown', '\U0001F44E'),
+        ('heart', '\u2764\uFE0F'),
+        ('laugh', '\U0001F602'),
+        ('exclamation', '\u2757'),
+        ('question', '\u2753'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+    )
+    emoji = models.CharField(max_length=20, choices=EMOJI_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # Polymorphic links — one should be set
+    direct_message = models.ForeignKey(
+        'DirectMessage',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='reactions',
+    )
+    channel_message = models.ForeignKey(
+        'ChannelMessage',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='reactions',
+    )
+
+    class Meta:
+        unique_together = [
+            ('user', 'emoji', 'direct_message'),
+            ('user', 'emoji', 'channel_message'),
+        ]
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.get_emoji_display()} by {self.user}'
+
+    @property
+    def emoji_char(self):
+        return dict(self.EMOJI_CHOICES).get(self.emoji, self.emoji)
