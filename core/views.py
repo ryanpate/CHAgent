@@ -2256,6 +2256,139 @@ def task_delete(request, pk):
 
 @login_required
 @require_POST
+def task_set_recurrence(request, pk):
+    """Set or update recurrence on a task."""
+    from .models import Task, RecurrenceRule
+    from datetime import date, timedelta
+
+    org = get_org(request)
+    task = get_object_or_404(Task, pk=pk)
+
+    frequency = request.POST.get('frequency')
+    if not frequency or frequency not in dict(RecurrenceRule.FREQUENCY_CHOICES):
+        return HttpResponse('Invalid frequency', status=400)
+
+    day_of_week = request.POST.get('day_of_week')
+    day_of_month = request.POST.get('day_of_month')
+
+    # Calculate first next_due
+    today = date.today()
+    if frequency in ('weekly', 'biweekly'):
+        dow = int(day_of_week) if day_of_week else today.weekday()
+        days_ahead = dow - today.weekday()
+        if days_ahead <= 0:
+            days_ahead += 7
+        next_due = today + timedelta(days=days_ahead)
+    else:
+        dom = int(day_of_month) if day_of_month else today.day
+        dom = min(dom, 28)
+        from dateutil.relativedelta import relativedelta
+        next_due = today.replace(day=dom)
+        if next_due <= today:
+            months = 3 if frequency == 'quarterly' else 1
+            next_due += relativedelta(months=months)
+
+    rule, created = RecurrenceRule.objects.update_or_create(
+        source_task=task,
+        defaults={
+            'organization': org,
+            'created_by': request.user,
+            'frequency': frequency,
+            'day_of_week': int(day_of_week) if day_of_week and frequency in ('weekly', 'biweekly') else None,
+            'day_of_month': int(day_of_month) if day_of_month and frequency in ('monthly', 'quarterly') else None,
+            'next_due': next_due,
+            'is_active': True,
+        }
+    )
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/recurrence_badge.html', {
+            'rule': rule, 'task': task,
+        })
+    return redirect(request.META.get('HTTP_REFERER', '/'))
+
+
+@login_required
+@require_POST
+def task_remove_recurrence(request, pk):
+    """Remove recurrence from a task."""
+    from .models import Task, RecurrenceRule
+    task = get_object_or_404(Task, pk=pk)
+    RecurrenceRule.objects.filter(source_task=task).delete()
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/recurrence_badge.html', {
+            'rule': None, 'task': task,
+        })
+    return redirect(request.META.get('HTTP_REFERER', '/'))
+
+
+@login_required
+@require_POST
+def project_set_recurrence(request, pk):
+    """Set or update recurrence on a project."""
+    from .models import Project, RecurrenceRule
+    from datetime import date, timedelta
+
+    org = get_org(request)
+    project = get_object_or_404(Project, pk=pk)
+
+    frequency = request.POST.get('frequency')
+    if not frequency or frequency not in dict(RecurrenceRule.FREQUENCY_CHOICES):
+        return HttpResponse('Invalid frequency', status=400)
+
+    day_of_week = request.POST.get('day_of_week')
+    day_of_month = request.POST.get('day_of_month')
+
+    today = date.today()
+    if frequency in ('weekly', 'biweekly'):
+        dow = int(day_of_week) if day_of_week else today.weekday()
+        days_ahead = dow - today.weekday()
+        if days_ahead <= 0:
+            days_ahead += 7
+        next_due = today + timedelta(days=days_ahead)
+    else:
+        dom = int(day_of_month) if day_of_month else today.day
+        dom = min(dom, 28)
+        from dateutil.relativedelta import relativedelta
+        next_due = today.replace(day=dom)
+        if next_due <= today:
+            months = 3 if frequency == 'quarterly' else 1
+            next_due += relativedelta(months=months)
+
+    rule, created = RecurrenceRule.objects.update_or_create(
+        source_project=project,
+        defaults={
+            'organization': org,
+            'created_by': request.user,
+            'frequency': frequency,
+            'day_of_week': int(day_of_week) if day_of_week and frequency in ('weekly', 'biweekly') else None,
+            'day_of_month': int(day_of_month) if day_of_month and frequency in ('monthly', 'quarterly') else None,
+            'next_due': next_due,
+            'is_active': True,
+        }
+    )
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('<span class="text-xs text-ch-gold">Recurring: ' + rule.get_frequency_display() + '</span>')
+    return redirect(request.META.get('HTTP_REFERER', '/'))
+
+
+@login_required
+@require_POST
+def project_remove_recurrence(request, pk):
+    """Remove recurrence from a project."""
+    from .models import Project, RecurrenceRule
+    project = get_object_or_404(Project, pk=pk)
+    RecurrenceRule.objects.filter(source_project=project).delete()
+
+    if request.headers.get('HX-Request'):
+        return HttpResponse('')
+    return redirect(request.META.get('HTTP_REFERER', '/'))
+
+
+@login_required
+@require_POST
 def channel_delete(request, slug):
     """Delete a channel. Only the creator or admins can delete."""
     from .models import Channel
@@ -3001,12 +3134,18 @@ def task_detail(request, project_pk, pk):
     checklists = task.checklists.all()
     completed_count = checklists.filter(is_completed=True).count()
 
+    try:
+        recurrence_rule = task.recurrence_rule
+    except Exception:
+        recurrence_rule = None
+
     context = {
         'project': project,
         'task': task,
         'comments': comments,
         'checklists': checklists,
         'completed_count': completed_count,
+        'recurrence_rule': recurrence_rule,
     }
     return render(request, 'core/comms/task_detail.html', context)
 
@@ -3029,12 +3168,18 @@ def standalone_task_detail(request, pk):
     checklists = task.checklists.all()
     completed_count = checklists.filter(is_completed=True).count()
 
+    try:
+        recurrence_rule = task.recurrence_rule
+    except Exception:
+        recurrence_rule = None
+
     context = {
         'project': None,
         'task': task,
         'comments': comments,
         'checklists': checklists,
         'completed_count': completed_count,
+        'recurrence_rule': recurrence_rule,
     }
     return render(request, 'core/comms/task_detail.html', context)
 

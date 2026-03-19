@@ -81,6 +81,8 @@ urlpatterns = [
     path('comms/projects/new/', views.project_create, name='project_create'),
     path('comms/projects/<int:pk>/', views.project_detail, name='project_detail'),
     path('comms/projects/<int:pk>/delete/', views.project_delete, name='project_delete'),
+    path('comms/projects/<int:pk>/recurrence/', views.project_set_recurrence, name='project_set_recurrence'),
+    path('comms/projects/<int:pk>/recurrence/remove/', views.project_remove_recurrence, name='project_remove_recurrence'),
     path('comms/projects/<int:pk>/add-member/', views.project_add_member, name='project_add_member'),
     path('comms/projects/<int:pk>/status/', views.project_update_status, name='project_update_status'),
     path('comms/projects/<int:project_pk>/tasks/new/', views.task_create, name='task_create'),
@@ -90,6 +92,8 @@ urlpatterns = [
     path('tasks/<int:pk>/status/', views.task_update_status, name='task_update_status'),
     path('tasks/<int:pk>/assign/', views.task_assign, name='task_assign'),
     path('tasks/<int:pk>/delete/', views.task_delete, name='task_delete'),
+    path('tasks/<int:pk>/recurrence/', views.task_set_recurrence, name='task_set_recurrence'),
+    path('tasks/<int:pk>/recurrence/remove/', views.task_remove_recurrence, name='task_remove_recurrence'),
     path('tasks/<int:pk>/comment/', views.task_comment, name='task_comment'),
     # Mention autocomplete
     path('api/members/search/', views.member_search, name='member_search'),

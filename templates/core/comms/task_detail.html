@@ -114,6 +114,11 @@
                     {% endfor %}
                 </div>
             </div>
+
+            <div>
+                <span class="text-gray-500">Repeat</span>
+                {% include 'core/partials/recurrence_badge.html' with task=task rule=recurrence_rule %}
+            </div>
         </div>
     </div>
 

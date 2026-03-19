@@ -56,6 +56,41 @@
                         {% endfor %}
                     </form>
                     <div class="border-t border-gray-700 p-2">
+                        <p class="text-xs text-gray-500 px-2 mb-1">Recurrence</p>
+                        {% if project.is_recurring %}
+                        <div class="px-2 py-1 text-xs text-ch-gold mb-1">
+                            {{ project.recurrence_rule.get_frequency_display }} — Next: {{ project.recurrence_rule.next_due|date:"M d" }}
+                        </div>
+                        <form hx-post="{% url 'project_remove_recurrence' project.pk %}"
+                              hx-swap="none"
+                              hx-on::after-request="location.reload()"
+                              hx-confirm="Stop recurring?"
+                              class="w-full">
+                            {% csrf_token %}
+                            <button type="submit" class="w-full text-left px-2 py-1 text-sm text-red-400 hover:bg-red-900/30 rounded">
+                                Stop Recurring
+                            </button>
+                        </form>
+                        {% else %}
+                        <form hx-post="{% url 'project_set_recurrence' project.pk %}"
+                              hx-swap="none"
+                              hx-on::after-request="location.reload()">
+                            {% csrf_token %}
+                            <select name="frequency" required
+                                    class="w-full bg-ch-gray border border-gray-700 rounded px-2 py-1 text-xs mb-1">
+                                <option value="weekly">Weekly</option>
+                                <option value="biweekly">Every 2 Weeks</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                            </select>
+                            <button type="submit"
+                                    class="w-full text-left px-2 py-1 text-sm hover:bg-ch-gray rounded">
+                                Set Recurrence
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    <div class="border-t border-gray-700 p-2">
                         <form hx-post="{% url 'project_delete' project.pk %}"
                               hx-confirm="Delete this project and all its tasks? This cannot be undone."
                               class="inline w-full">

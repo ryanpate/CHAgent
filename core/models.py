@@ -2433,6 +2433,13 @@ class Project(models.Model):
         return False
 
     @property
+    def is_recurring(self):
+        try:
+            return self.recurrence_rule is not None
+        except Exception:
+            return False
+
+    @property
     def progress_percent(self):
         """Calculate project progress based on completed tasks."""
         total = self.tasks.count()
@@ -2541,6 +2548,13 @@ class Task(models.Model):
         if self.due_date and self.status not in ['completed', 'cancelled']:
             return timezone.now().date() > self.due_date
         return False
+
+    @property
+    def is_recurring(self):
+        try:
+            return self.recurrence_rule is not None
+        except Exception:
+            return False
 
     @property
     def get_organization(self):
