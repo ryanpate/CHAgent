@@ -27,6 +27,13 @@
                 {{ message.sender.display_name|default:message.sender.username|slice:":1"|upper }}
             </div>
             <div class="max-w-[70%]">
+                {% if message.reply_to %}
+                <div class="mb-1 px-3 py-1 bg-gray-800 rounded-lg border-l-2 border-ch-gold/50 text-xs text-gray-400 cursor-pointer"
+                     onclick="document.getElementById('dm-{{ message.reply_to.id }}')?.scrollIntoView({behavior:'smooth', block:'center'})">
+                    <span class="font-medium text-gray-300">{{ message.reply_to.sender.display_name|default:message.reply_to.sender.username }}</span>
+                    <p class="truncate">{{ message.reply_to.content|truncatewords:12 }}</p>
+                </div>
+                {% endif %}
                 <div class="{% if message.sender == request.user %}bg-ch-gold/20 text-white{% else %}bg-ch-gray{% endif %} rounded-lg px-4 py-2">
                     <p class="break-words">{{ message.content }}</p>
                 </div>
@@ -35,6 +42,14 @@
                 {% endwith %}
                 <div class="flex items-center gap-2 mt-1 {% if message.sender == request.user %}justify-end{% endif %}">
                     <span class="text-xs text-gray-500">{{ message.created_at|date:"g:i A" }}</span>
+                    <button type="button"
+                            onclick="setReplyTo({{ message.id }}, '{{ message.sender.display_name|default:message.sender.username|escapejs }}', '{{ message.content|truncatewords:10|escapejs }}')"
+                            class="text-xs text-gray-500 hover:text-ch-gold opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Reply">
+                        <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                        </svg>
+                    </button>
                     {% if message.sender == request.user %}
                     <button hx-post="{% url 'dm_delete' message.id %}"
                             hx-target="#dm-{{ message.id }}"
@@ -54,14 +69,28 @@
         {% endfor %}
     </div>
 
+    <!-- Reply Preview Bar -->
+    <div id="reply-preview" class="hidden bg-ch-gray rounded-t-lg px-4 py-2 flex items-center justify-between">
+        <div class="flex-1 min-w-0">
+            <span class="text-xs text-ch-gold font-medium" id="reply-to-name"></span>
+            <p class="text-xs text-gray-400 truncate" id="reply-to-text"></p>
+        </div>
+        <button type="button" onclick="clearReply()" class="text-gray-500 hover:text-white ml-2 flex-shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    </div>
+
     <!-- Message Input (sticky to bottom - always visible when scrolling) -->
     <form id="dm-form" hx-post="{% url 'dm_send' partner.id %}"
           hx-target="#messages-container"
           hx-swap="beforeend"
           hx-encoding="multipart/form-data"
-          hx-on::after-request="this.reset(); document.getElementById('file-preview').innerHTML = ''; scrollToBottom();"
+          hx-on::after-request="this.reset(); document.getElementById('file-preview').innerHTML = ''; clearReply(); scrollToBottom();"
           class="sticky bottom-0 bg-ch-dark rounded-lg p-3 z-10">
         {% csrf_token %}
+        <input type="hidden" name="reply_to" id="reply-to-id" value="">
         <div id="file-preview" class="flex flex-wrap gap-2 mb-2"></div>
         <div class="flex gap-2 items-center">
             <label class="cursor-pointer p-2 text-gray-400 hover:text-ch-gold transition rounded-lg hover:bg-ch-gray flex-shrink-0" title="Attach file">
@@ -89,6 +118,19 @@ function scrollToBottom() {
     window.scrollTo(0, document.body.scrollHeight);
 }
 
+function setReplyTo(messageId, senderName, preview) {
+    document.getElementById('reply-to-id').value = messageId;
+    document.getElementById('reply-to-name').textContent = senderName;
+    document.getElementById('reply-to-text').textContent = preview;
+    document.getElementById('reply-preview').classList.remove('hidden');
+    document.getElementById('dm-input').focus();
+}
+
+function clearReply() {
+    document.getElementById('reply-to-id').value = '';
+    document.getElementById('reply-preview').classList.add('hidden');
+}
+
 (function() {
     // Scroll to latest messages on load
     scrollToBottom();
@@ -98,6 +140,24 @@ function scrollToBottom() {
         document.getElementById('dm-input').focus();
         setTimeout(scrollToBottom, 300);
     }, 100);
+
+    // Long-press to reply on mobile
+    var container = document.getElementById('messages-container');
+    var longPressTimer;
+    container.addEventListener('touchstart', function(e) {
+        var msgEl = e.target.closest('[id^="dm-"]');
+        if (!msgEl) return;
+        longPressTimer = setTimeout(function() {
+            var replyBtn = msgEl.querySelector('[onclick^="setReplyTo"]');
+            if (replyBtn) replyBtn.click();
+        }, 500);
+    });
+    container.addEventListener('touchend', function() {
+        clearTimeout(longPressTimer);
+    });
+    container.addEventListener('touchmove', function() {
+        clearTimeout(longPressTimer);
+    });
 })();
 
 function previewFiles(fileInput) {

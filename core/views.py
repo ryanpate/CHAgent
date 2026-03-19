@@ -2507,7 +2507,7 @@ def dm_conversation(request, user_id):
     conversation = DirectMessage.objects.filter(
         models.Q(sender=request.user, recipient=partner) |
         models.Q(sender=partner, recipient=request.user)
-    ).select_related('sender', 'recipient').order_by('created_at')[:100]
+    ).select_related('sender', 'recipient', 'reply_to', 'reply_to__sender').order_by('created_at')[:100]
 
     # Mark unread messages as read
     DirectMessage.objects.filter(
@@ -2534,6 +2534,7 @@ def dm_send(request, user_id):
     recipient = get_object_or_404(User, pk=user_id)
     content = request.POST.get('content', '').strip()
     files = request.FILES.getlist('attachments')
+    reply_to_id = request.POST.get('reply_to')
 
     is_htmx = request.headers.get('HX-Request')
 
@@ -2546,7 +2547,8 @@ def dm_send(request, user_id):
     message = DirectMessage.objects.create(
         sender=request.user,
         recipient=recipient,
-        content=content
+        content=content,
+        reply_to_id=reply_to_id if reply_to_id else None,
     )
 
     # Handle file attachments

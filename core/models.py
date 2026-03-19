@@ -2319,6 +2319,15 @@ class DirectMessage(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Thread support - optional reply to another message
+    reply_to = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='replies',
+    )
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = 'Direct Message'
