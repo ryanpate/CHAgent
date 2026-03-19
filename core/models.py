@@ -3570,3 +3570,94 @@ class DocumentImage(models.Model):
     def __str__(self):
         doc_title = self.document.title if self.document else 'Standalone'
         return f'{doc_title} - Image {self.pk}'
+
+
+class MessageAttachment(models.Model):
+    """
+    File attachment for DMs, channel messages, or task comments.
+    Uses nullable FKs — exactly one should be set per attachment.
+    """
+    ALLOWED_EXTENSIONS = {
+        'image': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
+        'document': ['.pdf', '.doc', '.docx', '.txt'],
+    }
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+    organization = models.ForeignKey(
+        'Organization',
+        on_delete=models.CASCADE,
+        related_name='attachments',
+        null=True,
+        blank=True,
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+    )
+    file = models.FileField(upload_to='attachments/%Y/%m/')
+    filename = models.CharField(max_length=255)
+    file_size = models.IntegerField(help_text='File size in bytes')
+    file_type = models.CharField(
+        max_length=20,
+        choices=[('image', 'Image'), ('document', 'Document'), ('other', 'Other')],
+    )
+    content_type = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # Polymorphic links — one should be set
+    direct_message = models.ForeignKey(
+        'DirectMessage',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='attachments',
+    )
+    channel_message = models.ForeignKey(
+        'ChannelMessage',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='attachments',
+    )
+    task_comment = models.ForeignKey(
+        'TaskComment',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='attachments',
+    )
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return self.filename
+
+    @property
+    def is_image(self):
+        return self.file_type == 'image'
+
+    @classmethod
+    def get_file_type(cls, filename):
+        """Determine file type from filename extension."""
+        import os
+        ext = os.path.splitext(filename)[1].lower()
+        for ftype, extensions in cls.ALLOWED_EXTENSIONS.items():
+            if ext in extensions:
+                return ftype
+        return 'other'
+
+    @classmethod
+    def validate_file(cls, uploaded_file):
+        """Validate file size and type. Returns (file_type, error_msg)."""
+        import os
+        if uploaded_file.size > cls.MAX_FILE_SIZE:
+            return None, 'File too large. Maximum size is 10 MB.'
+        ext = os.path.splitext(uploaded_file.name)[1].lower()
+        all_extensions = []
+        for extensions in cls.ALLOWED_EXTENSIONS.values():
+            all_extensions.extend(extensions)
+        if ext not in all_extensions:
+            return None, f'Unsupported file type. Allowed: images and PDF/DOC/TXT files.'
+        return cls.get_file_type(uploaded_file.name), None
