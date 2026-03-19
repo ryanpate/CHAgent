@@ -7,4 +7,8 @@ healthcheckTimeout = 100
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 # Run migrations at runtime when DATABASE_URL is available
-startCommand = "python manage.py migrate --noinput && python manage.py create_superuser_from_env && python manage.py create_demo_account && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --preload --access-logfile - --error-logfile -"
+# Also runs create_recurring_tasks on each deploy (daily Railway cron recommended for production)
+startCommand = "python manage.py migrate --noinput && python manage.py create_superuser_from_env && python manage.py create_demo_account && python manage.py create_recurring_tasks && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --preload --access-logfile - --error-logfile -"
+# For dedicated daily scheduling, create a Railway Cron service:
+#   Schedule: 0 6 * * * (6:00 AM UTC daily)
+#   Command: python manage.py create_recurring_tasks
