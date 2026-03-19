@@ -8,5 +8,8 @@
             <span class="text-xs text-gray-500">{{ message.created_at|date:"M j, g:i A" }}</span>
         </div>
         <p class="text-gray-300 break-words">{{ message.content }}</p>
+        {% with attachments=message.attachments.all %}
+        {% include 'core/partials/attachment_display.html' %}
+        {% endwith %}
     </div>
 </div>

@@ -66,6 +66,9 @@
                     {% endif %}
                 </div>
                 <p class="text-gray-300 break-words">{{ message.content }}</p>
+                {% with attachments=message.attachments.all %}
+                {% include 'core/partials/attachment_display.html' %}
+                {% endwith %}
             </div>
         </div>
         {% empty %}
@@ -79,10 +82,19 @@
     <form hx-post="{% url 'channel_send_message' channel.slug %}"
           hx-target="#messages-container"
           hx-swap="beforeend"
-          hx-on::after-request="this.reset(); document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;"
+          hx-encoding="multipart/form-data"
+          hx-on::after-request="this.reset(); document.getElementById('file-preview').innerHTML = ''; document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;"
           class="bg-ch-dark rounded-lg p-4">
         {% csrf_token %}
+        <div id="file-preview" class="flex flex-wrap gap-2 mb-2"></div>
         <div class="flex gap-4">
+            <label class="cursor-pointer p-2 text-gray-400 hover:text-ch-gold transition rounded-lg hover:bg-ch-gray flex-shrink-0 self-center" title="Attach file">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                </svg>
+                <input type="file" name="attachments" multiple accept="image/*,.pdf,.doc,.docx,.txt" class="hidden"
+                       onchange="previewFiles(this)">
+            </label>
             <input type="text" name="content"
                    placeholder="Message #{{ channel.name }}..."
                    autocomplete="off"
@@ -101,5 +113,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('messages-container');
     container.scrollTop = container.scrollHeight;
 });
+
+function previewFiles(input) {
+    var preview = document.getElementById('file-preview');
+    preview.innerHTML = '';
+    Array.from(input.files).forEach(function(file) {
+        var tag = document.createElement('span');
+        tag.className = 'inline-flex items-center gap-1 px-2 py-1 bg-ch-gray rounded text-xs text-gray-300';
+        tag.textContent = file.name.length > 25 ? file.name.substring(0, 22) + '...' : file.name;
+        preview.appendChild(tag);
+    });
+}
 </script>
 {% endblock %}

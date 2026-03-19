@@ -2052,7 +2052,7 @@ def channel_detail(request, slug):
 @require_POST
 def channel_send_message(request, slug):
     """Send a message to a channel."""
-    from .models import Channel, ChannelMessage
+    from .models import Channel, ChannelMessage, MessageAttachment
 
     org = get_org(request)
 
@@ -2066,12 +2066,29 @@ def channel_send_message(request, slug):
         return HttpResponse('Access denied', status=403)
 
     content = request.POST.get('content', '').strip()
-    if content:
+    files = request.FILES.getlist('attachments')
+    if content or files:
         message = ChannelMessage.objects.create(
             channel=channel,
             author=request.user,
             content=content
         )
+
+        # Handle file attachments
+        for f in files:
+            file_type, error = MessageAttachment.validate_file(f)
+            if error:
+                continue
+            MessageAttachment.objects.create(
+                organization=org,
+                uploaded_by=request.user,
+                file=f,
+                filename=f.name,
+                file_size=f.size,
+                file_type=file_type,
+                content_type=f.content_type or 'application/octet-stream',
+                channel_message=message,
+            )
 
         # Check for @mentions and send notifications
         try:
