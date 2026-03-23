@@ -146,6 +146,7 @@ def _process_standalone_image(document) -> None:
         vision_result = describe_image_with_vision(
             document.file.path,
             document_context=document.title,
+            organization=document.organization,
         )
 
         doc_image.description = vision_result.get('description', '')
@@ -323,6 +324,7 @@ def _process_document_images(document) -> None:
             vision_result = describe_image_with_vision(
                 doc_image.image_file.path,
                 document_context=document.title,
+                organization=document.organization,
             )
 
             doc_image.description = vision_result.get('description', '')
@@ -453,12 +455,13 @@ def _cap_images(images: list[dict], max_images: int = 20) -> list[dict]:
     return images
 
 
-def describe_image_with_vision(image_path: str, document_context: str = '') -> dict:
+def describe_image_with_vision(image_path: str, document_context: str = '', organization=None) -> dict:
     """Send image to Claude Vision for description and OCR.
 
     Args:
         image_path: Path to image file on disk.
         document_context: Optional document title for context.
+        organization: Optional organization for usage tracking.
 
     Returns:
         dict with 'description', 'ocr_text', and optionally 'error'.
@@ -478,7 +481,11 @@ def describe_image_with_vision(image_path: str, document_context: str = '') -> d
 
         context_line = f'This image is from a document titled "{document_context}". ' if document_context else ''
 
-        response = client.messages.create(
+        from .agent import call_claude
+        response = call_claude(
+            client,
+            organization=organization,
+            query_type='extraction',
             model='claude-sonnet-4-20250514',
             max_tokens=1024,
             messages=[{

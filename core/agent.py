@@ -2426,6 +2426,51 @@ def get_anthropic_client():
     return anthropic.Anthropic(api_key=api_key)
 
 
+def call_claude(client, organization=None, user=None, session_id='',
+                query_type='chat_query', **kwargs):
+    """
+    Wrapper around client.messages.create that tracks token usage.
+
+    Captures input/output tokens, increments organization AI usage counter,
+    and logs to AIUsageLog for cost visibility.
+
+    Args:
+        client: Anthropic client instance.
+        organization: Organization for usage tracking (optional).
+        user: User making the request (optional).
+        session_id: Chat session ID (optional).
+        query_type: Type of query for categorized tracking.
+        **kwargs: Passed directly to client.messages.create().
+
+    Returns:
+        The Anthropic API response object.
+    """
+    response = client.messages.create(**kwargs)
+
+    # Track usage if organization is available
+    if organization:
+        try:
+            organization.increment_ai_usage()
+        except Exception as e:
+            logger.error(f"Error incrementing AI usage: {e}")
+
+        try:
+            from .models import AIUsageLog
+            AIUsageLog.objects.create(
+                organization=organization,
+                user=user,
+                session_id=session_id or '',
+                query_type=query_type,
+                input_tokens=getattr(response.usage, 'input_tokens', 0),
+                output_tokens=getattr(response.usage, 'output_tokens', 0),
+                model=kwargs.get('model', ''),
+            )
+        except Exception as e:
+            logger.error(f"Error logging AI usage: {e}")
+
+    return response
+
+
 def parse_json_response(response) -> dict:
     """Parse JSON from Claude's response."""
     try:
@@ -2473,7 +2518,11 @@ def process_interaction(content: str, user, organization=None) -> dict:
     # Step 1: Extract data with Claude (if available)
     if client:
         try:
-            extraction_response = client.messages.create(
+            extraction_response = call_claude(
+                client,
+                organization=organization,
+                user=user,
+                query_type='extraction',
                 model="claude-sonnet-4-20250514",
                 max_tokens=1000,
                 system=EXTRACTION_PROMPT,
@@ -2674,7 +2723,9 @@ If no follow-up is needed, respond with:
 Respond ONLY with the JSON object, no other text."""
 
     try:
-        response = client.messages.create(
+        response = call_claude(
+            client,
+            query_type='extraction',
             model="claude-sonnet-4-20250514",
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}]
@@ -2837,7 +2888,12 @@ Interaction content:
 {interaction.content}"""
 
     try:
-        response = client.messages.create(
+        org = getattr(interaction, 'organization', None)
+        response = call_claude(
+            client,
+            organization=org,
+            user=user,
+            query_type='extraction',
             model="claude-sonnet-4-20250514",
             max_tokens=1000,
             messages=[{"role": "user", "content": extraction_prompt}]
@@ -2968,7 +3024,7 @@ def extract_volunteer_ids_from_interactions(interactions) -> list:
     return list(volunteer_ids)
 
 
-def summarize_conversation(client, messages: list, current_summary: str = "") -> str:
+def summarize_conversation(client, messages: list, current_summary: str = "", organization=None) -> str:
     """
     Generate a summary of the conversation for long conversations.
 
@@ -3006,7 +3062,10 @@ Recent conversation:
 Provide a concise 2-4 sentence summary that captures the essential context."""
 
     try:
-        response = client.messages.create(
+        response = call_claude(
+            client,
+            organization=organization,
+            query_type='summarization',
             model="claude-sonnet-4-20250514",
             max_tokens=300,
             messages=[{"role": "user", "content": summary_prompt}]
@@ -3715,7 +3774,12 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             selection_messages = [{"role": "user", "content": f"I selected song number {selection_index + 1}: \"{selected_title}\". Please provide the information about this song."}]
 
             try:
-                response = client.messages.create(
+                response = call_claude(
+                    client,
+                    organization=organization,
+                    user=user,
+                    session_id=session_id,
+                    query_type='song_selection',
                     model="claude-sonnet-4-20250514",
                     max_tokens=2000,
                     system=SYSTEM_PROMPT.format(
@@ -3772,7 +3836,12 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         lookup_messages = [{"role": "user", "content": f"Yes, please look up the service for {date_str}."}]
 
         try:
-            response = client.messages.create(
+            response = call_claude(
+                client,
+                organization=organization,
+                user=user,
+                session_id=session_id,
+                query_type='date_lookup',
                 model="claude-sonnet-4-20250514",
                 max_tokens=2000,
                 system=SYSTEM_PROMPT.format(
@@ -3885,7 +3954,12 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
                         song_data_context = f"\n[PLANNING CENTER: No songs found matching '{extracted_value}'.]\n"
 
                     user_name = user.display_name if user.display_name else user.username
-                    response = client.messages.create(
+                    response = call_claude(
+                        client,
+                        organization=organization,
+                        user=user,
+                        session_id=session_id,
+                        query_type='disambiguation',
                         model="claude-sonnet-4-20250514",
                         max_tokens=2000,
                         system=SYSTEM_PROMPT.format(
@@ -3925,7 +3999,12 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
                         person_data_context = f"\n[PLANNING CENTER: No person found matching '{extracted_value}'.]\n"
 
                     user_name = user.display_name if user.display_name else user.username
-                    response = client.messages.create(
+                    response = call_claude(
+                        client,
+                        organization=organization,
+                        user=user,
+                        session_id=session_id,
+                        query_type='disambiguation',
                         model="claude-sonnet-4-20250514",
                         max_tokens=2000,
                         system=SYSTEM_PROMPT.format(
@@ -3978,7 +4057,12 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         # Query Claude to ask for clarification
         user_name = user.display_name if user.display_name else user.username
         try:
-            response = client.messages.create(
+            response = call_claude(
+                client,
+                organization=organization,
+                user=user,
+                session_id=session_id,
+                query_type='disambiguation',
                 model="claude-sonnet-4-20250514",
                 max_tokens=500,
                 system=SYSTEM_PROMPT.format(
@@ -4067,7 +4151,12 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         roster_messages = [{"role": "user", "content": question}]
 
         try:
-            response = client.messages.create(
+            response = call_claude(
+                client,
+                organization=organization,
+                user=user,
+                session_id=session_id,
+                query_type='roster',
                 model="claude-sonnet-4-20250514",
                 max_tokens=2000,
                 system=SYSTEM_PROMPT.format(
@@ -4127,7 +4216,12 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         compound_messages = [{"role": "user", "content": question}]
 
         try:
-            response = client.messages.create(
+            response = call_claude(
+                client,
+                organization=organization,
+                user=user,
+                session_id=session_id,
+                query_type='compound_contact',
                 model="claude-sonnet-4-20250514",
                 max_tokens=2000,
                 system=SYSTEM_PROMPT.format(
@@ -4474,7 +4568,10 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
     if aggregate:
         # For aggregate questions, get ALL interactions to ensure comprehensive answers
         logger.info(f"Aggregate question detected (category: {category}). Fetching all interactions.")
-        all_interactions = Interaction.objects.select_related('user').prefetch_related('volunteers').all()
+        all_interactions = Interaction.objects.select_related('user').prefetch_related('volunteers')
+        if organization:
+            all_interactions = all_interactions.filter(organization=organization)
+        all_interactions = all_interactions.all()
 
         # For category-specific queries, prioritize interactions with relevant extracted data
         if category != 'general':
@@ -4521,7 +4618,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
 
         if question_embedding:
             # Get more interactions than needed, then filter by context
-            raw_interactions = search_similar(question_embedding, limit=30)
+            raw_interactions = search_similar(question_embedding, limit=30, organization=organization)
             # Filter and prioritize based on conversation context
             relevant_interactions = filter_interactions_by_context(
                 raw_interactions,
@@ -4530,7 +4627,10 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             )[:20]  # Limit to top 20 after filtering
         else:
             # Fallback: get recent interactions if embeddings unavailable
-            raw_interactions = list(Interaction.objects.all()[:30])
+            qs = Interaction.objects.all()
+            if organization:
+                qs = qs.filter(organization=organization)
+            raw_interactions = list(qs[:30])
             relevant_interactions = filter_interactions_by_context(
                 raw_interactions,
                 conversation_context,
@@ -4704,7 +4804,12 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
     # Step 4: Query Claude
     try:
         user_name = user.display_name if user.display_name else user.username
-        response = client.messages.create(
+        response = call_claude(
+            client,
+            organization=organization,
+            user=user,
+            session_id=session_id,
+            query_type='chat_query',
             model="claude-sonnet-4-20250514",
             max_tokens=2000,
             system=SYSTEM_PROMPT.format(
@@ -4761,7 +4866,7 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
         all_messages.append({"role": "user", "content": question})
         all_messages.append({"role": "assistant", "content": answer})
 
-        new_summary = summarize_conversation(client, all_messages, "")
+        new_summary = summarize_conversation(client, all_messages, "", organization=organization)
         if new_summary:
             conversation_context.conversation_summary = new_summary
             logger.info(f"Generated conversation summary: {new_summary[:100]}...")

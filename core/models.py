@@ -3816,3 +3816,49 @@ class MessageReaction(models.Model):
     @property
     def emoji_char(self):
         return dict(self.EMOJI_CHOICES).get(self.emoji, self.emoji)
+
+
+class AIUsageLog(models.Model):
+    """Tracks token usage for every Claude API call for cost visibility and optimization."""
+    QUERY_TYPE_CHOICES = [
+        ('chat_query', 'Chat Query'),
+        ('disambiguation', 'Disambiguation'),
+        ('song_selection', 'Song Selection'),
+        ('date_lookup', 'Date Lookup'),
+        ('roster', 'Team Roster'),
+        ('compound_contact', 'Compound Contact'),
+        ('summarization', 'Conversation Summarization'),
+        ('extraction', 'Data Extraction'),
+        ('analytics', 'Analytics'),
+        ('blockout', 'Blockout/Availability'),
+        ('followup', 'Follow-up Creation'),
+    ]
+
+    organization = models.ForeignKey(
+        'Organization', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='ai_usage_logs'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='ai_usage_logs'
+    )
+    session_id = models.CharField(max_length=100, blank=True, default='')
+    query_type = models.CharField(max_length=30, choices=QUERY_TYPE_CHOICES, default='chat_query')
+    input_tokens = models.IntegerField(default=0)
+    output_tokens = models.IntegerField(default=0)
+    model = models.CharField(max_length=100, default='')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['organization', 'created_at']),
+            models.Index(fields=['query_type', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.query_type}: {self.input_tokens}in/{self.output_tokens}out ({self.created_at:%Y-%m-%d %H:%M})"
+
+    @property
+    def total_tokens(self):
+        return self.input_tokens + self.output_tokens

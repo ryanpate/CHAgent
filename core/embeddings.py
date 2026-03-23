@@ -57,7 +57,7 @@ def get_embedding(text: str) -> Optional[list[float]]:
         return None
 
 
-def search_similar(query_embedding: list[float], limit: int = 10):
+def search_similar(query_embedding: list[float], limit: int = 10, organization=None):
     """
     Find interactions most similar to query using cosine similarity.
 
@@ -67,9 +67,10 @@ def search_similar(query_embedding: list[float], limit: int = 10):
     Args:
         query_embedding: The embedding vector to search against.
         limit: Maximum number of results to return.
+        organization: Organization to scope the search (required for multi-tenant isolation).
 
     Returns:
-        QuerySet of Interaction objects ordered by similarity.
+        List of Interaction objects ordered by similarity.
     """
     from .models import Interaction
     import math
@@ -88,8 +89,10 @@ def search_similar(query_embedding: list[float], limit: int = 10):
 
         return dot_product / (norm1 * norm2)
 
-    # Get all interactions with embeddings
+    # Get interactions with embeddings, scoped to organization
     interactions = Interaction.objects.exclude(embedding_json__isnull=True)
+    if organization:
+        interactions = interactions.filter(organization=organization)
 
     # Calculate similarities and sort
     scored_interactions = []
