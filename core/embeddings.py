@@ -36,12 +36,26 @@ def get_embedding(text: str) -> Optional[list[float]]:
     """
     Generate embedding vector for text using OpenAI's text-embedding-3-small model.
 
+    Uses Django's cache framework to avoid duplicate API calls for the same text.
+    Cache key is based on a SHA-256 hash of the input text with a 24-hour TTL.
+
     Args:
         text: The text to generate embeddings for.
 
     Returns:
         A list of floats representing the embedding vector, or None if unavailable.
     """
+    import hashlib
+    from django.core.cache import cache
+
+    # Check cache first
+    text_hash = hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]
+    cache_key = f"emb:{text_hash}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        logger.debug(f"Embedding cache hit for key {cache_key}")
+        return cached
+
     client = get_openai_client()
     if not client:
         return None
@@ -51,7 +65,10 @@ def get_embedding(text: str) -> Optional[list[float]]:
             model="text-embedding-3-small",
             input=text
         )
-        return response.data[0].embedding
+        embedding = response.data[0].embedding
+        # Cache for 24 hours
+        cache.set(cache_key, embedding, timeout=86400)
+        return embedding
     except Exception as e:
         logger.error(f"Error generating embedding: {e}")
         return None

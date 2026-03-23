@@ -2555,6 +2555,14 @@ def process_interaction(content: str, user, organization=None) -> dict:
     # Link confirmed volunteers
     interaction.volunteers.set(confirmed_volunteers)
 
+    # Invalidate response cache — new interaction data may change answers
+    if organization:
+        try:
+            from .models import AIResponseCache
+            AIResponseCache.invalidate_for_org(organization)
+        except Exception as e:
+            logger.error(f"Error invalidating response cache: {e}")
+
     # Step 5: Extract and store knowledge from the interaction
     # This runs asynchronously-ish - we don't wait for it
     try:
@@ -3693,6 +3701,57 @@ def _build_image_context(image_results: list[dict]) -> str:
     )
 
 
+def classify_retrieval_needs(question: str, has_structured_data: bool = False, is_aggregate: bool = False) -> dict:
+    """
+    Determine which retrieval sources are needed for a query.
+
+    Implements conditional retrieval (Agentic RAG Pattern 1) to skip
+    unnecessary embedding calls and context retrieval for simple queries.
+
+    Args:
+        question: The user's question.
+        has_structured_data: Whether PCO/song/blockout data was already retrieved.
+        is_aggregate: Whether this is an aggregate team-wide question.
+
+    Returns:
+        Dict with 'interactions', 'docs', 'images' limits (0 = skip retrieval),
+        and 'skip_embedding' bool.
+    """
+    q_lower = question.lower().strip()
+
+    # Conversational / acknowledgment messages — no retrieval needed
+    conversational_patterns = {
+        'thanks', 'thank you', 'thx', 'ty', 'ok', 'okay', 'got it',
+        'cool', 'great', 'awesome', 'perfect', 'nice', 'good',
+        'sounds good', 'makes sense', 'i see', 'understood',
+        'yes', 'no', 'yep', 'nope', 'yeah', 'nah', 'sure',
+        'hello', 'hi', 'hey', 'good morning', 'good afternoon',
+    }
+    if q_lower in conversational_patterns:
+        logger.info(f"Conditional retrieval: conversational message, skipping all retrieval")
+        return {'interactions': 0, 'docs': 0, 'images': 0, 'skip_embedding': True}
+
+    # Aggregate questions — keep current broad retrieval behavior
+    if is_aggregate:
+        return {'interactions': 150, 'docs': 0, 'images': 0, 'skip_embedding': True}
+
+    # Already handled by PCO/song/blockout router — minimal supplemental context
+    if has_structured_data:
+        logger.info(f"Conditional retrieval: structured data available, reducing interaction retrieval")
+        return {'interactions': 5, 'docs': 0, 'images': 0, 'skip_embedding': False}
+
+    # Knowledge base / how-to / procedural questions — docs-heavy, interactions-light
+    howto_keywords = ('how do i', 'how to', 'procedure', 'setup', 'set up',
+                      'guide', 'instructions', 'steps to', 'tutorial',
+                      'what is the process', 'walk me through')
+    if any(kw in q_lower for kw in howto_keywords):
+        logger.info(f"Conditional retrieval: how-to query, prioritizing documents")
+        return {'interactions': 5, 'docs': 8, 'images': 5, 'skip_embedding': False}
+
+    # Default general query — standard retrieval
+    return {'interactions': 20, 'docs': 5, 'images': 3, 'skip_embedding': False}
+
+
 def query_agent(question: str, user, session_id: str, organization=None) -> str:
     """
     Answer a question using RAG (Retrieval Augmented Generation):
@@ -4033,6 +4092,29 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
 
             return answer
 
+    # Response cache check (Agentic RAG: multi-level caching)
+    # Only for fresh queries (past all pending state handlers) with an organization
+    import hashlib
+    query_hash = hashlib.sha256(question.lower().strip().encode('utf-8')).hexdigest()
+    cached_response = None
+    if organization:
+        from .models import AIResponseCache
+        cached_response = AIResponseCache.get_cached(organization, query_hash)
+        if cached_response:
+            logger.info(f"Response cache hit for query: {question[:50]}...")
+            # Save to chat history so conversation context stays consistent
+            ChatMessage.objects.create(
+                user=user, organization=organization,
+                session_id=session_id, role='user', content=question
+            )
+            ChatMessage.objects.create(
+                user=user, organization=organization,
+                session_id=session_id, role='assistant', content=cached_response
+            )
+            conversation_context.increment_message_count(2)
+            conversation_context.save()
+            return cached_response
+
     # Check if this query is ambiguous between song and person
     is_ambiguous, ambig_value, matches_song, matches_person = check_ambiguous_song_or_person(question)
     if is_ambiguous and ambig_value:
@@ -4184,6 +4266,11 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         conversation_context.increment_message_count(2)
         conversation_context.save()
 
+        # Cache roster response
+        if organization:
+            from .models import AIResponseCache
+            AIResponseCache.store(organization, query_hash, question, 'roster', answer)
+
         return answer
 
     # Check if this is a compound team contact query (e.g., "phone numbers of people serving this weekend")
@@ -4248,6 +4335,11 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         # Update conversation context
         conversation_context.increment_message_count(2)
         conversation_context.save()
+
+        # Cache compound contact response
+        if organization:
+            from .models import AIResponseCache
+            AIResponseCache.store(organization, query_hash, question, 'compound_contact', answer)
 
         return answer
 
@@ -4561,6 +4653,57 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
     # Check if this is an aggregate question requiring broader data access
     aggregate, category = is_aggregate_question(question)
 
+    # Classify retrieval needs based on query type (Agentic RAG: Conditional Retrieval)
+    has_structured_data = bool(pco_data_context or song_data_context or blockout_data_context)
+    retrieval_needs = classify_retrieval_needs(question, has_structured_data, aggregate)
+    interaction_limit = retrieval_needs['interactions']
+    doc_limit = retrieval_needs['docs']
+    image_limit = retrieval_needs['images']
+    skip_embedding = retrieval_needs['skip_embedding']
+
+    # ExtractedKnowledge-first: if query mentions a known volunteer and we have
+    # structured knowledge for them, reduce interaction retrieval (knowledge is more
+    # token-efficient than raw interaction text)
+    volunteer_knowledge_context = ""
+    if not aggregate and interaction_limit > 0 and organization:
+        try:
+            from .models import ExtractedKnowledge
+            q_lower = question.lower()
+            # Check discussed volunteers and any volunteers whose names appear in the question
+            candidate_vols = []
+            for vol_id in (conversation_context.discussed_volunteer_ids or [])[:5]:
+                try:
+                    vol = Volunteer.objects.get(id=vol_id)
+                    if vol.name.lower() in q_lower or any(
+                        part.lower() in q_lower for part in vol.name.split() if len(part) > 2
+                    ):
+                        candidate_vols.append(vol)
+                except Volunteer.DoesNotExist:
+                    pass
+
+            # Also check local volunteers by name match
+            if not candidate_vols:
+                name_matched = Volunteer.objects.filter(
+                    organization=organization,
+                    normalized_name__icontains=q_lower.split("'s")[0].strip() if "'s" in q_lower else ''
+                )[:3] if "'s" in q_lower else []
+                candidate_vols = list(name_matched)
+
+            # If we found matching volunteers with rich knowledge, use it
+            for vol in candidate_vols[:3]:
+                profile = ExtractedKnowledge.get_volunteer_profile(vol)
+                if profile and len(profile) >= 2:  # At least 2 knowledge types
+                    vol_ctx = get_volunteer_knowledge_context(vol)
+                    if vol_ctx:
+                        volunteer_knowledge_context += vol_ctx + "\n"
+                        logger.info(f"ExtractedKnowledge-first: found rich profile for {vol.name}, reducing interaction limit")
+
+            if volunteer_knowledge_context:
+                # Rich knowledge available — reduce interaction retrieval
+                interaction_limit = min(interaction_limit, 5)
+        except Exception as e:
+            logger.error(f"Error in ExtractedKnowledge-first lookup: {e}")
+
     # Step 1: Get relevant interactions
     relevant_interactions = []
     question_embedding = None
@@ -4612,19 +4755,21 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         else:
             # General aggregate - get all (up to 150 to prevent token overflow)
             relevant_interactions = list(all_interactions[:150])
-    else:
+    elif interaction_limit > 0:
         # Standard semantic search for non-aggregate questions
-        question_embedding = get_embedding(question)
+        if not skip_embedding:
+            question_embedding = get_embedding(question)
 
         if question_embedding:
             # Get more interactions than needed, then filter by context
-            raw_interactions = search_similar(question_embedding, limit=30, organization=organization)
+            fetch_limit = max(interaction_limit + 10, 30)  # Fetch extra for filtering
+            raw_interactions = search_similar(question_embedding, limit=fetch_limit, organization=organization)
             # Filter and prioritize based on conversation context
             relevant_interactions = filter_interactions_by_context(
                 raw_interactions,
                 conversation_context,
                 prioritize_discussed=True
-            )[:20]  # Limit to top 20 after filtering
+            )[:interaction_limit]
         else:
             # Fallback: get recent interactions if embeddings unavailable
             qs = Interaction.objects.all()
@@ -4635,17 +4780,26 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
                 raw_interactions,
                 conversation_context,
                 prioritize_discussed=True
-            )[:20]
+            )[:interaction_limit]
+    else:
+        logger.info("Conditional retrieval: skipping interaction retrieval")
 
     # Track which interactions we're showing (for context deduplication)
     shown_interaction_ids = [i.id for i in relevant_interactions]
 
-    # Step 2: Build context from relevant interactions
+    # Step 2: Build context from relevant interactions using tiered formatting
+    # Tier 1 (top 5): Full content, summary, and extracted data
+    # Tier 2 (next 10): Volunteer names, date, and summary only
+    # Tier 3 (remaining): Just volunteer names and dates (one line each)
+    # Aggregate queries always use full content (they need comprehensive data)
+    TIER1_LIMIT = 5
+    TIER2_LIMIT = 15  # tier 2 ends here (indices 5-14)
+
     context_parts = []
     new_interaction_ids = []  # Track new interactions being shown for the first time
     already_shown_ids = set(conversation_context.shown_interaction_ids or [])
 
-    for interaction in relevant_interactions:
+    for idx, interaction in enumerate(relevant_interactions):
         volunteers = ", ".join([v.name for v in interaction.volunteers.all()])
         date_str = interaction.created_at.strftime('%Y-%m-%d') if interaction.created_at else 'Unknown'
 
@@ -4656,13 +4810,27 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         if not previously_shown:
             new_interaction_ids.append(interaction.id)
 
-        context_parts.append(f"""
+        if aggregate or idx < TIER1_LIMIT:
+            # Tier 1 (or aggregate): Full detail
+            context_parts.append(f"""
 --- Interaction from {date_str}{marker} ---
 Volunteers: {volunteers or 'Not specified'}
 Notes: {interaction.content}
 Summary: {interaction.ai_summary or 'No summary'}
 Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_extracted_data else 'None'}
 """)
+        elif idx < TIER2_LIMIT:
+            # Tier 2: Summary only (saves ~60% tokens per interaction)
+            context_parts.append(f"""
+--- Interaction from {date_str}{marker} ---
+Volunteers: {volunteers or 'Not specified'}
+Summary: {interaction.ai_summary or 'No summary'}
+""")
+        else:
+            # Tier 3: Minimal reference (saves ~80% tokens per interaction)
+            context_parts.append(
+                f"- {date_str}: {volunteers or 'Unknown'}{marker}"
+            )
 
     if context_parts:
         context = "\n".join(context_parts)
@@ -4673,9 +4841,10 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
 
     # Add learned knowledge about discussed volunteers
     # This gives Aria accumulated knowledge about volunteers from past interactions
+    # volunteer_knowledge_context may already contain knowledge from ExtractedKnowledge-first lookup
     try:
         from .models import ExtractedKnowledge
-        discussed_vols = conversation_context.discussed_volunteer_ids or []
+        discussed_vols = list(conversation_context.discussed_volunteer_ids or [])
         # Also extract volunteer names from the current question
         for interaction in relevant_interactions:
             for vol in interaction.volunteers.all():
@@ -4683,10 +4852,16 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
                     discussed_vols.append(vol.id)
 
         # Get knowledge context for discussed volunteers (limit to 5 to avoid token overflow)
+        # Skip volunteers already covered by ExtractedKnowledge-first lookup
         knowledge_context_parts = []
+        if volunteer_knowledge_context:
+            knowledge_context_parts.append(volunteer_knowledge_context)
         for vol_id in discussed_vols[:5]:
             try:
                 vol = Volunteer.objects.get(id=vol_id)
+                # Skip if already in early knowledge context
+                if volunteer_knowledge_context and vol.name.upper() in volunteer_knowledge_context:
+                    continue
                 vol_knowledge = get_volunteer_knowledge_context(vol)
                 if vol_knowledge:
                     knowledge_context_parts.append(vol_knowledge)
@@ -4737,11 +4912,15 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
         context = blockout_data_context + "\n" + context
 
     # Add Knowledge Base document context if available
-    if organization and question_embedding:
+    # For how-to queries, generate embedding if we skipped it earlier (needed for doc search)
+    if organization and doc_limit > 0 and not question_embedding:
+        question_embedding = get_embedding(question)
+
+    if organization and question_embedding and doc_limit > 0:
         try:
             from .embeddings import search_similar_documents
             doc_results = search_similar_documents(
-                question_embedding, organization, limit=5, threshold=0.3
+                question_embedding, organization, limit=doc_limit, threshold=0.3
             )
             if doc_results:
                 doc_context_parts = []
@@ -4762,18 +4941,22 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
                     )
                     context = doc_context + "\n\n" + context
                     logger.info(f"Added {len(doc_context_parts)} document chunks to context")
+        except Exception as e:
+            logger.error(f"Error searching documents: {e}")
 
+    if organization and question_embedding and image_limit > 0:
+        try:
             # Search Knowledge Base images
             from .embeddings import search_similar_images
             image_results = search_similar_images(
-                question_embedding, organization, limit=3, threshold=0.3
+                question_embedding, organization, limit=image_limit, threshold=0.3
             )
             if image_results:
                 image_context = _build_image_context(image_results)
                 context = image_context + "\n\n" + context
                 logger.info(f"Added {len(image_results)} document images to context")
         except Exception as e:
-            logger.error(f"Error searching documents: {e}")
+            logger.error(f"Error searching images: {e}")
 
     # Step 3: Get chat history for this session
     all_history = ChatMessage.objects.filter(
@@ -4873,6 +5056,14 @@ Extracted Data: {json.dumps(interaction.ai_extracted_data) if interaction.ai_ext
 
     # Save the updated context
     conversation_context.save()
+
+    # Cache the response for non-aggregate, non-conversational queries
+    if organization and not aggregate and interaction_limit > 0:
+        try:
+            from .models import AIResponseCache
+            AIResponseCache.store(organization, query_hash, question, 'chat_query', answer)
+        except Exception as e:
+            logger.error(f"Error caching response: {e}")
 
     return answer
 

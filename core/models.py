@@ -3818,6 +3818,93 @@ class MessageReaction(models.Model):
         return dict(self.EMOJI_CHOICES).get(self.emoji, self.emoji)
 
 
+class AIResponseCache(models.Model):
+    """
+    Caches Claude API responses for repeated queries to reduce API costs.
+
+    Only caches stateless, deterministic queries (PCO lookups, song info, etc.).
+    Not used for: multi-turn conversations, aggregate queries, disambiguation flows.
+    """
+    CACHEABLE_QUERY_TYPES = [
+        ('roster', 'Team Roster'),
+        ('compound_contact', 'Compound Contact'),
+        ('chat_query', 'Chat Query'),
+    ]
+
+    # TTL defaults by context (in seconds)
+    TTL_DEFAULTS = {
+        'roster': 3600,          # 1 hour — team schedules change
+        'compound_contact': 3600, # 1 hour
+        'chat_query': 86400,     # 24 hours — general knowledge queries
+    }
+
+    organization = models.ForeignKey(
+        'Organization', on_delete=models.CASCADE,
+        related_name='ai_response_caches'
+    )
+    query_hash = models.CharField(max_length=64, db_index=True)
+    query_text = models.TextField()
+    query_type = models.CharField(max_length=30, default='chat_query')
+    response_text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    hit_count = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['organization', 'query_hash']),
+        ]
+        unique_together = [('organization', 'query_hash')]
+
+    def __str__(self):
+        return f"Cache[{self.query_type}]: {self.query_text[:50]}... (hits: {self.hit_count})"
+
+    @property
+    def is_expired(self):
+        from django.utils import timezone
+        return timezone.now() >= self.expires_at
+
+    @classmethod
+    def get_cached(cls, organization, query_hash):
+        """Look up a cached response. Returns response_text or None."""
+        from django.utils import timezone
+        try:
+            entry = cls.objects.get(
+                organization=organization,
+                query_hash=query_hash,
+                expires_at__gt=timezone.now(),
+            )
+            entry.hit_count += 1
+            entry.save(update_fields=['hit_count'])
+            return entry.response_text
+        except cls.DoesNotExist:
+            return None
+
+    @classmethod
+    def store(cls, organization, query_hash, query_text, query_type, response_text):
+        """Store a response in the cache with appropriate TTL."""
+        from django.utils import timezone
+        from datetime import timedelta
+        ttl_seconds = cls.TTL_DEFAULTS.get(query_type, 86400)
+        cls.objects.update_or_create(
+            organization=organization,
+            query_hash=query_hash,
+            defaults={
+                'query_text': query_text,
+                'query_type': query_type,
+                'response_text': response_text,
+                'expires_at': timezone.now() + timedelta(seconds=ttl_seconds),
+                'hit_count': 0,
+            }
+        )
+
+    @classmethod
+    def invalidate_for_org(cls, organization):
+        """Invalidate all cached responses for an organization (e.g., after new data)."""
+        cls.objects.filter(organization=organization).delete()
+
+
 class AIUsageLog(models.Model):
     """Tracks token usage for every Claude API call for cost visibility and optimization."""
     QUERY_TYPE_CHOICES = [
