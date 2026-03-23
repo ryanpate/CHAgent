@@ -47,18 +47,34 @@
 
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-1">Due Date</label>
-                <input type="date" name="due_date"
-                       value="{% if task.due_date %}{{ task.due_date|date:'Y-m-d' }}{% endif %}"
-                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 text-white"
-                       style="-webkit-appearance: none; color-scheme: dark;">
+                <div class="flex gap-2">
+                    <input type="date" name="due_date" id="id_due_date"
+                           value="{% if task.due_date %}{{ task.due_date|date:'Y-m-d' }}{% endif %}"
+                           class="flex-1 bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 text-white"
+                           style="-webkit-appearance: none; color-scheme: dark;">
+                    {% if task.due_date %}
+                    <button type="button" onclick="document.getElementById('id_due_date').value=''; this.style.display='none';"
+                            class="px-3 py-2 text-gray-400 hover:text-red-400 border border-gray-700 rounded-lg hover:border-red-400/50 transition text-sm">
+                        Clear
+                    </button>
+                    {% endif %}
+                </div>
             </div>
 
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-1">Due Time</label>
-                <input type="time" name="due_time"
-                       value="{% if task.due_time %}{{ task.due_time|time:'H:i' }}{% endif %}"
-                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 text-white"
-                       style="-webkit-appearance: none; color-scheme: dark;">
+                <div class="flex gap-2">
+                    <input type="time" name="due_time" id="id_due_time"
+                           value="{% if task.due_time %}{{ task.due_time|time:'H:i' }}{% endif %}"
+                           class="flex-1 bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 text-white"
+                           style="-webkit-appearance: none; color-scheme: dark;">
+                    {% if task.due_time %}
+                    <button type="button" onclick="document.getElementById('id_due_time').value=''; this.style.display='none';"
+                            class="px-3 py-2 text-gray-400 hover:text-red-400 border border-gray-700 rounded-lg hover:border-red-400/50 transition text-sm">
+                        Clear
+                    </button>
+                    {% endif %}
+                </div>
             </div>
         </div>
 
