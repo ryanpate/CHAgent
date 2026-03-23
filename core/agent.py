@@ -3074,7 +3074,7 @@ Provide a concise 2-4 sentence summary that captures the essential context."""
             client,
             organization=organization,
             query_type='summarization',
-            model="claude-sonnet-4-20250514",
+            model="claude-haiku-4-5-20251001",  # Haiku is 10x cheaper, adequate for summarization
             max_tokens=300,
             messages=[{"role": "user", "content": summary_prompt}]
         )
@@ -4973,13 +4973,13 @@ Summary: {interaction.ai_summary or 'No summary'}
         summary_context = f"\n[CONVERSATION SUMMARY: {conversation_context.conversation_summary}]\n"
         context = summary_context + context
 
-        # Only include recent messages (last 10) plus the summary
-        recent_history = list(all_history[max(0, history_count - 10):])
+        # With summary available, only include last 6 recent messages (down from 10)
+        recent_history = list(all_history[max(0, history_count - 6):])
         messages = [{"role": msg.role, "content": msg.content} for msg in recent_history]
         logger.info(f"Using conversation summary with {len(recent_history)} recent messages")
     else:
-        # Normal case: include up to 20 recent messages
-        history = list(all_history[:20])
+        # Normal case: include up to 12 recent messages (down from 20)
+        history = list(all_history[:12])
         messages = [{"role": msg.role, "content": msg.content} for msg in history]
 
     messages.append({"role": "user", "content": question})
@@ -5042,17 +5042,24 @@ Summary: {interaction.ai_summary or 'No summary'}
     # Increment message count (user + assistant = 2 messages)
     conversation_context.increment_message_count(2)
 
-    # Generate summary if conversation is getting long and we don't have one yet
-    if conversation_context.should_summarize() and not conversation_context.conversation_summary:
+    # Generate or refresh summary for long conversations
+    # Re-summarize every 10 messages to keep the summary current
+    msg_count = conversation_context.message_count
+    should_resummarize = (
+        conversation_context.should_summarize() and
+        (not conversation_context.conversation_summary or msg_count % 10 == 0)
+    )
+    if should_resummarize:
         all_messages = [{"role": msg.role, "content": msg.content}
                         for msg in all_history]
         all_messages.append({"role": "user", "content": question})
         all_messages.append({"role": "assistant", "content": answer})
 
-        new_summary = summarize_conversation(client, all_messages, "", organization=organization)
+        current = conversation_context.conversation_summary or ""
+        new_summary = summarize_conversation(client, all_messages, current, organization=organization)
         if new_summary:
             conversation_context.conversation_summary = new_summary
-            logger.info(f"Generated conversation summary: {new_summary[:100]}...")
+            logger.info(f"{'Refreshed' if current else 'Generated'} conversation summary: {new_summary[:100]}...")
 
     # Save the updated context
     conversation_context.save()
