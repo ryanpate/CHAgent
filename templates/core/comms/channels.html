@@ -5,9 +5,16 @@
 {% block content %}
 <div class="max-w-4xl mx-auto">
     <div class="flex items-center justify-between mb-6">
-        <div>
-            <h2 class="text-2xl font-bold text-ch-gold">Channels</h2>
-            <p class="text-gray-400 text-sm mt-1">Group conversations for teams and topics</p>
+        <div class="flex items-center gap-3">
+            <a href="{% url 'comms_hub' %}" class="text-gray-400 hover:text-white">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </a>
+            <div>
+                <h2 class="text-2xl font-bold text-ch-gold">Channels</h2>
+                <p class="text-gray-400 text-sm mt-1">Group conversations for teams and topics</p>
+            </div>
         </div>
         <a href="{% url 'channel_create' %}" class="px-4 py-2 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition">
             New Channel
