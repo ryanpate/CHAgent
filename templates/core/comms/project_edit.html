@@ -55,6 +55,10 @@
                 <input type="date" name="due_date"
                        value="{% if project.due_date %}{{ project.due_date|date:'Y-m-d' }}{% endif %}"
                        class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2">
+                {% if project.is_recurring %}
+                <p class="text-xs text-gray-500 mt-1">This project is recurring. Due date is typically not needed for recurring projects.</p>
+                {% endif %}
+                <p class="text-xs text-gray-500 mt-1">Leave blank to remove the due date.</p>
             </div>
         </div>
 

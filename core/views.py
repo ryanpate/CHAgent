@@ -2397,6 +2397,11 @@ def project_set_recurrence(request, pk):
         }
     )
 
+    # Clear due date — not relevant for recurring projects
+    if project.due_date:
+        project.due_date = None
+        project.save(update_fields=['due_date'])
+
     if request.headers.get('HX-Request'):
         return HttpResponse('<span class="text-xs text-ch-gold">Recurring: ' + rule.get_frequency_display() + '</span>')
     return redirect(request.META.get('HTTP_REFERER', '/'))
