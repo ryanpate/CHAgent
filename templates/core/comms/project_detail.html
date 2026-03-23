@@ -43,6 +43,12 @@
                 </button>
                 <div x-show="open" @click.away="open = false"
                      class="absolute right-0 mt-2 w-48 bg-ch-dark border border-gray-700 rounded-lg shadow-xl z-10">
+                    <div class="p-2">
+                        <a href="{% url 'project_edit' project.pk %}"
+                           class="block px-2 py-1 text-sm text-gray-300 hover:bg-ch-gray hover:text-white rounded">
+                            Edit Project
+                        </a>
+                    </div>
                     <form hx-post="{% url 'project_update_status' project.pk %}"
                           hx-target="#project-status"
                           class="p-2">
@@ -150,6 +156,56 @@
         </div>
     </div>
 
+    <!-- Milestones -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold flex items-center gap-2">
+                <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path>
+                </svg>
+                Milestones
+                <span class="text-sm text-gray-500">({{ milestones.count }})</span>
+            </h2>
+            <button onclick="document.getElementById('add-milestone-form').classList.toggle('hidden')"
+                    class="px-3 py-1.5 bg-ch-gray hover:bg-ch-gold hover:text-black rounded-lg transition text-sm">
+                Add Milestone
+            </button>
+        </div>
+        <div class="space-y-2" id="milestone-list">
+            {% for milestone in milestones %}
+            {% include 'core/partials/milestone_item.html' %}
+            {% endfor %}
+        </div>
+        <!-- Inline add form -->
+        <div id="add-milestone-form" class="hidden mt-3">
+            <form hx-post="{% url 'milestone_add' project.pk %}"
+                  hx-target="#milestone-list"
+                  hx-swap="beforeend"
+                  hx-on::after-request="this.reset();"
+                  class="bg-ch-dark rounded-lg p-4">
+                {% csrf_token %}
+                <div class="flex flex-wrap gap-3">
+                    <div class="flex-1 min-w-[200px]">
+                        <input type="text" name="title" placeholder="Milestone title" required
+                               class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                    </div>
+                    <div>
+                        <input type="date" name="due_date" required
+                               class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                        <input type="text" name="description" placeholder="Description (optional)"
+                               class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+                    </div>
+                    <button type="submit"
+                            class="px-4 py-2 bg-ch-gold text-black rounded-lg text-sm font-medium hover:bg-yellow-500 transition">
+                        Add
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Task Board -->
     <div class="mb-6">
         <div class="flex items-center justify-between mb-4">
@@ -216,6 +272,49 @@
                     {% endfor %}
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Activity Feed -->
+    <div class="mb-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Activity
+        </h2>
+        <!-- Post Update Form -->
+        <div class="bg-ch-dark rounded-lg p-4 mb-4">
+            <form hx-post="{% url 'project_post_update' project.pk %}"
+                  hx-target="#activity-feed"
+                  hx-swap="afterbegin"
+                  hx-on::after-request="this.reset();">
+                {% csrf_token %}
+                <div class="flex gap-3">
+                    <div class="w-8 h-8 bg-ch-gold/20 rounded-full flex items-center justify-center text-sm font-medium text-ch-gold flex-shrink-0">
+                        {{ request.user.display_name|default:request.user.username|slice:":1"|upper }}
+                    </div>
+                    <div class="flex-1">
+                        <textarea name="content" rows="2" placeholder="Post an update to the team..."
+                                  class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ch-gold resize-none"></textarea>
+                        <div class="flex justify-end mt-2">
+                            <button type="submit"
+                                    class="px-4 py-1.5 bg-ch-gold text-black rounded-lg text-sm font-medium hover:bg-yellow-500 transition">
+                                Post Update
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <!-- Activity List -->
+        <div class="bg-ch-dark rounded-lg px-4 divide-y divide-gray-800" id="activity-feed">
+            {% for activity in activities %}
+            {% include 'core/partials/activity_item.html' %}
+            {% endfor %}
+            {% if not activities %}
+            <p class="text-gray-500 text-sm py-4 text-center">No activity yet. Post an update or create tasks to see activity here.</p>
+            {% endif %}
         </div>
     </div>
 </div>

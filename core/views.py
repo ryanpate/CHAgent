@@ -2678,10 +2678,19 @@ def project_list(request):
     return render(request, 'core/comms/project_list.html', context)
 
 
+def log_project_activity(project, activity_type, user, content='', metadata=None, task=None):
+    """Log an activity entry for a project's activity feed."""
+    from .models import ProjectActivity
+    ProjectActivity.objects.create(
+        project=project, activity_type=activity_type,
+        user=user, content=content, metadata=metadata or {}, task=task
+    )
+
+
 @login_required
 def project_detail(request, pk):
     """View a project and its tasks."""
-    from .models import Project, Task
+    from .models import Project, Task, ProjectMilestone, MessageReaction
     from accounts.models import User
 
     org = get_org(request)
@@ -2709,12 +2718,19 @@ def project_detail(request, pk):
     # Get available users for assignment (members of org if applicable)
     available_users = User.objects.filter(is_active=True).order_by('display_name', 'username')
 
+    # Get milestones and activities for this project
+    milestones = project.milestones.all()
+    activities = project.activities.select_related('user', 'task')[:20]
+
     context = {
         'project': project,
         'tasks': tasks,
         'tasks_by_status': tasks_by_status,
         'available_users': available_users,
         'priority_choices': Task.PRIORITY_CHOICES,
+        'milestones': milestones,
+        'activities': activities,
+        'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
     }
     return render(request, 'core/comms/project_detail.html', context)
 
@@ -2831,12 +2847,15 @@ def project_add_member(request, pk):
     user_id = request.POST.get('user_id')
     if user_id:
         try:
-            user = User.objects.get(pk=int(user_id))
-            project.add_member(user, notify=True)
+            user_to_add = User.objects.get(pk=int(user_id))
+            project.add_member(user_to_add, notify=True)
 
             # Also add to project channel if exists
             if project.channel:
-                project.channel.members.add(user)
+                project.channel.members.add(user_to_add)
+
+            log_project_activity(project, 'member_added', request.user,
+                                 metadata={'member_name': user_to_add.display_name or user_to_add.username})
         except (ValueError, User.DoesNotExist):
             pass
 
@@ -2865,15 +2884,226 @@ def project_update_status(request, pk):
 
     status = request.POST.get('status')
     if status in dict(Project.STATUS_CHOICES):
+        old_status = project.get_status_display()
         project.status = status
         if status == 'completed':
             project.completed_at = timezone.now()
         project.save()
+        new_status = project.get_status_display()
+        log_project_activity(project, 'status_change', request.user,
+                             metadata={'old_status': old_status, 'new_status': new_status})
 
     if request.headers.get('HX-Request'):
         return render(request, 'core/partials/project_status.html', {'project': project})
 
     return redirect('project_detail', pk=pk)
+
+
+@login_required
+@require_organization
+def milestone_add(request, project_pk):
+    """Add a milestone to a project."""
+    from .models import Project, ProjectMilestone
+    project = get_object_or_404(Project, pk=project_pk, organization=request.organization)
+    if request.method == 'POST':
+        title = request.POST.get('title', '').strip()
+        due_date_str = request.POST.get('due_date', '')
+        description = request.POST.get('description', '').strip()
+        if title and due_date_str:
+            from datetime import datetime
+            try:
+                due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return HttpResponse("Invalid date", status=400)
+            milestone = ProjectMilestone.objects.create(
+                project=project, title=title, due_date=due_date, description=description
+            )
+            return render(request, 'core/partials/milestone_item.html', {'milestone': milestone, 'project': project})
+    return HttpResponse(status=400)
+
+
+@login_required
+@require_organization
+def milestone_toggle(request, pk):
+    """Toggle a milestone between completed and upcoming."""
+    from .models import ProjectMilestone
+    milestone = get_object_or_404(ProjectMilestone, pk=pk, project__organization=request.organization)
+    if request.method == 'POST':
+        if milestone.status == 'completed':
+            milestone.status = 'upcoming'
+            milestone.completed_at = None
+            milestone.completed_by = None
+        else:
+            milestone.status = 'completed'
+            milestone.completed_at = timezone.now()
+            milestone.completed_by = request.user
+            log_project_activity(milestone.project, 'milestone_completed', request.user,
+                                 content=milestone.title)
+        milestone.save()
+        return render(request, 'core/partials/milestone_item.html', {'milestone': milestone, 'project': milestone.project})
+    return HttpResponse(status=400)
+
+
+@login_required
+@require_organization
+def milestone_delete(request, pk):
+    """Delete a milestone."""
+    from .models import ProjectMilestone
+    milestone = get_object_or_404(ProjectMilestone, pk=pk, project__organization=request.organization)
+    if request.method == 'POST':
+        milestone.delete()
+        return HttpResponse('')
+    return HttpResponse(status=400)
+
+
+@login_required
+@require_organization
+def project_post_update(request, pk):
+    """Post an update/comment to the project activity feed."""
+    from .models import Project, ProjectActivity
+    project = get_object_or_404(Project, pk=pk, organization=request.organization)
+    if request.method == 'POST':
+        content = request.POST.get('content', '').strip()
+        if content:
+            activity = ProjectActivity.objects.create(
+                project=project, activity_type='comment',
+                user=request.user, content=content
+            )
+            # Parse @mentions
+            mention_tokens = re.findall(r'@(\w+)', content)
+            if mention_tokens:
+                from accounts.models import User
+                for username in mention_tokens:
+                    try:
+                        mentioned = User.objects.get(username=username)
+                        activity.mentioned_users.add(mentioned)
+                    except User.DoesNotExist:
+                        pass
+            return render(request, 'core/partials/activity_item.html', {'activity': activity})
+    return HttpResponse(status=400)
+
+
+@login_required
+@require_organization
+def project_edit(request, pk):
+    """Edit project details. Owner or admin only."""
+    from .models import Project
+
+    org = get_org(request)
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    project = get_object_or_404(queryset, pk=pk)
+
+    # Permission check: owner or admin
+    is_owner = project.owner == request.user
+    is_admin = getattr(request, 'membership', None) and request.membership.role in ('admin', 'owner')
+
+    if not is_owner and not is_admin:
+        return HttpResponse('Only the project owner or admin can edit this project.', status=403)
+
+    if request.method == 'POST':
+        project.name = request.POST.get('name', project.name).strip()
+        project.description = request.POST.get('description', '').strip()
+        project.priority = request.POST.get('priority', project.priority)
+        due_date = request.POST.get('due_date', '')
+        start_date = request.POST.get('start_date', '')
+
+        if due_date:
+            try:
+                from datetime import datetime
+                project.due_date = datetime.strptime(due_date, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        else:
+            project.due_date = None
+
+        if start_date:
+            try:
+                from datetime import datetime
+                project.start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        else:
+            project.start_date = None
+
+        project.save()
+        return redirect('project_detail', pk=project.pk)
+
+    context = {
+        'project': project,
+        'priority_choices': Project.PRIORITY_CHOICES,
+    }
+    return render(request, 'core/comms/project_edit.html', context)
+
+
+@login_required
+@require_organization
+def task_edit(request, pk):
+    """Edit task details. Creator, assignee, or project owner."""
+    from .models import Task
+
+    org = get_org(request)
+    queryset = Task.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    task = get_object_or_404(queryset, pk=pk)
+
+    # Permission check
+    is_assignee = request.user in task.assignees.all()
+    is_creator = task.created_by == request.user
+    is_project_owner = task.project and task.project.owner == request.user
+    is_admin = getattr(request, 'membership', None) and request.membership.role in ('admin', 'owner')
+
+    if not (is_assignee or is_creator or is_project_owner or is_admin):
+        return HttpResponse("You don't have permission to edit this task.", status=403)
+
+    if request.method == 'POST':
+        task.title = request.POST.get('title', task.title).strip()
+        task.description = request.POST.get('description', '').strip()
+        task.priority = request.POST.get('priority', task.priority)
+
+        new_due_date = request.POST.get('due_date', '')
+        old_due_date = task.due_date
+        if new_due_date:
+            try:
+                from datetime import datetime
+                task.due_date = datetime.strptime(new_due_date, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        else:
+            task.due_date = None
+
+        due_time = request.POST.get('due_time', '')
+        if due_time:
+            try:
+                from datetime import time as dt_time
+                parts = due_time.split(':')
+                task.due_time = dt_time(int(parts[0]), int(parts[1]))
+            except (ValueError, IndexError):
+                pass
+        else:
+            task.due_time = None
+
+        # Reset reminder if due date changed
+        if task.due_date != old_due_date:
+            task.reminder_sent = False
+
+        task.save()
+
+        # Redirect based on whether it's a project task or standalone
+        if task.project:
+            return redirect('task_detail', project_pk=task.project.pk, pk=task.pk)
+        else:
+            return redirect('standalone_task_detail', pk=task.pk)
+
+    context = {
+        'task': task,
+        'priority_choices': Task.PRIORITY_CHOICES,
+    }
+    return render(request, 'core/comms/task_edit.html', context)
 
 
 @login_required
@@ -2922,6 +3152,8 @@ def task_create(request, project_pk):
                     task.assign_to(user, notify=True)
                 except (ValueError, User.DoesNotExist):
                     pass
+
+        log_project_activity(project, 'task_created', request.user, content=task.title, task=task)
 
         if request.headers.get('HX-Request'):
             return render(request, 'core/partials/task_card.html', {'task': task})
@@ -3003,10 +3235,28 @@ def task_update_status(request, pk):
 
     status = request.POST.get('status')
     if status in dict(Task.STATUS_CHOICES):
+        from .models import TaskComment
+        old_status = task.get_status_display()
+        old_status_key = task.status
         task.status = status
         if status == 'completed':
             task.completed_at = timezone.now()
         task.save()
+        new_status = task.get_status_display()
+
+        # Create system comment for status change
+        if old_status_key != status:
+            TaskComment.objects.create(
+                task=task, author=request.user,
+                content=f"changed status from {old_status} to {new_status}",
+                is_system=True
+            )
+
+        # Log activity on project
+        if task.project:
+            activity_type = 'task_completed' if status == 'completed' else 'status_change'
+            log_project_activity(task.project, activity_type, request.user,
+                                 content=task.title, task=task)
 
     if request.headers.get('HX-Request'):
         return render(request, 'core/partials/task_card.html', {'task': task})
@@ -3031,8 +3281,24 @@ def task_assign(request, pk):
     user_id = request.POST.get('user_id')
     if user_id:
         try:
-            user = User.objects.get(pk=int(user_id))
-            task.assign_to(user, notify=True)
+            from .models import TaskComment
+            assigned_user = User.objects.get(pk=int(user_id))
+            task.assign_to(assigned_user, notify=True)
+
+            # System comment
+            TaskComment.objects.create(
+                task=task, author=request.user,
+                content=f"assigned {assigned_user.display_name or assigned_user.username} to this task",
+                is_system=True
+            )
+
+            # Activity log
+            if task.project:
+                log_project_activity(
+                    task.project, 'assignment_change', request.user,
+                    content=f'assigned {assigned_user.display_name or assigned_user.username}',
+                    task=task
+                )
         except (ValueError, User.DoesNotExist):
             pass
 
@@ -3112,7 +3378,12 @@ def task_comment(request, pk):
             logging.getLogger(__name__).error(f"Failed to send task comment notification: {e}")
 
         if request.headers.get('HX-Request'):
-            return render(request, 'core/partials/task_comment.html', {'comment': comment})
+            from .models import MessageReaction
+            comment.reaction_list = []  # New comment, no reactions yet
+            return render(request, 'core/partials/task_comment.html', {
+                'comment': comment,
+                'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
+            })
 
     if project:
         return redirect('project_detail', pk=project.pk)
@@ -3128,6 +3399,7 @@ def toggle_reaction(request):
     emoji = request.POST.get('emoji')
     dm_id = request.POST.get('dm_id')
     cm_id = request.POST.get('cm_id')
+    tc_id = request.POST.get('tc_id')
 
     if not emoji:
         return HttpResponse('Missing emoji', status=400)
@@ -3142,6 +3414,8 @@ def toggle_reaction(request):
         filters['direct_message_id'] = dm_id
     elif cm_id:
         filters['channel_message_id'] = cm_id
+    elif tc_id:
+        filters['task_comment_id'] = tc_id
     else:
         return HttpResponse('Missing message ID', status=400)
 
@@ -3155,33 +3429,24 @@ def toggle_reaction(request):
     if dm_id:
         from .models import DirectMessage
         msg = DirectMessage.objects.get(pk=dm_id)
-        reactions = msg.reactions.values('emoji').annotate(
-            count=Count('id'),
-            user_reacted=Count('id', filter=Q(user=request.user))
-        ).order_by('emoji')
-    else:
+        reactions_qs = msg.reactions.all()
+    elif cm_id:
         from .models import ChannelMessage
         msg = ChannelMessage.objects.get(pk=cm_id)
-        reactions = msg.reactions.values('emoji').annotate(
-            count=Count('id'),
-            user_reacted=Count('id', filter=Q(user=request.user))
-        ).order_by('emoji')
+        reactions_qs = msg.reactions.all()
+    else:
+        from .models import TaskComment
+        msg = TaskComment.objects.get(pk=tc_id)
+        reactions_qs = msg.reactions.all()
 
     emoji_map = dict(MessageReaction.EMOJI_CHOICES)
-    reaction_data = [
-        {
-            'emoji': r['emoji'],
-            'char': emoji_map.get(r['emoji'], r['emoji']),
-            'count': r['count'],
-            'user_reacted': r['user_reacted'] > 0,
-        }
-        for r in reactions
-    ]
+    reaction_data = _build_reaction_list(reactions_qs, request.user, emoji_map)
 
     return render(request, 'core/partials/reaction_bar.html', {
         'reactions': reaction_data,
         'dm_id': dm_id,
         'cm_id': cm_id,
+        'tc_id': tc_id,
         'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
     })
 
@@ -3227,7 +3492,7 @@ def member_search(request):
 @login_required
 def task_detail(request, project_pk, pk):
     """View a task's details."""
-    from .models import Project, Task
+    from .models import Project, Task, MessageReaction
 
     project = get_object_or_404(Project, pk=project_pk)
     task = get_object_or_404(Task, pk=pk, project=project)
@@ -3236,9 +3501,14 @@ def task_detail(request, project_pk, pk):
     if project.owner != request.user and request.user not in project.members.all():
         return redirect('project_list')
 
-    comments = task.comments.select_related('author').prefetch_related('mentioned_users')
+    comments = task.comments.select_related('author').prefetch_related('mentioned_users', 'reactions')
     checklists = task.checklists.all()
     completed_count = checklists.filter(is_completed=True).count()
+
+    # Attach reaction data to each comment
+    emoji_map = dict(MessageReaction.EMOJI_CHOICES)
+    for comment in comments:
+        comment.reaction_list = _build_reaction_list(comment.reactions.all(), request.user, emoji_map)
 
     try:
         recurrence_rule = task.recurrence_rule
@@ -3252,6 +3522,7 @@ def task_detail(request, project_pk, pk):
         'checklists': checklists,
         'completed_count': completed_count,
         'recurrence_rule': recurrence_rule,
+        'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
     }
     return render(request, 'core/comms/task_detail.html', context)
 
@@ -3259,7 +3530,7 @@ def task_detail(request, project_pk, pk):
 @login_required
 def standalone_task_detail(request, pk):
     """View a standalone task's details (not attached to a project)."""
-    from .models import Task
+    from .models import Task, MessageReaction
 
     org = get_org(request)
     task = get_object_or_404(Task, pk=pk, project__isnull=True)
@@ -3270,9 +3541,14 @@ def standalone_task_detail(request, pk):
     if request.user not in task.assignees.all() and task.created_by != request.user:
         return redirect('my_tasks')
 
-    comments = task.comments.select_related('author').prefetch_related('mentioned_users')
+    comments = task.comments.select_related('author').prefetch_related('mentioned_users', 'reactions')
     checklists = task.checklists.all()
     completed_count = checklists.filter(is_completed=True).count()
+
+    # Attach reaction data to each comment
+    emoji_map = dict(MessageReaction.EMOJI_CHOICES)
+    for comment in comments:
+        comment.reaction_list = _build_reaction_list(comment.reactions.all(), request.user, emoji_map)
 
     try:
         recurrence_rule = task.recurrence_rule
@@ -3286,6 +3562,7 @@ def standalone_task_detail(request, pk):
         'checklists': checklists,
         'completed_count': completed_count,
         'recurrence_rule': recurrence_rule,
+        'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
     }
     return render(request, 'core/comms/task_detail.html', context)
 

@@ -8,6 +8,7 @@
         <input type="hidden" name="emoji" value="{{ r.emoji }}">
         {% if dm_id %}<input type="hidden" name="dm_id" value="{{ dm_id }}">{% endif %}
         {% if cm_id %}<input type="hidden" name="cm_id" value="{{ cm_id }}">{% endif %}
+        {% if tc_id %}<input type="hidden" name="tc_id" value="{{ tc_id }}">{% endif %}
         <button type="submit"
                 class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs transition
                        {% if r.user_reacted %}bg-ch-gold/20 border border-ch-gold/50{% else %}bg-gray-800 border border-gray-700 hover:border-gray-500{% endif %}">
@@ -28,6 +29,7 @@
         <input type="hidden" name="emoji" value="{{ key }}">
         {% if dm_id %}<input type="hidden" name="dm_id" value="{{ dm_id }}">{% endif %}
         {% if cm_id %}<input type="hidden" name="cm_id" value="{{ cm_id }}">{% endif %}
+        {% if tc_id %}<input type="hidden" name="tc_id" value="{{ tc_id }}">{% endif %}
         <button type="submit" class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-700 transition text-sm" title="{{ key }}">
             {{ char }}
         </button>

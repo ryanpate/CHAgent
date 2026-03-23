@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit {{ task.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="flex items-center gap-3 mb-6">
+        {% if task.project %}
+        <a href="{% url 'task_detail' task.project.pk task.pk %}" class="text-gray-400 hover:text-white">
+        {% else %}
+        <a href="{% url 'standalone_task_detail' task.pk %}" class="text-gray-400 hover:text-white">
+        {% endif %}
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+        </a>
+        <h1 class="text-2xl font-bold">Edit Task</h1>
+    </div>
+
+    <form method="POST" class="bg-ch-dark rounded-lg p-6">
+        {% csrf_token %}
+
+        <div class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Title</label>
+                <input type="text" name="title" required
+                       value="{{ task.title }}"
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Description</label>
+                <textarea name="description" rows="3"
+                          placeholder="What needs to be done?"
+                          class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">{{ task.description }}</textarea>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Priority</label>
+                    <select name="priority"
+                            class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2">
+                        {% for value, label in priority_choices %}
+                        <option value="{{ value }}" {% if value == task.priority %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Due Date</label>
+                    <input type="date" name="due_date"
+                           value="{% if task.due_date %}{{ task.due_date|date:'Y-m-d' }}{% endif %}"
+                           class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Due Time</label>
+                <input type="time" name="due_time"
+                       value="{% if task.due_time %}{{ task.due_time|time:'H:i' }}{% endif %}"
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2">
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-700">
+            {% if task.project %}
+            <a href="{% url 'task_detail' task.project.pk task.pk %}"
+               class="px-4 py-2 text-gray-400 hover:text-white transition">
+                Cancel
+            </a>
+            {% else %}
+            <a href="{% url 'standalone_task_detail' task.pk %}"
+               class="px-4 py-2 text-gray-400 hover:text-white transition">
+                Cancel
+            </a>
+            {% endif %}
+            <button type="submit"
+                    class="px-6 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                Save Changes
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

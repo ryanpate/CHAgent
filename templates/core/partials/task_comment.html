@@ -1,11 +1,28 @@
 <!-- Task Comment -->
-<div class="flex gap-3">
+{% if comment.is_system %}
+<!-- System comment (status change, assignment, etc.) -->
+<div class="flex items-center gap-2 py-2">
+    <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+    </svg>
+    <p class="text-xs text-gray-500">
+        <span class="text-gray-400">{{ comment.author.display_name|default:comment.author.username }}</span>
+        {{ comment.content }}
+        <span class="ml-1">{{ comment.created_at|timesince }} ago</span>
+    </p>
+</div>
+{% else %}
+<!-- User comment -->
+<div class="flex gap-3 group">
     <div class="flex-shrink-0">
         <div class="w-8 h-8 rounded-full bg-ch-gold text-black flex items-center justify-center text-sm font-medium">
             {{ comment.author.display_name|default:comment.author.username|slice:":1"|upper }}
         </div>
     </div>
-    <div class="flex-1">
+    <div class="flex-1 relative">
+        <div class="reactions-container absolute -top-3 right-0 z-10" id="reactions-tc-{{ comment.id }}">
+            {% include 'core/partials/reaction_bar.html' with reactions=comment.reaction_list tc_id=comment.id reaction_emoji_choices=reaction_emoji_choices %}
+        </div>
         <div class="flex items-center gap-2 mb-1">
             <span class="font-medium text-sm">{{ comment.author.display_name|default:comment.author.username }}</span>
             <span class="text-xs text-gray-500">{{ comment.created_at|timesince }} ago</span>
@@ -25,3 +42,4 @@
         {% endif %}
     </div>
 </div>
+{% endif %}

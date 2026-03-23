@@ -2538,6 +2538,9 @@ class Task(models.Model):
     # Ordering within project
     order = models.PositiveIntegerField(default=0)
 
+    # Notification tracking
+    reminder_sent = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2597,6 +2600,7 @@ class Task(models.Model):
 class TaskComment(models.Model):
     """
     Comments on tasks for discussion and updates.
+    System-generated comments (is_system=True) track status/priority/assignment changes.
     """
     task = models.ForeignKey(
         Task,
@@ -2611,6 +2615,7 @@ class TaskComment(models.Model):
     )
 
     content = models.TextField()
+    is_system = models.BooleanField(default=False)
 
     # @mentions in comments
     mentioned_users = models.ManyToManyField(
@@ -2679,6 +2684,102 @@ class TaskChecklist(models.Model):
         self.completed_by = None
         self.completed_at = None
         self.save(update_fields=['is_completed', 'completed_by', 'completed_at', 'updated_at'])
+
+
+class ProjectMilestone(models.Model):
+    """
+    Key dates/deliverables within a project.
+    E.g., "Rehearsal tracks due", "Tech rehearsal", "Service day".
+    """
+    STATUS_CHOICES = [
+        ('upcoming', 'Upcoming'),
+        ('completed', 'Completed'),
+        ('missed', 'Missed'),
+    ]
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='milestones'
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    due_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='upcoming')
+    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='completed_milestones'
+    )
+    order = models.PositiveIntegerField(default=0)
+    reminder_sent = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['due_date', 'order']
+
+    def __str__(self):
+        return f"{self.title} ({self.project.name}) - {self.due_date}"
+
+    @property
+    def is_overdue(self):
+        if self.due_date and self.status == 'upcoming':
+            return timezone.now().date() > self.due_date
+        return False
+
+
+class ProjectActivity(models.Model):
+    """
+    Unified activity feed for projects. Includes both user-posted updates
+    (comment type) and system-generated entries (status changes, task events, etc.).
+    """
+    ACTIVITY_TYPES = [
+        ('comment', 'Comment'),
+        ('status_change', 'Status Change'),
+        ('task_created', 'Task Created'),
+        ('task_completed', 'Task Completed'),
+        ('member_added', 'Member Added'),
+        ('member_removed', 'Member Removed'),
+        ('milestone_completed', 'Milestone Completed'),
+        ('assignment_change', 'Assignment Change'),
+    ]
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='activities'
+    )
+    activity_type = models.CharField(max_length=30, choices=ACTIVITY_TYPES)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True
+    )
+    content = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='project_activities'
+    )
+    mentioned_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='activity_mentions'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = 'Project activities'
+
+    def __str__(self):
+        return f"{self.get_activity_type_display()} by {self.user} on {self.project.name}"
 
 
 class TaskTemplate(models.Model):
@@ -3802,11 +3903,19 @@ class MessageReaction(models.Model):
         blank=True,
         related_name='reactions',
     )
+    task_comment = models.ForeignKey(
+        'TaskComment',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='reactions',
+    )
 
     class Meta:
         unique_together = [
             ('user', 'emoji', 'direct_message'),
             ('user', 'emoji', 'channel_message'),
+            ('user', 'emoji', 'task_comment'),
         ]
         ordering = ['created_at']
 

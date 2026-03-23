@@ -69,6 +69,12 @@
                     </div>
                 </div>
 
+                <!-- Edit Button -->
+                <a href="{% url 'task_edit' task.pk %}"
+                   class="px-3 py-1.5 bg-ch-gray hover:bg-ch-gold hover:text-black rounded text-sm transition">
+                    Edit
+                </a>
+
                 <!-- Delete Button -->
                 <form hx-post="{% url 'task_delete' task.pk %}"
                       hx-confirm="Delete this task? This cannot be undone."
