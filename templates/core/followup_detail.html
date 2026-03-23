@@ -154,7 +154,8 @@
                         <label class="text-sm text-gray-400 block mb-1">Follow-up Date</label>
                         <input type="date" name="follow_up_date"
                                value="{% if followup.follow_up_date %}{{ followup.follow_up_date|date:'Y-m-d' }}{% endif %}"
-                               class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2">
+                               class="w-full bg-ch-gray border border-gray-700 rounded px-3 py-2 text-white"
+                               style="color-scheme: dark;">
                     </div>
                     <div>
                         <label class="text-sm text-gray-400 block mb-1">Priority</label>

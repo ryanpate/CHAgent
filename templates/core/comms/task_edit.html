@@ -35,30 +35,30 @@
                           class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold">{{ task.description }}</textarea>
             </div>
 
-            <div class="grid md:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">Priority</label>
-                    <select name="priority"
-                            class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2">
-                        {% for value, label in priority_choices %}
-                        <option value="{{ value }}" {% if value == task.priority %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Priority</label>
+                <select name="priority"
+                        class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 appearance-none">
+                    {% for value, label in priority_choices %}
+                    <option value="{{ value }}" {% if value == task.priority %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">Due Date</label>
-                    <input type="date" name="due_date"
-                           value="{% if task.due_date %}{{ task.due_date|date:'Y-m-d' }}{% endif %}"
-                           class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2">
-                </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Due Date</label>
+                <input type="date" name="due_date"
+                       value="{% if task.due_date %}{{ task.due_date|date:'Y-m-d' }}{% endif %}"
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 text-white"
+                       style="-webkit-appearance: none; color-scheme: dark;">
             </div>
 
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-1">Due Time</label>
                 <input type="time" name="due_time"
                        value="{% if task.due_time %}{{ task.due_time|time:'H:i' }}{% endif %}"
-                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2">
+                       class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 text-white"
+                       style="-webkit-appearance: none; color-scheme: dark;">
             </div>
         </div>
 

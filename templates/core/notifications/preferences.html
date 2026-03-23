@@ -197,13 +197,15 @@
                         <label class="text-xs text-gray-400">From</label>
                         <input type="time" name="quiet_hours_start"
                                value="{{ prefs.quiet_hours_start|default:'22:00'|time:'H:i' }}"
-                               class="bg-ch-gray border border-gray-600 rounded px-3 py-1 text-sm">
+                               class="bg-ch-gray border border-gray-600 rounded px-3 py-1 text-sm text-white"
+                               style="color-scheme: dark;">
                     </div>
                     <div>
                         <label class="text-xs text-gray-400">To</label>
                         <input type="time" name="quiet_hours_end"
                                value="{{ prefs.quiet_hours_end|default:'07:00'|time:'H:i' }}"
-                               class="bg-ch-gray border border-gray-600 rounded px-3 py-1 text-sm">
+                               class="bg-ch-gray border border-gray-600 rounded px-3 py-1 text-sm text-white"
+                               style="color-scheme: dark;">
                     </div>
                 </div>
             </div>
