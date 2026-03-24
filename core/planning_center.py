@@ -2528,6 +2528,7 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             'per_page': 50
         })
         candidates = search_result.get('data', [])
+        logger.info(f"_find_services_person_by_name: first_name search for '{first_name}' returned {len(candidates)} candidates")
 
         # Also try last name search if first name didn't find enough
         if len(candidates) < 3 and last_name:
@@ -2536,9 +2537,15 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 'per_page': 50
             })
             seen_ids = {p.get('id') for p in candidates}
+            before_count = len(candidates)
             for p in last_search.get('data', []):
                 if p.get('id') not in seen_ids:
                     candidates.append(p)
+            logger.info(f"_find_services_person_by_name: last_name search for '{last_name}' added {len(candidates) - before_count} candidates")
+
+        # Log all candidate names for debugging
+        candidate_names = [f"{p.get('attributes', {}).get('first_name', '')} {p.get('attributes', {}).get('last_name', '')}".strip() for p in candidates[:10]]
+        logger.info(f"_find_services_person_by_name: candidates (first 10): {candidate_names}")
 
         # Check for exact match in candidates
         for person in candidates:
@@ -2549,10 +2556,14 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 logger.info(f"Found Services person by exact name match: {attrs.get('first_name')} {attrs.get('last_name')} (ID: {person.get('id')})")
                 return person
 
+        logger.info(f"_find_services_person_by_name: no exact match in {len(candidates)} candidates, trying People API")
+
         # Strategy 2: People API search (uses search_name which is more reliable)
         # Find person via People API, get their email, cross-reference to Services
         # Note: self inherits from PlanningCenterAPI, so search_people is available
         people_results = self.search_people(person_name)
+        people_names = [f"{p.get('attributes', {}).get('first_name', '')} {p.get('attributes', {}).get('last_name', '')}".strip() for p in (people_results or [])[:5]]
+        logger.info(f"_find_services_person_by_name: People API search for '{person_name}' returned {len(people_results or [])} results: {people_names}")
 
         if people_results:
             # Find exact match in People results
