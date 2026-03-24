@@ -2499,6 +2499,11 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         """
         Find a Services person record by name.
 
+        Uses a multi-strategy approach:
+        1. Services API first/last name search with exact matching
+        2. People API search_name (more reliable) → email cross-reference to Services
+        3. Fuzzy matching on Services candidates as last resort
+
         Args:
             person_name: Name to search for.
 
@@ -2514,8 +2519,10 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         name_parts = person_name.strip().split()
         first_name = name_parts[0] if name_parts else ''
         last_name = name_parts[-1] if len(name_parts) > 1 else ''
+        target_first = first_name.lower().strip()
+        target_last = last_name.lower().strip()
 
-        # Try searching by first name
+        # Strategy 1: Services API first/last name search
         search_result = self._get("/services/v2/people", params={
             'where[first_name]': first_name,
             'per_page': 50
@@ -2523,20 +2530,95 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         candidates = search_result.get('data', [])
 
         # Also try last name search if first name didn't find enough
-        if len(candidates) < 3:
+        if len(candidates) < 3 and last_name:
             last_search = self._get("/services/v2/people", params={
                 'where[last_name]': last_name,
                 'per_page': 50
             })
+            seen_ids = {p.get('id') for p in candidates}
             for p in last_search.get('data', []):
-                if p not in candidates:
+                if p.get('id') not in seen_ids:
                     candidates.append(p)
 
-        # If still no results, paginate through all
+        # Check for exact match in candidates
+        for person in candidates:
+            attrs = person.get('attributes', {})
+            p_first = (attrs.get('first_name') or '').lower().strip()
+            p_last = (attrs.get('last_name') or '').lower().strip()
+            if p_first == target_first and p_last == target_last:
+                logger.info(f"Found Services person by exact name match: {attrs.get('first_name')} {attrs.get('last_name')} (ID: {person.get('id')})")
+                return person
+
+        # Strategy 2: People API search (uses search_name which is more reliable)
+        # Find person via People API, get their email, cross-reference to Services
+        # Note: self inherits from PlanningCenterAPI, so search_people is available
+        people_results = self.search_people(person_name)
+
+        if people_results:
+            # Find exact match in People results
+            people_match = None
+            for person in people_results:
+                attrs = person.get('attributes', {})
+                p_first = (attrs.get('first_name') or '').lower().strip()
+                p_last = (attrs.get('last_name') or '').lower().strip()
+                if p_first == target_first and p_last == target_last:
+                    people_match = person
+                    break
+
+            if not people_match and people_results:
+                # Use best match from People API
+                people_match = people_results[0]
+
+            if people_match:
+                people_id = people_match.get('id')
+                # Get email from People API to cross-reference
+                person_emails = set()
+                try:
+                    emails_result = self._get(f"/people/v2/people/{people_id}/emails")
+                    for email in emails_result.get('data', []):
+                        addr = email.get('attributes', {}).get('address', '').lower().strip()
+                        if addr:
+                            person_emails.add(addr)
+                except Exception:
+                    pass
+
+                # Cross-reference: find Services person with matching email
+                if person_emails:
+                    # Search Services candidates we already have
+                    for person in candidates:
+                        sp_email = (person.get('attributes', {}).get('email') or '').lower().strip()
+                        if sp_email and sp_email in person_emails:
+                            logger.info(f"Found Services person by People API email cross-reference: {person.get('attributes', {}).get('first_name')} {person.get('attributes', {}).get('last_name')} (ID: {person.get('id')})")
+                            return person
+
+                    # Also search broader Services list
+                    all_services = self._get_all_services_people_list()
+                    for person in all_services:
+                        sp_email = (person.get('attributes', {}).get('email') or '').lower().strip()
+                        if sp_email and sp_email in person_emails:
+                            logger.info(f"Found Services person by People API email cross-reference (full scan): {person.get('attributes', {}).get('first_name')} {person.get('attributes', {}).get('last_name')} (ID: {person.get('id')})")
+                            return person
+
+                # Cross-reference: match by name from People API result
+                p_attrs = people_match.get('attributes', {})
+                match_first = (p_attrs.get('first_name') or '').lower().strip()
+                match_last = (p_attrs.get('last_name') or '').lower().strip()
+
+                if not candidates:
+                    candidates = self._get_all_services_people_list()
+
+                for person in candidates:
+                    attrs = person.get('attributes', {})
+                    p_first = (attrs.get('first_name') or '').lower().strip()
+                    p_last = (attrs.get('last_name') or '').lower().strip()
+                    if p_first == match_first and p_last == match_last:
+                        logger.info(f"Found Services person by People API name cross-reference: {attrs.get('first_name')} {attrs.get('last_name')} (ID: {person.get('id')})")
+                        return person
+
+        # Strategy 3: Fuzzy match on Services candidates as last resort
         if not candidates:
             candidates = self._get_all_services_people_list()
 
-        # Find best match
         search_full = person_name.lower().strip()
         best_match = None
         best_score = 0
@@ -2547,15 +2629,14 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             p_last = (attrs.get('last_name') or '').lower()
             p_full = f"{p_first} {p_last}".strip()
 
-            # Exact match
-            if p_first == first_name.lower() and p_last == last_name.lower():
-                return person
-
-            # Fuzzy match
             score = SequenceMatcher(None, search_full, p_full).ratio()
-            if score > best_score and score > 0.7:
+            if score > best_score and score > 0.8:
                 best_score = score
                 best_match = person
+
+        if best_match:
+            attrs = best_match.get('attributes', {})
+            logger.info(f"Found Services person by fuzzy match (score={best_score:.2f}): {attrs.get('first_name')} {attrs.get('last_name')} (ID: {best_match.get('id')})")
 
         return best_match
 
