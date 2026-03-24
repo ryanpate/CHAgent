@@ -4094,10 +4094,15 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
 
     # Response cache check (Agentic RAG: multi-level caching)
     # Only for fresh queries (past all pending state handlers) with an organization
+    # Skip cache for time-sensitive queries (blockouts, availability, schedules)
     import hashlib
     query_hash = hashlib.sha256(question.lower().strip().encode('utf-8')).hexdigest()
     cached_response = None
-    if organization:
+    is_time_sensitive = is_blockout_query(question)[0] or bool(re.search(
+        r'(?:who.s on|who is on|who.s serving|who is serving|schedule|team this|team next)',
+        question.lower()
+    ))
+    if organization and not is_time_sensitive:
         from .models import AIResponseCache
         cached_response = AIResponseCache.get_cached(organization, query_hash)
         if cached_response:
@@ -4114,6 +4119,16 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             conversation_context.increment_message_count(2)
             conversation_context.save()
             return cached_response
+    elif is_time_sensitive:
+        logger.info(f"Skipping response cache for time-sensitive query: {question[:50]}...")
+        # Invalidate any stale cached response for this query
+        if organization:
+            from .models import AIResponseCache
+            deleted, _ = AIResponseCache.objects.filter(
+                organization=organization, query_hash=query_hash
+            ).delete()
+            if deleted:
+                logger.info(f"Invalidated {deleted} stale cache entry for time-sensitive query")
 
     # Check if this query is ambiguous between song and person
     is_ambiguous, ambig_value, matches_song, matches_person = check_ambiguous_song_or_person(question)
@@ -5069,8 +5084,8 @@ Summary: {interaction.ai_summary or 'No summary'}
     # Save the updated context
     conversation_context.save()
 
-    # Cache the response for non-aggregate, non-conversational queries
-    if organization and not aggregate and interaction_limit > 0:
+    # Cache the response for non-aggregate, non-conversational, non-time-sensitive queries
+    if organization and not aggregate and interaction_limit > 0 and not is_time_sensitive:
         try:
             from .models import AIResponseCache
             AIResponseCache.store(organization, query_hash, question, 'chat_query', answer)
