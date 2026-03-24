@@ -2640,7 +2640,7 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
 
         return best_match
 
-    def _get_all_services_people_list(self, max_pages: int = 5) -> list:
+    def _get_all_services_people_list(self, max_pages: int = 10) -> list:
         """
         Fetch services people with pagination for name matching.
 
