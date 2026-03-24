@@ -2633,14 +2633,19 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         try:
             # Get recent and upcoming plans for main service type
             service_types = self.get_service_types()
+            st_names = [st.get('attributes', {}).get('name', '') for st in service_types]
+            logger.info(f"_find_services_person_by_name: service types: {st_names}")
+
             main_service_type_id = None
             for st in service_types:
                 st_name = st.get('attributes', {}).get('name', '')
                 if 'main' in st_name.lower() or 'morning' in st_name.lower() or 'sunday' in st_name.lower():
                     main_service_type_id = st.get('id')
+                    logger.info(f"_find_services_person_by_name: selected service type '{st_name}' (ID: {main_service_type_id})")
                     break
             if not main_service_type_id and service_types:
                 main_service_type_id = service_types[0].get('id')
+                logger.info(f"_find_services_person_by_name: using first service type (ID: {main_service_type_id})")
 
             if main_service_type_id:
                 # Get a few recent plans to search team members
@@ -2649,6 +2654,7 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                     params={'order': '-sort_date', 'per_page': 5, 'filter': 'future'}
                 )
                 plans = plans_result.get('data', [])
+                logger.info(f"_find_services_person_by_name: found {len(plans)} future plans")
                 if not plans:
                     # Try past plans if no future ones
                     plans_result = self._get(
@@ -2656,23 +2662,30 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                         params={'order': '-sort_date', 'per_page': 5, 'filter': 'past'}
                     )
                     plans = plans_result.get('data', [])
+                    logger.info(f"_find_services_person_by_name: found {len(plans)} past plans")
 
                 for plan in plans[:3]:  # Check up to 3 plans
                     plan_id = plan.get('id')
+                    plan_date = plan.get('attributes', {}).get('sort_date', 'unknown')
                     team_result = self._get(
                         f"/services/v2/service_types/{main_service_type_id}/plans/{plan_id}/team_members",
                         params={'include': 'person', 'per_page': 100}
                     )
-                    for member in team_result.get('data', []):
+                    members = team_result.get('data', [])
+                    member_names = [m.get('attributes', {}).get('name', '') for m in members]
+                    logger.info(f"_find_services_person_by_name: plan {plan_id} ({plan_date}) has {len(members)} members: {member_names[:15]}")
+
+                    for member in members:
                         attrs = member.get('attributes', {})
                         member_name = attrs.get('name', '')
                         name_parts_m = member_name.split()
                         m_first = name_parts_m[0].lower() if name_parts_m else ''
                         m_last = name_parts_m[-1].lower() if len(name_parts_m) > 1 else ''
                         if m_first == target_first and m_last == target_last:
-                            # Found! Get the Services person record
+                            # Found! Get the Services person record via relationship
                             relationships = member.get('relationships', {})
                             person_data = relationships.get('person', {}).get('data', {})
+                            logger.info(f"_find_services_person_by_name: matched team member '{member_name}', person relationship: {person_data}")
                             if person_data:
                                 person_id = person_data.get('id')
                                 # Fetch the full Services person record
@@ -2680,8 +2693,14 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                                 if person_record.get('data'):
                                     logger.info(f"Found Services person via plan team member search: {member_name} (ID: {person_id})")
                                     return person_record['data']
+                                else:
+                                    logger.warning(f"_find_services_person_by_name: could not fetch Services record for person_id={person_id}")
+                            else:
+                                logger.warning(f"_find_services_person_by_name: no person relationship data for team member '{member_name}'")
+            else:
+                logger.warning(f"_find_services_person_by_name: no service type found")
         except Exception as e:
-            logger.warning(f"_find_services_person_by_name: plan search failed: {e}")
+            logger.error(f"_find_services_person_by_name: plan search EXCEPTION: {e}", exc_info=True)
 
         # Strategy 4: Fuzzy match on Services candidates as last resort
         if not candidates:
