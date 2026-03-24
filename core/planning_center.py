@@ -2651,20 +2651,24 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 # Get a few recent plans to search team members
                 plans_result = self._get(
                     f"/services/v2/service_types/{main_service_type_id}/plans",
-                    params={'order': '-sort_date', 'per_page': 5, 'filter': 'future'}
+                    params={'order': 'sort_date', 'per_page': 10, 'filter': 'future'}
                 )
                 plans = plans_result.get('data', [])
                 logger.info(f"_find_services_person_by_name: found {len(plans)} future plans")
                 if not plans:
-                    # Try past plans if no future ones
+                    # Try past plans if no future ones (most recent first)
                     plans_result = self._get(
                         f"/services/v2/service_types/{main_service_type_id}/plans",
-                        params={'order': '-sort_date', 'per_page': 5, 'filter': 'past'}
+                        params={'order': '-sort_date', 'per_page': 10, 'filter': 'past'}
                     )
                     plans = plans_result.get('data', [])
                     logger.info(f"_find_services_person_by_name: found {len(plans)} past plans")
 
-                for plan in plans[:3]:  # Check up to 3 plans
+                # Skip plans with no team members, check up to 5 populated plans
+                plans_checked = 0
+                for plan in plans:
+                    if plans_checked >= 5:
+                        break
                     plan_id = plan.get('id')
                     plan_date = plan.get('attributes', {}).get('sort_date', 'unknown')
                     team_result = self._get(
@@ -2672,6 +2676,10 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                         params={'include': 'person', 'per_page': 100}
                     )
                     members = team_result.get('data', [])
+                    if not members:
+                        logger.info(f"_find_services_person_by_name: plan {plan_id} ({plan_date}) has 0 members, skipping")
+                        continue
+                    plans_checked += 1
                     member_names = [m.get('attributes', {}).get('name', '') for m in members]
                     logger.info(f"_find_services_person_by_name: plan {plan_id} ({plan_date}) has {len(members)} members: {member_names[:15]}")
 
