@@ -692,10 +692,10 @@ def is_blockout_query(message: str) -> Tuple[bool, str, Optional[str], Optional[
         # "Team availability for [date]" or "Who's available on [date]?" - check FIRST (before availability_check)
         'team_availability': r'team\s+availability|who\'?s?\s+(?:is\s+)?available\s+(?:on|for|this|next)|availability\s+(?:on|for)\s+(?:the\s+)?(?:team|this|next)',
         # "Who is blocked out on [date]?" or "Who has blockouts on [date]?" - check BEFORE person_blockouts
-        # Also matches "who is blocked out the first week" (no preposition)
-        'date_blockouts': r'who\s+(?:is|are|has|have)\s+blocked?\s*out(?:s)?\s+(?:on|for|in|the|this|next)|who\s+(?:has|have)\s+block\s*out(?:s)?\s+(?:on|for|in|the)|who\s+can\'?t\s+(?:make\s+it|serve|be\s+there)\s+(?:on|for|in|the|this|next)|blocked?\s*out\s+(?:on|in|the|this|next)',
-        # "Is [person] available on [date]?" or "Can [person] serve on [date]?"
-        'availability_check': r'(?:is|are)\s+.+\s+(?:available|free|able\s+to\s+serve)\s+(?:on|for|this|next)|can\s+.+\s+(?:serve|make\s+it|be\s+there)\s+(?:on|for|this|next)|.+\s+availability\s+(?:on|for)',
+        # Only matches "who"-prefixed questions (team-wide queries)
+        'date_blockouts': r'who\s+(?:is|are|has|have)\s+blocked?\s*out(?:s)?\s+(?:on|for|in|the|this|next)|who\'?s\s+blocked?\s*out\s+(?:on|for|in|the|this|next)|who\s+(?:has|have)\s+block\s*out(?:s)?\s+(?:on|for|in|the)|who\s+can\'?t\s+(?:make\s+it|serve|be\s+there)\s+(?:on|for|in|the|this|next)',
+        # "Is [person] available/blocked out on [date]?" or "Can [person] serve on [date]?"
+        'availability_check': r'(?:is|are)\s+.+\s+(?:available|free|able\s+to\s+serve|blocked?\s*out)\s+(?:on|for|this|next)|can\s+.+\s+(?:serve|make\s+it|be\s+there)\s+(?:on|for|this|next)|.+\s+availability\s+(?:on|for)',
         # "When is [person] blocked out?" or "What are [person]'s blockouts?" - check LAST
         'person_blockouts': r'when\s+(?:is|are)\s+.+\s+blocked?\s*out|block\s*out(?:s|ed)?\s+(?:for|of)\s+|what\s+(?:are|is)\s+.+[\'s]*\s+block\s*out|.+[\'s]*\s+block\s*out(?:s|ed)?|(?:show|list|get)\s+(?:me\s+)?.+[\'s]*\s+block\s*out',
     }
@@ -4447,8 +4447,13 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
                     blockout_data_context = "\n[BLOCKOUT QUERY: Please specify which volunteer's blockouts you want to see.]\n"
 
             elif blockout_query_type == 'date_blockouts':
-                # Looking for who is blocked out on a specific date or date range
-                if blockout_date:
+                # Safety net: if a person name was extracted, this is really a person-specific query
+                # (avoids iterating all 500+ services people and causing worker timeout)
+                if blockout_person and blockout_date:
+                    availability_data = services_api.check_person_availability(blockout_person, blockout_date)
+                    blockout_data_context = format_availability_check(availability_data)
+                    logger.info(f"date_blockouts redirected to availability_check for '{blockout_person}' on '{blockout_date}'")
+                elif blockout_date:
                     # First check if this is a date range (e.g., "first week of February 2026")
                     range_data = services_api.get_blockouts_for_date_range(blockout_date)
                     if range_data:
