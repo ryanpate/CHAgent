@@ -2626,7 +2626,64 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                         logger.info(f"Found Services person by People API name cross-reference: {attrs.get('first_name')} {attrs.get('last_name')} (ID: {person.get('id')})")
                         return person
 
-        # Strategy 3: Fuzzy match on Services candidates as last resort
+        # Strategy 3: Search recent/upcoming plan team members
+        # This finds people who are active team members but may not appear in
+        # the /services/v2/people paginated list (PCO API ordering issue)
+        logger.info(f"_find_services_person_by_name: trying plan team member search for '{person_name}'")
+        try:
+            # Get recent and upcoming plans for main service type
+            service_types = self.get_service_types()
+            main_service_type_id = None
+            for st in service_types:
+                st_name = st.get('attributes', {}).get('name', '')
+                if 'main' in st_name.lower() or 'morning' in st_name.lower() or 'sunday' in st_name.lower():
+                    main_service_type_id = st.get('id')
+                    break
+            if not main_service_type_id and service_types:
+                main_service_type_id = service_types[0].get('id')
+
+            if main_service_type_id:
+                # Get a few recent plans to search team members
+                plans_result = self._get(
+                    f"/services/v2/service_types/{main_service_type_id}/plans",
+                    params={'order': '-sort_date', 'per_page': 5, 'filter': 'future'}
+                )
+                plans = plans_result.get('data', [])
+                if not plans:
+                    # Try past plans if no future ones
+                    plans_result = self._get(
+                        f"/services/v2/service_types/{main_service_type_id}/plans",
+                        params={'order': '-sort_date', 'per_page': 5, 'filter': 'past'}
+                    )
+                    plans = plans_result.get('data', [])
+
+                for plan in plans[:3]:  # Check up to 3 plans
+                    plan_id = plan.get('id')
+                    team_result = self._get(
+                        f"/services/v2/service_types/{main_service_type_id}/plans/{plan_id}/team_members",
+                        params={'include': 'person', 'per_page': 100}
+                    )
+                    for member in team_result.get('data', []):
+                        attrs = member.get('attributes', {})
+                        member_name = attrs.get('name', '')
+                        name_parts_m = member_name.split()
+                        m_first = name_parts_m[0].lower() if name_parts_m else ''
+                        m_last = name_parts_m[-1].lower() if len(name_parts_m) > 1 else ''
+                        if m_first == target_first and m_last == target_last:
+                            # Found! Get the Services person record
+                            relationships = member.get('relationships', {})
+                            person_data = relationships.get('person', {}).get('data', {})
+                            if person_data:
+                                person_id = person_data.get('id')
+                                # Fetch the full Services person record
+                                person_record = self._get(f"/services/v2/people/{person_id}")
+                                if person_record.get('data'):
+                                    logger.info(f"Found Services person via plan team member search: {member_name} (ID: {person_id})")
+                                    return person_record['data']
+        except Exception as e:
+            logger.warning(f"_find_services_person_by_name: plan search failed: {e}")
+
+        # Strategy 4: Fuzzy match on Services candidates as last resort
         if not candidates:
             candidates = self._get_all_services_people_list()
 
