@@ -3073,22 +3073,33 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         result['person_name'] = actual_name
 
         # Check 1: Standalone blockout date ranges from /blockouts endpoint
-        blockouts_result = self._get(
-            f"/services/v2/people/{person_id}/blockouts",
-            params={'per_page': 50}
-        )
+        # Paginate through ALL blockouts (Kent Hill has 50+ spanning 2018-2026)
+        all_blockouts = []
+        blockout_offset = 0
+        blockout_per_page = 100
+        while True:
+            blockouts_result = self._get(
+                f"/services/v2/people/{person_id}/blockouts",
+                params={'per_page': blockout_per_page, 'offset': blockout_offset}
+            )
+            page_data = blockouts_result.get('data', [])
+            if not page_data:
+                break
+            all_blockouts.extend(page_data)
+            if len(page_data) < blockout_per_page:
+                break
+            blockout_offset += blockout_per_page
 
-        blockout_entries = blockouts_result.get('data', [])
-        logger.info(f"check_person_availability: found {len(blockout_entries)} blockout entries for {actual_name} (ID: {person_id})")
+        logger.info(f"check_person_availability: found {len(all_blockouts)} total blockout entries for {actual_name} (ID: {person_id})")
 
-        for blockout in blockout_entries:
+        for blockout in all_blockouts:
             b_attrs = blockout.get('attributes', {})
             starts_at = b_attrs.get('starts_at')
             ends_at = b_attrs.get('ends_at')
             reason = b_attrs.get('reason', '')
-            logger.info(f"  blockout: {starts_at} to {ends_at}, reason='{reason}'")
 
             if self._date_in_blockout_range(target_date, starts_at, ends_at):
+                logger.info(f"  MATCH: blockout {starts_at} to {ends_at}, reason='{reason}'")
                 result['available'] = False
                 result['blockout_reason'] = reason or 'No reason provided'
                 result['blockout_dates'] = {
@@ -3105,11 +3116,24 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
                 plan_id = plan.get('plan_id')
                 service_type_id = plan.get('service_type_id')
                 if service_type_id and plan_id:
-                    team_result = self._get(
-                        f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/team_members",
-                        params={'per_page': 100}
-                    )
-                    for member in team_result.get('data', []):
+                    # Paginate team members (some plans have 100+ members)
+                    all_members = []
+                    member_offset = 0
+                    member_per_page = 100
+                    while True:
+                        team_result = self._get(
+                            f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/team_members",
+                            params={'per_page': member_per_page, 'offset': member_offset}
+                        )
+                        page_members = team_result.get('data', [])
+                        if not page_members:
+                            break
+                        all_members.extend(page_members)
+                        if len(page_members) < member_per_page:
+                            break
+                        member_offset += member_per_page
+                    logger.info(f"check_person_availability: checking {len(all_members)} team members on plan {plan_id}")
+                    for member in all_members:
                         m_attrs = member.get('attributes', {})
                         # Check if this team member is our person by matching person relationship
                         relationships = member.get('relationships', {})
