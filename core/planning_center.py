@@ -3073,26 +3073,36 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         result['person_name'] = actual_name
 
         # Check 1: Standalone blockout date ranges from /blockouts endpoint
-        # Paginate through ALL blockouts (Kent Hill has 50+ spanning 2018-2026)
-        all_blockouts = []
-        blockout_offset = 0
-        blockout_per_page = 100
-        while True:
+        # Filter to only blockouts that could overlap the target date (1 API call)
+        target_date_str = target_date.strftime('%Y-%m-%dT00:00:00Z')
+        target_date_end = target_date.strftime('%Y-%m-%dT23:59:59Z')
+        blockouts_result = self._get(
+            f"/services/v2/people/{person_id}/blockouts",
+            params={
+                'per_page': 100,
+                'where[ends_at][gte]': target_date_str,
+                'where[starts_at][lte]': target_date_end,
+            }
+        )
+        blockout_entries = blockouts_result.get('data', [])
+
+        # If date filtering isn't supported by the API, fall back to fetching
+        # recent blockouts and checking manually
+        if not blockout_entries:
+            # Try without filters in case the API ignores where params
+            # Only fetch blockouts that haven't ended yet (skip historical ones)
             blockouts_result = self._get(
                 f"/services/v2/people/{person_id}/blockouts",
-                params={'per_page': blockout_per_page, 'offset': blockout_offset}
+                params={
+                    'per_page': 100,
+                    'order': '-starts_at',  # Newest first
+                }
             )
-            page_data = blockouts_result.get('data', [])
-            if not page_data:
-                break
-            all_blockouts.extend(page_data)
-            if len(page_data) < blockout_per_page:
-                break
-            blockout_offset += blockout_per_page
+            blockout_entries = blockouts_result.get('data', [])
 
-        logger.info(f"check_person_availability: found {len(all_blockouts)} total blockout entries for {actual_name} (ID: {person_id})")
+        logger.info(f"check_person_availability: checking {len(blockout_entries)} blockout entries for {actual_name} on {target_date}")
 
-        for blockout in all_blockouts:
+        for blockout in blockout_entries:
             b_attrs = blockout.get('attributes', {})
             starts_at = b_attrs.get('starts_at')
             ends_at = b_attrs.get('ends_at')
