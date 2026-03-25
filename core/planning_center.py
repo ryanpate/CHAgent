@@ -3072,25 +3072,59 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
         result['found'] = True
         result['person_name'] = actual_name
 
-        # Check their blockouts
+        # Check 1: Standalone blockout date ranges from /blockouts endpoint
         blockouts_result = self._get(
             f"/services/v2/people/{person_id}/blockouts",
             params={'per_page': 50}
         )
 
-        for blockout in blockouts_result.get('data', []):
+        blockout_entries = blockouts_result.get('data', [])
+        logger.info(f"check_person_availability: found {len(blockout_entries)} blockout entries for {actual_name} (ID: {person_id})")
+
+        for blockout in blockout_entries:
             b_attrs = blockout.get('attributes', {})
             starts_at = b_attrs.get('starts_at')
             ends_at = b_attrs.get('ends_at')
+            reason = b_attrs.get('reason', '')
+            logger.info(f"  blockout: {starts_at} to {ends_at}, reason='{reason}'")
 
             if self._date_in_blockout_range(target_date, starts_at, ends_at):
                 result['available'] = False
-                result['blockout_reason'] = b_attrs.get('reason', 'No reason provided')
+                result['blockout_reason'] = reason or 'No reason provided'
                 result['blockout_dates'] = {
                     'starts_at': starts_at,
                     'ends_at': ends_at
                 }
                 break
+
+        # Check 2: Plan-specific status (person may be blocked/declined on a specific plan)
+        # This catches cases where the blockout is tied to a plan, not a standalone date range
+        if result['available']:
+            plan = self.find_plan_by_date(date_str)
+            if plan and plan.get('plan_id'):
+                plan_id = plan.get('plan_id')
+                service_type_id = plan.get('service_type_id')
+                if service_type_id and plan_id:
+                    team_result = self._get(
+                        f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/team_members",
+                        params={'per_page': 100}
+                    )
+                    for member in team_result.get('data', []):
+                        m_attrs = member.get('attributes', {})
+                        # Check if this team member is our person by matching person relationship
+                        relationships = member.get('relationships', {})
+                        member_person = relationships.get('person', {}).get('data', {})
+                        member_person_id = member_person.get('id') if member_person else None
+
+                        if str(member_person_id) == str(person_id):
+                            status = m_attrs.get('status', '')
+                            member_name = m_attrs.get('name', '')
+                            logger.info(f"check_person_availability: found {actual_name} on plan {plan_id} with status='{status}'")
+                            # Status codes: C=Confirmed, U=Unconfirmed, D=Declined, B=Blocked
+                            if status in ('D', 'B'):
+                                result['available'] = False
+                                result['blockout_reason'] = m_attrs.get('decline_reason', '') or f'Declined/Blocked on plan (status: {status})'
+                                break
 
         status = "available" if result['available'] else f"blocked out ({result['blockout_reason']})"
         logger.info(f"{actual_name} is {status} on {target_date}")
