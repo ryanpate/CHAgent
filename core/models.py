@@ -2538,6 +2538,15 @@ class Task(models.Model):
     # Ordering within project
     order = models.PositiveIntegerField(default=0)
 
+    # Subtask hierarchy
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='subtasks',
+    )
+
     # Notification tracking
     reminder_sent = models.BooleanField(default=False)
 
