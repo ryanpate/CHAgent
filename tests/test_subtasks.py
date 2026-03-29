@@ -139,3 +139,129 @@ class TestSubtaskModel:
         parent.delete()
         assert not Task.objects.filter(pk=child.pk).exists()
         assert not Task.objects.filter(pk=grandchild.pk).exists()
+
+
+@pytest.mark.django_db
+class TestSubtaskViews:
+    def test_create_subtask_inherits_project(self, client, user_alpha_owner, org_alpha):
+        client.force_login(user_alpha_owner)
+        project = Project.objects.create(
+            organization=org_alpha, name='Easter', owner=user_alpha_owner,
+        )
+        parent = Task.objects.create(
+            project=project, title='Stage Setup', created_by=user_alpha_owner,
+        )
+        response = client.post(
+            f'/tasks/{parent.pk}/subtasks/create/',
+            {'title': 'Lighting Rig'},
+        )
+        assert response.status_code in (200, 302)
+        child = Task.objects.get(title='Lighting Rig')
+        assert child.parent == parent
+        assert child.project == project
+        assert child.organization == org_alpha
+
+    def test_create_subtask_standalone(self, client, user_alpha_owner, org_alpha):
+        client.force_login(user_alpha_owner)
+        parent = Task.objects.create(
+            organization=org_alpha, title='Standalone Parent', created_by=user_alpha_owner,
+        )
+        response = client.post(
+            f'/tasks/{parent.pk}/subtasks/create/',
+            {'title': 'Standalone Child'},
+        )
+        assert response.status_code in (200, 302)
+        child = Task.objects.get(title='Standalone Child')
+        assert child.parent == parent
+        assert child.organization == org_alpha
+        assert child.project is None
+
+    def test_create_subtask_with_assignee(self, client, user_alpha_owner, user_alpha_member, org_alpha):
+        client.force_login(user_alpha_owner)
+        parent = Task.objects.create(
+            organization=org_alpha, title='Parent', created_by=user_alpha_owner,
+        )
+        response = client.post(
+            f'/tasks/{parent.pk}/subtasks/create/',
+            {'title': 'Assigned Sub', 'assignees': [user_alpha_member.pk]},
+        )
+        assert response.status_code in (200, 302)
+        child = Task.objects.get(title='Assigned Sub')
+        assert user_alpha_member in child.assignees.all()
+
+    def test_create_subtask_empty_title_rejected(self, client, user_alpha_owner, org_alpha):
+        client.force_login(user_alpha_owner)
+        parent = Task.objects.create(
+            organization=org_alpha, title='Parent', created_by=user_alpha_owner,
+        )
+        response = client.post(
+            f'/tasks/{parent.pk}/subtasks/create/',
+            {'title': ''},
+        )
+        assert Task.objects.filter(parent=parent).count() == 0
+
+    def test_create_subtask_org_isolation(self, client, user_alpha_owner, org_beta):
+        """Cannot create subtask on task from different org."""
+        from core.models import Task as TaskModel
+        client.force_login(user_alpha_owner)
+        other_task = TaskModel.objects.create(
+            organization=org_beta, title='Other Org Task',
+            created_by=user_alpha_owner,
+        )
+        response = client.post(
+            f'/tasks/{other_task.pk}/subtasks/create/',
+            {'title': 'Sneaky Sub'},
+        )
+        assert response.status_code == 404
+
+    def test_subtasks_partial_returns_children(self, client, user_alpha_owner, org_alpha):
+        client.force_login(user_alpha_owner)
+        parent = Task.objects.create(
+            organization=org_alpha, title='Parent', created_by=user_alpha_owner,
+        )
+        Task.objects.create(
+            title='Child 1', parent=parent, created_by=user_alpha_owner,
+        )
+        Task.objects.create(
+            title='Child 2', parent=parent, created_by=user_alpha_owner,
+        )
+        response = client.get(f'/tasks/{parent.pk}/subtasks/')
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'Child 1' in content
+        assert 'Child 2' in content
+
+    def test_subtasks_partial_excludes_other_org(self, client, user_alpha_owner, org_beta):
+        """Cannot load subtasks for a task in another org."""
+        from core.models import Task as TaskModel
+        client.force_login(user_alpha_owner)
+        other_parent = TaskModel.objects.create(
+            organization=org_beta, title='Other Parent', created_by=user_alpha_owner,
+        )
+        response = client.get(f'/tasks/{other_parent.pk}/subtasks/')
+        assert response.status_code == 404
+
+    def test_subtasks_partial_empty(self, client, user_alpha_owner, org_alpha):
+        client.force_login(user_alpha_owner)
+        parent = Task.objects.create(
+            organization=org_alpha, title='No Kids', created_by=user_alpha_owner,
+        )
+        response = client.get(f'/tasks/{parent.pk}/subtasks/')
+        assert response.status_code == 200
+
+    def test_project_detail_shows_only_root_tasks(self, client, user_alpha_owner, org_alpha):
+        client.force_login(user_alpha_owner)
+        project = Project.objects.create(
+            organization=org_alpha, name='Easter', owner=user_alpha_owner,
+        )
+        project.members.add(user_alpha_owner)
+        root = Task.objects.create(
+            project=project, title='Root Task', created_by=user_alpha_owner,
+        )
+        Task.objects.create(
+            title='Child Task', parent=root, created_by=user_alpha_owner,
+        )
+        response = client.get(f'/comms/projects/{project.pk}/')
+        content = response.content.decode()
+        assert 'Root Task' in content
+        assert 'Child Task' not in content

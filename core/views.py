@@ -2711,7 +2711,13 @@ def project_detail(request, pk):
         return redirect('project_list')
 
     # Get tasks grouped by status
-    tasks = project.tasks.select_related('created_by').prefetch_related('assignees')
+    from django.db.models import Count, Q
+    tasks = project.tasks.filter(parent=None).select_related('created_by').prefetch_related(
+        'assignees', 'subtasks'
+    ).annotate(
+        subtask_count=Count('subtasks'),
+        completed_subtask_count=Count('subtasks', filter=Q(subtasks__status='completed')),
+    )
 
     tasks_by_status = {
         'todo': tasks.filter(status='todo'),
@@ -3218,6 +3224,94 @@ def task_create_standalone(request):
             )
 
     return redirect('comms_hub')
+
+
+@login_required
+@require_POST
+def task_create_subtask(request, parent_pk):
+    """Create a subtask under a parent task."""
+    from .models import Task
+    from accounts.models import User
+
+    org = get_org(request)
+
+    # Get parent task scoped to user's org
+    parent = get_object_or_404(Task, pk=parent_pk, organization=org)
+
+    # Check access: project member/owner, or task creator/assignee for standalone
+    if parent.project:
+        project = parent.project
+        if project.owner != request.user and request.user not in project.members.all():
+            return HttpResponse('Access denied', status=403)
+    else:
+        if request.user not in parent.assignees.all() and parent.created_by != request.user:
+            return HttpResponse('Access denied', status=403)
+
+    title = request.POST.get('title', '').strip()
+    if not title:
+        if request.headers.get('HX-Request'):
+            return HttpResponse('')
+        return redirect(request.META.get('HTTP_REFERER', '/'))
+
+    priority = request.POST.get('priority', parent.priority)
+    due_date_str = request.POST.get('due_date', '')
+    assignee_ids = request.POST.getlist('assignees')
+
+    due_date = None
+    if due_date_str:
+        try:
+            from datetime import datetime
+            due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    subtask = Task.objects.create(
+        title=title,
+        parent=parent,
+        priority=priority,
+        due_date=due_date,
+        created_by=request.user,
+    )
+
+    if assignee_ids:
+        for assignee_id in assignee_ids:
+            try:
+                user = User.objects.get(pk=int(assignee_id))
+                subtask.assign_to(user, notify=True)
+            except (ValueError, User.DoesNotExist):
+                pass
+
+    if parent.project:
+        log_project_activity(parent.project, 'task_created', request.user,
+                             content=subtask.title, task=subtask)
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/subtask_list.html', {
+            'subtasks': [subtask],
+            'parent': parent,
+        })
+
+    if parent.project:
+        return redirect('task_detail', project_pk=parent.project.pk, pk=parent.pk)
+    return redirect('standalone_task_detail', pk=parent.pk)
+
+
+@login_required
+def task_subtasks_partial(request, pk):
+    """HTMX partial: return subtask list for a task."""
+    from .models import Task
+
+    org = get_org(request)
+    task = get_object_or_404(Task, pk=pk, organization=org)
+
+    subtasks = task.subtasks.select_related('created_by', 'parent').prefetch_related(
+        'assignees', 'subtasks'
+    ).order_by('order', 'created_at')
+
+    return render(request, 'core/partials/subtask_list.html', {
+        'subtasks': subtasks,
+        'parent': task,
+    })
 
 
 @login_required
