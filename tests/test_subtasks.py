@@ -331,3 +331,49 @@ class TestSubtaskViews:
         content = response.content.decode()
         assert 'Root Task' in content
         assert 'Child Task' not in content
+
+
+@pytest.mark.django_db
+class TestSubtaskPermissions:
+    def test_only_project_member_can_create_subtask(self, client, user_alpha_member, org_alpha):
+        """Non-project-member cannot create subtasks on project tasks."""
+        from accounts.models import User
+        client.force_login(user_alpha_member)
+        other_user = User.objects.create_user(
+            username='outsider', email='outsider@test.com', password='test123'
+        )
+        project = Project.objects.create(
+            organization=org_alpha, name='Private', owner=other_user,
+        )
+        parent = Task.objects.create(
+            project=project, title='Locked', created_by=other_user,
+        )
+        response = client.post(
+            f'/tasks/{parent.pk}/subtasks/create/',
+            {'title': 'Unauthorized'},
+        )
+        assert response.status_code in (403, 404)
+        assert not Task.objects.filter(title='Unauthorized').exists()
+
+    def test_standalone_task_creator_can_add_subtask(self, client, user_alpha_owner, org_alpha):
+        client.force_login(user_alpha_owner)
+        parent = Task.objects.create(
+            organization=org_alpha, title='My Task', created_by=user_alpha_owner,
+        )
+        response = client.post(
+            f'/tasks/{parent.pk}/subtasks/create/',
+            {'title': 'My Sub'},
+        )
+        assert Task.objects.filter(title='My Sub', parent=parent).exists()
+
+    def test_standalone_task_assignee_can_add_subtask(self, client, user_alpha_member, org_alpha, user_alpha_owner):
+        client.force_login(user_alpha_member)
+        parent = Task.objects.create(
+            organization=org_alpha, title='Assigned Task', created_by=user_alpha_owner,
+        )
+        parent.assignees.add(user_alpha_member)
+        response = client.post(
+            f'/tasks/{parent.pk}/subtasks/create/',
+            {'title': 'Assignee Sub'},
+        )
+        assert Task.objects.filter(title='Assignee Sub', parent=parent).exists()
