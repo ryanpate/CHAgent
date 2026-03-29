@@ -2584,6 +2584,18 @@ class Task(models.Model):
             return self.project.organization
         return self.organization
 
+    @property
+    def subtask_progress(self):
+        """Returns (completed_count, total_count) for direct subtasks."""
+        total = self.subtasks.count()
+        completed = self.subtasks.filter(status='completed').count()
+        return completed, total
+
+    @property
+    def has_subtasks(self):
+        """Check if task has any subtasks."""
+        return self.subtasks.exists()
+
     def save(self, *args, **kwargs):
         """Ensure organization/project consistency and prevent circular references."""
         # Circular reference guard
