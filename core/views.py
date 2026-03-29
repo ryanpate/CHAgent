@@ -3373,7 +3373,9 @@ def task_update_status(request, pk):
         response_html = render(request, 'core/partials/task_card.html', {'task': task}).content.decode()
         return HttpResponse(response_html + nudge_html)
 
-    return redirect('project_detail', pk=task.project.pk)
+    if task.project:
+        return redirect('project_detail', pk=task.project.pk)
+    return redirect('standalone_task_detail', pk=task.pk)
 
 
 @login_required
@@ -3639,9 +3641,16 @@ def task_detail(request, project_pk, pk):
         ancestors.insert(0, current)
         current = current.parent
 
-    # Available users for subtask assignment
+    # Available users for subtask assignment (org-scoped)
     from accounts.models import User as UserModel
-    available_users = UserModel.objects.filter(is_active=True).order_by('display_name', 'username')
+    task_org = task.get_organization
+    if task_org:
+        available_users = UserModel.objects.filter(
+            is_active=True,
+            organization_memberships__organization=task_org,
+        ).order_by('display_name', 'username')
+    else:
+        available_users = UserModel.objects.filter(is_active=True).order_by('display_name', 'username')
 
     context = {
         'project': project,
@@ -3698,9 +3707,16 @@ def standalone_task_detail(request, pk):
         ancestors.insert(0, current)
         current = current.parent
 
-    # Available users for subtask assignment
+    # Available users for subtask assignment (org-scoped)
     from accounts.models import User as UserModel
-    available_users = UserModel.objects.filter(is_active=True).order_by('display_name', 'username')
+    task_org = task.get_organization
+    if task_org:
+        available_users = UserModel.objects.filter(
+            is_active=True,
+            organization_memberships__organization=task_org,
+        ).order_by('display_name', 'username')
+    else:
+        available_users = UserModel.objects.filter(is_active=True).order_by('display_name', 'username')
 
     context = {
         'project': None,
