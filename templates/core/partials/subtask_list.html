@@ -1,0 +1,71 @@
+{% for subtask in subtasks %}
+<div class="flex items-center gap-3 py-2 px-3 bg-ch-gray rounded-lg text-sm group"
+     id="subtask-{{ subtask.pk }}">
+    <!-- Completion toggle -->
+    <form hx-post="{% url 'task_update_status' subtask.pk %}"
+          hx-target="#subtask-{{ subtask.pk }}"
+          hx-swap="outerHTML">
+        {% csrf_token %}
+        <input type="hidden" name="status" value="{% if subtask.status == 'completed' %}todo{% else %}completed{% endif %}">
+        <button type="submit"
+                class="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0
+                    {% if subtask.status == 'completed' %}border-green-500 bg-green-500 text-black{% else %}border-gray-500 hover:border-ch-gold{% endif %}">
+            {% if subtask.status == 'completed' %}
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            {% endif %}
+        </button>
+    </form>
+
+    <!-- Title and info -->
+    <div class="flex-1 min-w-0">
+        <a href="{% if subtask.project %}{% url 'task_detail' subtask.project.pk subtask.pk %}{% else %}{% url 'standalone_task_detail' subtask.pk %}{% endif %}"
+           class="{% if subtask.status == 'completed' %}line-through text-gray-500{% else %}text-white{% endif %} hover:text-ch-gold">
+            {{ subtask.title }}
+        </a>
+        {% if subtask.description %}
+        <p class="text-xs text-gray-500 truncate">{{ subtask.description|truncatewords:10 }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Subtask count badge -->
+    {% with progress=subtask.subtask_progress %}
+    {% if progress.1 > 0 %}
+    <span class="text-xs text-gray-500">
+        {{ progress.0 }}/{{ progress.1 }}
+    </span>
+    {% endif %}
+    {% endwith %}
+
+    <!-- Comment count -->
+    {% if subtask.comments.count > 0 %}
+    <span class="text-xs text-gray-500 flex items-center gap-1">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+        </svg>
+        {{ subtask.comments.count }}
+    </span>
+    {% endif %}
+
+    <!-- Assignees -->
+    <div class="flex -space-x-1">
+        {% for assignee in subtask.assignees.all|slice:":2" %}
+        <div class="w-5 h-5 rounded-full bg-ch-gold text-black flex items-center justify-center text-xs font-medium border border-ch-gray"
+             title="{{ assignee.display_name|default:assignee.username }}">
+            {{ assignee.display_name|default:assignee.username|slice:":1"|upper }}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Nested subtasks (expand/collapse) -->
+{% if subtask.has_subtasks %}
+<div class="ml-6 mt-1 space-y-1" id="subtask-children-{{ subtask.pk }}">
+    {% with subtask.subtasks.all as nested_subtasks %}
+    {% include 'core/partials/subtask_list.html' with subtasks=nested_subtasks %}
+    {% endwith %}
+</div>
+{% endif %}
+{% endfor %}

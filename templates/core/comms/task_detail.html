@@ -5,7 +5,7 @@
 {% block content %}
 <div class="max-w-3xl mx-auto">
     <!-- Breadcrumb -->
-    <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+    <div class="flex items-center gap-2 text-sm text-gray-400 mb-4 flex-wrap">
         {% if project %}
         <a href="{% url 'project_list' %}" class="hover:text-white">Projects</a>
         <span>/</span>
@@ -13,6 +13,11 @@
         {% else %}
         <a href="{% url 'my_tasks' %}" class="hover:text-white">My Tasks</a>
         {% endif %}
+        {% for ancestor in ancestors %}
+        <span>/</span>
+        <a href="{% if project %}{% url 'task_detail' project.pk ancestor.pk %}{% else %}{% url 'standalone_task_detail' ancestor.pk %}{% endif %}"
+           class="hover:text-white">{{ ancestor.title }}</a>
+        {% endfor %}
         <span>/</span>
         <span class="text-white">{{ task.title }}</span>
     </div>
@@ -173,6 +178,49 @@
                 Add
             </button>
         </form>
+    </div>
+
+    <!-- Subtasks Section -->
+    <div class="bg-ch-dark rounded-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold flex items-center gap-2">
+                Subtasks
+                {% with progress=task.subtask_progress %}
+                {% if progress.1 > 0 %}
+                <span class="text-sm text-gray-400 font-normal">{{ progress.0 }}/{{ progress.1 }}</span>
+                <div class="w-20 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-ch-gold rounded-full" style="width: {% widthratio progress.0 progress.1 100 %}%"></div>
+                </div>
+                {% endif %}
+                {% endwith %}
+            </h2>
+        </div>
+
+        <!-- Subtask list -->
+        <div class="space-y-1" id="subtask-list">
+            {% include 'core/partials/subtask_list.html' %}
+        </div>
+
+        <!-- Completion nudge -->
+        {% with progress=task.subtask_progress %}
+        {% if progress.1 > 0 and progress.0 == progress.1 and task.status != 'completed' %}
+        <div class="mt-3 p-3 bg-green-900/20 border border-green-800 rounded-lg flex items-center justify-between">
+            <span class="text-green-400 text-sm">All subtasks done — mark complete?</span>
+            <form hx-post="{% url 'task_update_status' task.pk %}" hx-swap="none"
+                  hx-on::after-request="location.reload()">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="completed">
+                <button type="submit"
+                        class="px-3 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm transition">
+                    Complete
+                </button>
+            </form>
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <!-- Add subtask form -->
+        {% include 'core/partials/subtask_form.html' with parent_task=task %}
     </div>
 
     <!-- Comments Section -->

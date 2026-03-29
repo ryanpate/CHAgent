@@ -101,6 +101,8 @@ urlpatterns = [
     path('tasks/<int:pk>/recurrence/', views.task_set_recurrence, name='task_set_recurrence'),
     path('tasks/<int:pk>/recurrence/remove/', views.task_remove_recurrence, name='task_remove_recurrence'),
     path('tasks/<int:pk>/comment/', views.task_comment, name='task_comment'),
+    path('tasks/<int:parent_pk>/subtasks/create/', views.task_create_subtask, name='task_create_subtask'),
+    path('tasks/<int:pk>/subtasks/', views.task_subtasks_partial, name='task_subtasks_partial'),
     # Reactions
     path('api/react/', views.toggle_reaction, name='toggle_reaction'),
     # Mention autocomplete

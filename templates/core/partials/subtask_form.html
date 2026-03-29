@@ -1,0 +1,31 @@
+<!-- Inline Add Subtask Form -->
+<form hx-post="{% url 'task_create_subtask' parent_task.pk %}"
+      hx-target="#subtask-list"
+      hx-swap="beforeend"
+      hx-on::after-request="this.reset(); this.querySelector('input[name=title]').focus();"
+      class="flex flex-wrap gap-2 items-end bg-ch-dark rounded-lg p-3 mt-2">
+    {% csrf_token %}
+    <div class="flex-1 min-w-[200px]">
+        <input type="text" name="title" placeholder="Subtask title..." required
+               class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
+    </div>
+    <div>
+        <select name="assignees" multiple
+                class="bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-ch-gold"
+                style="color-scheme: dark;">
+            <option value="" disabled>Assign to...</option>
+            {% for user in available_users %}
+            <option value="{{ user.pk }}">{{ user.display_name|default:user.username }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <input type="date" name="due_date"
+               class="bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-ch-gold"
+               style="-webkit-appearance: none; color-scheme: dark;">
+    </div>
+    <button type="submit"
+            class="px-4 py-2 bg-ch-gold text-black rounded-lg text-sm font-medium hover:bg-yellow-500 transition">
+        Add
+    </button>
+</form>
