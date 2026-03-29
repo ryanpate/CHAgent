@@ -3358,7 +3358,20 @@ def task_update_status(request, pk):
                                  content=task.title, task=task)
 
     if request.headers.get('HX-Request'):
-        return render(request, 'core/partials/task_card.html', {'task': task})
+        # Check if completing this subtask means all siblings are done
+        nudge_html = ''
+        if status == 'completed' and task.parent:
+            completed_count, total_count = task.parent.subtask_progress
+            if completed_count == total_count and task.parent.status != 'completed':
+                nudge_html = (
+                    '<div class="mt-2 p-2 bg-green-900/20 border border-green-800 rounded-lg '
+                    'flex items-center justify-between text-sm">'
+                    '<span class="text-green-400">All subtasks done — mark parent complete?</span>'
+                    '</div>'
+                )
+
+        response_html = render(request, 'core/partials/task_card.html', {'task': task}).content.decode()
+        return HttpResponse(response_html + nudge_html)
 
     return redirect('project_detail', pk=task.project.pk)
 
@@ -3614,6 +3627,22 @@ def task_detail(request, project_pk, pk):
     except Exception:
         recurrence_rule = None
 
+    # Get subtasks
+    subtasks = task.subtasks.select_related('created_by', 'parent').prefetch_related(
+        'assignees', 'subtasks', 'comments'
+    ).order_by('order', 'created_at')
+
+    # Build ancestor breadcrumb chain
+    ancestors = []
+    current = task.parent
+    while current is not None:
+        ancestors.insert(0, current)
+        current = current.parent
+
+    # Available users for subtask assignment
+    from accounts.models import User as UserModel
+    available_users = UserModel.objects.filter(is_active=True).order_by('display_name', 'username')
+
     context = {
         'project': project,
         'task': task,
@@ -3622,6 +3651,9 @@ def task_detail(request, project_pk, pk):
         'completed_count': completed_count,
         'recurrence_rule': recurrence_rule,
         'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
+        'subtasks': subtasks,
+        'ancestors': ancestors,
+        'available_users': available_users,
     }
     return render(request, 'core/comms/task_detail.html', context)
 
@@ -3654,6 +3686,22 @@ def standalone_task_detail(request, pk):
     except Exception:
         recurrence_rule = None
 
+    # Get subtasks
+    subtasks = task.subtasks.select_related('created_by', 'parent').prefetch_related(
+        'assignees', 'subtasks', 'comments'
+    ).order_by('order', 'created_at')
+
+    # Build ancestor breadcrumb chain
+    ancestors = []
+    current = task.parent
+    while current is not None:
+        ancestors.insert(0, current)
+        current = current.parent
+
+    # Available users for subtask assignment
+    from accounts.models import User as UserModel
+    available_users = UserModel.objects.filter(is_active=True).order_by('display_name', 'username')
+
     context = {
         'project': None,
         'task': task,
@@ -3662,6 +3710,9 @@ def standalone_task_detail(request, pk):
         'completed_count': completed_count,
         'recurrence_rule': recurrence_rule,
         'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
+        'subtasks': subtasks,
+        'ancestors': ancestors,
+        'available_users': available_users,
     }
     return render(request, 'core/comms/task_detail.html', context)
 

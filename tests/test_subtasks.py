@@ -249,6 +249,72 @@ class TestSubtaskViews:
         response = client.get(f'/tasks/{parent.pk}/subtasks/')
         assert response.status_code == 200
 
+    def test_task_detail_shows_subtasks_section(self, client, user_alpha_owner, org_alpha):
+        client.force_login(user_alpha_owner)
+        project = Project.objects.create(
+            organization=org_alpha, name='Easter', owner=user_alpha_owner,
+        )
+        project.members.add(user_alpha_owner)
+        parent = Task.objects.create(
+            project=project, title='Stage Setup', created_by=user_alpha_owner,
+        )
+        Task.objects.create(
+            title='Lights', parent=parent, status='completed', created_by=user_alpha_owner,
+        )
+        Task.objects.create(
+            title='Sound', parent=parent, status='todo', created_by=user_alpha_owner,
+        )
+        response = client.get(f'/comms/projects/{project.pk}/tasks/{parent.pk}/')
+        content = response.content.decode()
+        assert 'Subtasks' in content
+        assert '1/2' in content
+        assert 'Lights' in content
+        assert 'Sound' in content
+
+    def test_task_detail_ancestor_breadcrumbs(self, client, user_alpha_owner, org_alpha):
+        client.force_login(user_alpha_owner)
+        project = Project.objects.create(
+            organization=org_alpha, name='Easter', owner=user_alpha_owner,
+        )
+        project.members.add(user_alpha_owner)
+        grandparent = Task.objects.create(
+            project=project, title='Stage', created_by=user_alpha_owner,
+        )
+        parent = Task.objects.create(
+            title='Lighting', parent=grandparent, created_by=user_alpha_owner,
+        )
+        child = Task.objects.create(
+            title='Front Wash', parent=parent, created_by=user_alpha_owner,
+        )
+        response = client.get(f'/comms/projects/{project.pk}/tasks/{child.pk}/')
+        content = response.content.decode()
+        assert 'Stage' in content
+        assert 'Lighting' in content
+        assert 'Front Wash' in content
+
+    def test_completion_nudge_when_all_siblings_done(self, client, user_alpha_owner, org_alpha):
+        client.force_login(user_alpha_owner)
+        parent = Task.objects.create(
+            organization=org_alpha, title='Parent', created_by=user_alpha_owner,
+        )
+        parent.assignees.add(user_alpha_owner)
+        child1 = Task.objects.create(
+            title='Child 1', parent=parent, status='completed', created_by=user_alpha_owner,
+        )
+        child1.assignees.add(user_alpha_owner)
+        child2 = Task.objects.create(
+            title='Child 2', parent=parent, status='todo', created_by=user_alpha_owner,
+        )
+        child2.assignees.add(user_alpha_owner)
+        # Complete the last remaining subtask
+        response = client.post(
+            f'/tasks/{child2.pk}/status/',
+            {'status': 'completed'},
+            HTTP_HX_REQUEST='true',
+        )
+        content = response.content.decode()
+        assert 'All subtasks done' in content
+
     def test_project_detail_shows_only_root_tasks(self, client, user_alpha_owner, org_alpha):
         client.force_login(user_alpha_owner)
         project = Project.objects.create(
