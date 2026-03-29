@@ -2585,10 +2585,29 @@ class Task(models.Model):
         return self.organization
 
     def save(self, *args, **kwargs):
-        """Ensure organization consistency."""
-        # If task has a project, sync organization from project
-        if self.project and not self.organization:
+        """Ensure organization/project consistency and prevent circular references."""
+        # Circular reference guard
+        if self.parent_id and self.pk:
+            current = self.parent
+            depth = 0
+            while current is not None and depth < 20:
+                if current.pk == self.pk:
+                    from django.core.exceptions import ValidationError
+                    raise ValidationError("Circular subtask reference detected.")
+                current = current.parent
+                depth += 1
+
+        # Inherit project and organization from parent
+        if self.parent:
+            root = self.parent
+            while root.parent is not None:
+                root = root.parent
+            self.project = root.project
+            self.organization = root.organization or (root.project.organization if root.project else None)
+        elif self.project and not self.organization:
+            # Original behavior: sync org from project for root tasks
             self.organization = self.project.organization
+
         super().save(*args, **kwargs)
 
     def assign_to(self, user, notify=True):
