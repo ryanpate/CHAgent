@@ -196,6 +196,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         case "church.aria.app.chat": return "/chat/"
         case "church.aria.app.followups": return "/followups/"
         case "church.aria.app.interaction": return "/interactions/create/"
+        case "church.aria.app.songs": return "/songs/"
         default: return "/chat/"
         }
     }

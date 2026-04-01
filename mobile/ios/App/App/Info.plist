@@ -75,6 +75,14 @@
 			<key>UIApplicationShortcutItemIconType</key>
 			<string>UIApplicationShortcutIconTypeAdd</string>
 		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>church.aria.app.songs</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Song Submissions</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeAudio</string>
+		</dict>
 	</array>
 </dict>
 </plist>

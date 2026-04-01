@@ -94,6 +94,7 @@ def apple_app_site_association(request):
                         {"/" : "/interactions/*"},
                         {"/" : "/analytics/*"},
                         {"/" : "/care/*"},
+                        {"/" : "/songs/*"},
                     ]
                 }
             ]
