@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'accounts',
     'core',
     'blog',
+    'songs',
     'axes',
     'rest_framework',
     'corsheaders',
