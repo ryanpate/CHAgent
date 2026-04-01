@@ -3226,6 +3226,8 @@ class NotificationPreference(models.Model):
 
     followup_reminders = models.BooleanField(default=True, help_text="Follow-up due date reminders")
 
+    song_submissions = models.BooleanField(default=True, help_text="Song submission notifications")
+
     # Quiet hours (don't send notifications during these times)
     quiet_hours_enabled = models.BooleanField(default=False)
     quiet_hours_start = models.TimeField(null=True, blank=True, help_text="Start of quiet hours (e.g., 22:00)")

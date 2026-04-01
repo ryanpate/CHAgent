@@ -178,6 +178,20 @@
                 </div>
             </div>
 
+            <!-- Song Submissions -->
+            <div class="border-b border-gray-700 pb-6">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="font-medium">Song Submissions</h3>
+                        <p class="text-sm text-gray-400">New song suggestions from your congregation</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="song_submissions" class="sr-only peer" {% if prefs.song_submissions %}checked{% endif %}>
+                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-ch-gold"></div>
+                    </label>
+                </div>
+            </div>
+
             <!-- Quiet Hours -->
             <div>
                 <div class="flex items-start justify-between">

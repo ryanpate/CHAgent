@@ -4345,6 +4345,7 @@ def push_preferences(request):
         prefs.care_alerts = request.POST.get('care_alerts') == 'on'
         prefs.care_urgent_only = request.POST.get('care_urgent_only') == 'on'
         prefs.followup_reminders = request.POST.get('followup_reminders') == 'on'
+        prefs.song_submissions = request.POST.get('song_submissions') == 'on'
         prefs.quiet_hours_enabled = request.POST.get('quiet_hours_enabled') == 'on'
 
         # Parse quiet hours

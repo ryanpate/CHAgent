@@ -203,6 +203,10 @@ def send_notification_to_user(
                 if not prefs.followup_reminders:
                     return 0
 
+            elif notification_type == 'song_submission':
+                if not prefs.song_submissions:
+                    return 0
+
         except NotificationPreference.DoesNotExist:
             # No preferences set - use defaults (send all)
             pass
@@ -434,6 +438,37 @@ def notify_new_announcement(announcement):
     )
 
     logger.info(f"Announcement notifications sent: {sent}")
+    return sent
+
+
+def notify_song_submission(submission):
+    """Send notifications when a new song is submitted."""
+    from core.models import OrganizationMembership
+
+    memberships = OrganizationMembership.objects.filter(
+        organization=submission.organization,
+        is_active=True,
+    ).select_related('user')
+
+    users = [m.user for m in memberships if m.user.is_active]
+
+    if submission.submitted_by:
+        users = [u for u in users if u.pk != submission.submitted_by.pk]
+
+    submitter = submission.submitter_name or 'Someone'
+    title = '🎵 New Song Suggestion'
+    body = f'{submitter} suggested {submission.title} by {submission.artist}'
+
+    sent = send_notification_to_users(
+        users=users,
+        notification_type='song_submission',
+        title=title,
+        body=body,
+        url=f'/songs/{submission.pk}/',
+        data={'submission_id': submission.pk},
+    )
+
+    logger.info(f"Song submission notifications sent: {sent}")
     return sent
 
 

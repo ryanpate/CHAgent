@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 from django.test import Client
 from songs.models import SongSubmission, SongVote
 
@@ -310,3 +311,46 @@ class TestSongStatusUpdate:
         assert sub.reviewed_by == user_alpha_owner
         assert sub.reviewed_at is not None
         assert sub.review_note == 'Great fit for our style'
+
+
+@pytest.mark.django_db
+class TestSongNotifications:
+    def test_notification_preference_field_exists(self, org_alpha, user_alpha_owner):
+        from core.models import NotificationPreference
+        prefs = NotificationPreference.get_or_create_for_user(user_alpha_owner)
+        assert hasattr(prefs, 'song_submissions')
+        assert prefs.song_submissions is True  # Default is True
+
+    def test_notify_song_submission_calls_send(self, org_alpha, user_alpha_owner):
+        sub = SongSubmission.objects.create(
+            organization=org_alpha,
+            title='Test Song',
+            artist='Test Artist',
+            submitter_name='Jane',
+        )
+        with patch('core.notifications.send_notification_to_users') as mock_send:
+            mock_send.return_value = 1
+            from core.notifications import notify_song_submission
+            notify_song_submission(sub)
+            mock_send.assert_called_once()
+            call_kwargs = mock_send.call_args.kwargs
+            assert call_kwargs['notification_type'] == 'song_submission'
+            assert 'Test Song' in call_kwargs['body']
+            assert 'Test Artist' in call_kwargs['body']
+            assert 'Jane' in call_kwargs['body']
+
+    def test_notify_excludes_submitter(self, org_alpha, user_alpha_owner):
+        sub = SongSubmission.objects.create(
+            organization=org_alpha,
+            title='Test Song',
+            artist='Test Artist',
+            submitted_by=user_alpha_owner,
+        )
+        with patch('core.notifications.send_notification_to_users') as mock_send:
+            mock_send.return_value = 0
+            from core.notifications import notify_song_submission
+            notify_song_submission(sub)
+            if mock_send.called:
+                users_arg = mock_send.call_args.kwargs['users']
+                user_ids = [u.pk for u in users_arg]
+                assert user_alpha_owner.pk not in user_ids
