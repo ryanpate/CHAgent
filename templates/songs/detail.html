@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% load songs_tags %}
+
+{% block title %}{{ submission.title }} — Song Submissions{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+    <div class="text-xs text-gray-500 mb-4">
+        <a href="{% url 'songs:dashboard' %}" class="text-ch-gold hover:text-ch-gold/80 transition">Song Submissions</a>
+        &rsaquo; {{ submission.title }}
+    </div>
+
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+        <div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-bold">{{ submission.title }}</h1>
+                <span class="text-xs px-2 py-0.5 rounded
+                    {% if submission.status == 'pending' %}bg-ch-gold/20 text-ch-gold
+                    {% elif submission.status == 'reviewed' %}bg-white/10 text-white
+                    {% elif submission.status == 'approved' %}bg-green-900/30 text-green-400
+                    {% else %}bg-gray-800 text-gray-500{% endif %}">
+                    {{ submission.get_status_display }}
+                </span>
+            </div>
+            <p class="text-gray-400 mt-1">by {{ submission.artist }}</p>
+        </div>
+        {% if submission.link %}
+        <a href="{{ submission.link }}" target="_blank" rel="noopener"
+           class="bg-ch-dark border border-gray-700 text-ch-gold px-4 py-2 rounded-lg text-sm hover:border-ch-gold transition whitespace-nowrap">
+            &#127911; Listen &rarr;
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 space-y-4">
+            <div class="bg-ch-dark border border-gray-800 rounded-lg p-5">
+                <div class="text-xs text-gray-500 uppercase tracking-wider mb-3">Submission Details</div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <div class="text-xs text-gray-600">Submitted by</div>
+                        <div class="text-white text-sm mt-1">{{ submission.submitter_name|default:"Anonymous" }}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-600">Date</div>
+                        <div class="text-white text-sm mt-1">{{ submission.created_at|date:"F j, Y" }}</div>
+                    </div>
+                </div>
+                {% if submission.submitter_comment %}
+                <div class="mt-3">
+                    <div class="text-xs text-gray-600">Comment</div>
+                    <div class="text-gray-300 text-sm mt-1 italic">"{{ submission.submitter_comment }}"</div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="bg-ch-dark border border-gray-800 rounded-lg p-5">
+                <div class="text-xs text-gray-500 uppercase tracking-wider mb-3">Your Rating</div>
+                {% with show_count=False %}
+                {% include 'songs/partials/star_rating.html' with submission=submission user_rating=user_rating %}
+                {% endwith %}
+                <span class="text-gray-500 text-sm ml-2">
+                    {% if user_rating %}You rated {{ user_rating }} star{{ user_rating|pluralize }}{% else %}Click to rate{% endif %}
+                </span>
+            </div>
+
+            <div class="bg-ch-dark border border-gray-800 rounded-lg p-5">
+                <div class="text-xs text-gray-500 uppercase tracking-wider mb-3">Team Votes ({{ team_votes|length }})</div>
+                {% if team_votes %}
+                <div class="space-y-2">
+                    {% for vote in team_votes %}
+                    <div class="flex items-center gap-3">
+                        <div class="w-7 h-7 bg-ch-gray rounded-full flex items-center justify-center text-xs text-gray-400 shrink-0">
+                            {{ vote.user.display_name|default:vote.user.username|make_list|first }}
+                        </div>
+                        <div class="flex-1 text-gray-300 text-sm">{{ vote.user.display_name|default:vote.user.username }}</div>
+                        <div class="text-ch-gold text-sm">
+                            {% for i in "12345" %}{% if forloop.counter <= vote.rating %}&#9733;{% else %}<span class="text-gray-700">&#9733;</span>{% endif %}{% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="border-t border-gray-700 mt-3 pt-3 flex justify-between">
+                    <span class="text-gray-500 text-sm">Average</span>
+                    <span class="text-white font-semibold">{{ submission.average_rating }} &#9733;</span>
+                </div>
+                {% else %}
+                <p class="text-gray-500 text-sm">No votes yet. Be the first to rate!</p>
+                {% endif %}
+            </div>
+
+            {% if similar_submissions %}
+            <div class="bg-blue-900/10 border border-blue-900/30 rounded-lg p-5">
+                <div class="text-xs text-blue-400 font-semibold mb-2">Similar Submissions</div>
+                {% for sim in similar_submissions %}
+                <a href="{% url 'songs:detail' sim.pk %}" class="text-sm text-blue-300 hover:text-blue-200 block">
+                    {{ sim.title }} by {{ sim.artist }} — {{ sim.get_status_display }} ({{ sim.created_at|date:"M j" }})
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="space-y-4">
+            <div class="bg-ch-dark border border-gray-800 rounded-lg p-5">
+                <div class="text-xs text-gray-500 uppercase tracking-wider mb-3">Update Status</div>
+                {% include 'songs/partials/status_buttons.html' with submission=submission can_change_status=can_change_status %}
+            </div>
+
+            {% if can_change_status %}
+            <div class="bg-ch-dark border border-gray-800 rounded-lg p-5">
+                <div class="text-xs text-gray-500 uppercase tracking-wider mb-2">Team Note</div>
+                <form hx-post="{% url 'songs:update_status' submission.id %}"
+                      hx-target="#status-buttons-{{ submission.id }}"
+                      hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <input type="hidden" name="status" value="{{ submission.status }}">
+                    <textarea name="review_note" rows="3"
+                              class="w-full bg-ch-gray border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:border-ch-gold focus:outline-none resize-y"
+                              placeholder="Add an internal note...">{{ submission.review_note }}</textarea>
+                    <button type="submit"
+                            class="w-full bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-2 rounded-lg text-sm transition mt-2">
+                        Save Note
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+
+            <div class="bg-ch-dark border border-gray-800 rounded-lg p-5">
+                <div class="text-xs text-gray-500 uppercase tracking-wider mb-2">Quick Stats</div>
+                <div class="space-y-3">
+                    <div>
+                        <div class="text-xs text-gray-600">Avg Rating</div>
+                        <div class="text-ch-gold text-lg font-bold">{% if submission.vote_count %}{{ submission.average_rating }} &#9733;{% else %}&mdash;{% endif %}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-600">Total Votes</div>
+                        <div class="text-white text-lg font-bold">{{ submission.vote_count }}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-600">Days Pending</div>
+                        <div class="text-white text-lg font-bold">{{ submission.created_at|timesince }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

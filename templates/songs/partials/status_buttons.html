@@ -1,0 +1,31 @@
+{# HTMX-swappable status buttons for detail page #}
+{# Context: submission, can_change_status #}
+<div id="status-buttons-{{ submission.id }}">
+    {% if can_change_status %}
+    <div class="flex flex-col gap-2">
+        {% for value, label in submission.STATUS_CHOICES %}
+        <button hx-post="{% url 'songs:update_status' submission.id %}"
+                hx-vals='{"status": "{{ value }}"}'
+                hx-target="#status-buttons-{{ submission.id }}"
+                hx-swap="outerHTML"
+                class="w-full text-left px-3 py-2.5 rounded-lg text-sm transition
+                    {% if submission.status == value %}
+                        bg-ch-dark border-2 border-ch-gold text-ch-gold font-semibold
+                    {% else %}
+                        bg-ch-dark border border-gray-700 text-gray-400 hover:border-gray-500
+                    {% endif %}">
+            {% if value == 'pending' %}&#9203;{% elif value == 'reviewed' %}&#128065;{% elif value == 'approved' %}&#10003;{% else %}&#10007;{% endif %}
+            {{ label }}
+        </button>
+        {% endfor %}
+    </div>
+    {% else %}
+    <span class="text-xs px-2 py-1 rounded
+        {% if submission.status == 'pending' %}bg-ch-gold/20 text-ch-gold
+        {% elif submission.status == 'reviewed' %}bg-white/10 text-white
+        {% elif submission.status == 'approved' %}bg-green-900/30 text-green-400
+        {% else %}bg-gray-800 text-gray-500{% endif %}">
+        {{ submission.get_status_display }}
+    </span>
+    {% endif %}
+</div>

@@ -219,3 +219,94 @@ class TestSongDashboard:
     def test_dashboard_copy_link_present(self, client_alpha, org_alpha):
         response = client_alpha.get('/songs/')
         assert org_alpha.slug.encode() in response.content
+
+
+@pytest.mark.django_db
+class TestSongDetail:
+    def test_detail_requires_auth(self, org_alpha):
+        sub = SongSubmission.objects.create(organization=org_alpha, title='Test', artist='A')
+        client = Client()
+        response = client.get(f'/songs/{sub.pk}/')
+        assert response.status_code == 302
+
+    def test_detail_renders(self, client_alpha, org_alpha):
+        sub = SongSubmission.objects.create(organization=org_alpha, title='Build My Life', artist='Housefires')
+        response = client_alpha.get(f'/songs/{sub.pk}/')
+        assert response.status_code == 200
+        assert b'Build My Life' in response.content
+        assert b'Housefires' in response.content
+
+    def test_detail_shows_team_votes(self, client_alpha, org_alpha, user_alpha_owner, user_alpha_member):
+        sub = SongSubmission.objects.create(organization=org_alpha, title='Test', artist='A')
+        SongVote.objects.create(submission=sub, user=user_alpha_owner, rating=5)
+        SongVote.objects.create(submission=sub, user=user_alpha_member, rating=4)
+        response = client_alpha.get(f'/songs/{sub.pk}/')
+        assert b'Alpha Owner' in response.content
+        assert b'Alpha Member' in response.content
+
+    def test_detail_org_isolation(self, client_alpha, org_beta):
+        sub = SongSubmission.objects.create(organization=org_beta, title='Beta Song', artist='B')
+        response = client_alpha.get(f'/songs/{sub.pk}/')
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestSongVote:
+    def test_cast_vote(self, client_alpha, org_alpha):
+        sub = SongSubmission.objects.create(organization=org_alpha, title='Test', artist='A')
+        response = client_alpha.post(f'/songs/{sub.pk}/vote/', {'rating': '4'})
+        assert response.status_code == 200
+        sub.refresh_from_db()
+        assert sub.average_rating == 4.0
+        assert sub.vote_count == 1
+
+    def test_update_vote(self, client_alpha, org_alpha, user_alpha_owner):
+        sub = SongSubmission.objects.create(organization=org_alpha, title='Test', artist='A')
+        SongVote.objects.create(submission=sub, user=user_alpha_owner, rating=3)
+        sub.update_rating()
+        response = client_alpha.post(f'/songs/{sub.pk}/vote/', {'rating': '5'})
+        assert response.status_code == 200
+        sub.refresh_from_db()
+        assert sub.average_rating == 5.0
+
+    def test_vote_requires_auth(self, org_alpha):
+        sub = SongSubmission.objects.create(organization=org_alpha, title='Test', artist='A')
+        client = Client()
+        response = client.post(f'/songs/{sub.pk}/vote/', {'rating': '4'})
+        assert response.status_code == 302
+
+    def test_vote_invalid_rating(self, client_alpha, org_alpha):
+        sub = SongSubmission.objects.create(organization=org_alpha, title='Test', artist='A')
+        response = client_alpha.post(f'/songs/{sub.pk}/vote/', {'rating': '0'})
+        assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestSongStatusUpdate:
+    def test_owner_can_update_status(self, client_alpha, org_alpha):
+        sub = SongSubmission.objects.create(organization=org_alpha, title='Test', artist='A')
+        response = client_alpha.post(f'/songs/{sub.pk}/status/', {'status': 'approved'})
+        assert response.status_code == 200
+        sub.refresh_from_db()
+        assert sub.status == 'approved'
+
+    def test_member_cannot_update_status(self, org_alpha, user_alpha_member):
+        sub = SongSubmission.objects.create(organization=org_alpha, title='Test', artist='A')
+        client = Client()
+        client.force_login(user_alpha_member)
+        session = client.session
+        session['organization_id'] = org_alpha.id
+        session.save()
+        response = client.post(f'/songs/{sub.pk}/status/', {'status': 'approved'})
+        assert response.status_code == 403
+
+    def test_status_sets_reviewed_fields(self, client_alpha, org_alpha, user_alpha_owner):
+        sub = SongSubmission.objects.create(organization=org_alpha, title='Test', artist='A')
+        client_alpha.post(f'/songs/{sub.pk}/status/', {
+            'status': 'approved',
+            'review_note': 'Great fit for our style',
+        })
+        sub.refresh_from_db()
+        assert sub.reviewed_by == user_alpha_owner
+        assert sub.reviewed_at is not None
+        assert sub.review_note == 'Great fit for our style'
