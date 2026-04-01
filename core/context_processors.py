@@ -64,6 +64,15 @@ def organization_context(request):
         context['is_past_due'] = organization.subscription_status == 'past_due'
         context['subscription_status'] = organization.subscription_status
 
+        # Pending song submissions count for sidebar badge
+        try:
+            from songs.models import SongSubmission
+            context['pending_song_count'] = SongSubmission.objects.filter(
+                organization=organization, status='pending'
+            ).count()
+        except Exception:
+            context['pending_song_count'] = 0
+
     if membership:
         context['membership'] = membership
         context['is_owner'] = membership.is_owner
