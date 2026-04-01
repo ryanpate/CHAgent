@@ -165,3 +165,57 @@ class TestPublicSubmissionForm:
         assert response.status_code == 200
         sub = SongSubmission.objects.get(title='Holy Spirit')
         assert sub.submitted_by == user_alpha_owner
+
+
+@pytest.mark.django_db
+class TestSongDashboard:
+    def test_dashboard_requires_auth(self):
+        client = Client()
+        response = client.get('/songs/')
+        assert response.status_code == 302
+
+    def test_dashboard_renders(self, client_alpha, org_alpha):
+        SongSubmission.objects.create(organization=org_alpha, title='Test Song', artist='Test Artist')
+        response = client_alpha.get('/songs/')
+        assert response.status_code == 200
+        assert b'Song Submissions' in response.content
+        assert b'Test Song' in response.content
+
+    def test_dashboard_stats(self, client_alpha, org_alpha):
+        SongSubmission.objects.create(organization=org_alpha, title='Song 1', artist='A', status='pending')
+        SongSubmission.objects.create(organization=org_alpha, title='Song 2', artist='B', status='approved')
+        SongSubmission.objects.create(organization=org_alpha, title='Song 3', artist='C', status='rejected')
+        response = client_alpha.get('/songs/')
+        assert response.status_code == 200
+        context = response.context
+        assert context['total_count'] == 3
+        assert context['pending_count'] == 1
+        assert context['approved_count'] == 1
+        assert context['rejected_count'] == 1
+
+    def test_dashboard_filter_by_status(self, client_alpha, org_alpha):
+        SongSubmission.objects.create(organization=org_alpha, title='Pending Song', artist='A', status='pending')
+        SongSubmission.objects.create(organization=org_alpha, title='Approved Song', artist='B', status='approved')
+        response = client_alpha.get('/songs/?status=pending')
+        assert response.status_code == 200
+        assert b'Pending Song' in response.content
+        assert b'Approved Song' not in response.content
+
+    def test_dashboard_sort_by_rating(self, client_alpha, org_alpha, user_alpha_owner):
+        sub1 = SongSubmission.objects.create(organization=org_alpha, title='Low Rated', artist='A', average_rating=2.0)
+        sub2 = SongSubmission.objects.create(organization=org_alpha, title='High Rated', artist='B', average_rating=5.0)
+        response = client_alpha.get('/songs/?sort=highest_rated')
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert content.index('High Rated') < content.index('Low Rated')
+
+    def test_dashboard_org_isolation(self, client_alpha, org_alpha, org_beta):
+        SongSubmission.objects.create(organization=org_alpha, title='Alpha Song', artist='A')
+        SongSubmission.objects.create(organization=org_beta, title='Beta Song', artist='B')
+        response = client_alpha.get('/songs/')
+        assert b'Alpha Song' in response.content
+        assert b'Beta Song' not in response.content
+
+    def test_dashboard_copy_link_present(self, client_alpha, org_alpha):
+        response = client_alpha.get('/songs/')
+        assert org_alpha.slug.encode() in response.content

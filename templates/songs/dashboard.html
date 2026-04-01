@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% load songs_tags %}
+
+{% block title %}Song Submissions{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold">Song Submissions</h1>
+            <p class="text-gray-400 text-sm">Songs suggested by your congregation</p>
+        </div>
+        <button onclick="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}/{{ org_slug }}/songs/submit/'); this.textContent='Copied!'; setTimeout(() => this.textContent='📋 Copy Submission Link', 2000)"
+                class="bg-ch-dark border border-gray-700 text-ch-gold px-4 py-2 rounded-lg text-sm hover:border-ch-gold transition whitespace-nowrap">
+            &#128203; Copy Submission Link
+        </button>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+        <div class="bg-ch-dark border border-gray-800 rounded-lg p-4">
+            <div class="text-xs text-gray-500 uppercase tracking-wider">Total</div>
+            <div class="text-2xl font-bold text-white mt-1">{{ total_count }}</div>
+        </div>
+        <div class="bg-ch-dark border border-gray-800 rounded-lg p-4">
+            <div class="text-xs text-gray-500 uppercase tracking-wider">Pending</div>
+            <div class="text-2xl font-bold text-ch-gold mt-1">{{ pending_count }}</div>
+        </div>
+        <div class="bg-ch-dark border border-gray-800 rounded-lg p-4">
+            <div class="text-xs text-gray-500 uppercase tracking-wider">Approved</div>
+            <div class="text-2xl font-bold text-green-400 mt-1">{{ approved_count }}</div>
+        </div>
+        <div class="bg-ch-dark border border-gray-800 rounded-lg p-4">
+            <div class="text-xs text-gray-500 uppercase tracking-wider">Not Added</div>
+            <div class="text-2xl font-bold text-gray-500 mt-1">{{ rejected_count }}</div>
+        </div>
+        <div class="bg-ch-dark border border-gray-800 rounded-lg p-4">
+            <div class="text-xs text-gray-500 uppercase tracking-wider">Avg Rating</div>
+            <div class="text-2xl font-bold text-white mt-1">{{ avg_rating }} <span class="text-sm text-ch-gold">&#9733;</span></div>
+        </div>
+    </div>
+
+    <!-- Insights -->
+    {% if top_rated_pending or most_submitted_artist %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        {% if top_rated_pending %}
+        <div class="bg-green-900/10 border border-green-900/30 rounded-lg p-4">
+            <div class="text-xs text-green-400 font-semibold mb-1">&#128293; Top Rated Pending</div>
+            <div class="text-white text-sm">{{ top_rated_pending.title }} — {{ top_rated_pending.artist }}</div>
+            <div class="text-gray-500 text-xs mt-1">{{ top_rated_pending.average_rating }} &#9733; avg from {{ top_rated_pending.vote_count }} vote{{ top_rated_pending.vote_count|pluralize }}</div>
+        </div>
+        {% endif %}
+        {% if most_submitted_artist %}
+        <div class="bg-indigo-900/10 border border-indigo-900/30 rounded-lg p-4">
+            <div class="text-xs text-indigo-400 font-semibold mb-1">&#127925; Most Submitted Artist</div>
+            <div class="text-white text-sm">{{ most_submitted_artist.artist }}</div>
+            <div class="text-gray-500 text-xs mt-1">{{ most_submitted_artist.count }} song{{ most_submitted_artist.count|pluralize }} submitted</div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Filters -->
+    <div class="flex flex-col sm:flex-row gap-2 mb-4 items-start sm:items-center">
+        <select onchange="window.location.search='status='+this.value+'&sort={{ sort }}'"
+                class="bg-ch-dark border border-gray-700 text-white rounded-lg px-3 py-2 text-sm">
+            <option value="" {% if not status_filter %}selected{% endif %}>All Statuses</option>
+            <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+            <option value="reviewed" {% if status_filter == 'reviewed' %}selected{% endif %}>Reviewed</option>
+            <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Approved</option>
+            <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Not Added</option>
+        </select>
+        <select onchange="window.location.search='status={{ status_filter }}&sort='+this.value"
+                class="bg-ch-dark border border-gray-700 text-white rounded-lg px-3 py-2 text-sm">
+            <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest First</option>
+            <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>Oldest First</option>
+            <option value="highest_rated" {% if sort == 'highest_rated' %}selected{% endif %}>Highest Rated</option>
+            <option value="most_votes" {% if sort == 'most_votes' %}selected{% endif %}>Most Votes</option>
+        </select>
+        <span class="text-gray-500 text-xs sm:ml-auto">{{ submissions|length }} submission{{ submissions|length|pluralize }}</span>
+    </div>
+
+    <!-- Submissions List -->
+    <div class="space-y-2">
+        {% for submission in submissions %}
+        {% include 'songs/partials/submission_row.html' with submission=submission user_votes=user_votes %}
+        {% empty %}
+        <div class="bg-ch-dark border border-gray-800 rounded-lg p-8 text-center">
+            <p class="text-gray-400">No song submissions yet.</p>
+            <p class="text-gray-500 text-sm mt-2">Share your submission link to start receiving suggestions!</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

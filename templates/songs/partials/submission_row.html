@@ -1,0 +1,44 @@
+{# Single submission row for dashboard list #}
+{# Context: submission, user_votes #}
+{% load songs_tags %}
+<div class="bg-ch-dark border border-gray-800 rounded-lg p-4 flex items-center gap-4" id="submission-{{ submission.id }}">
+    <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+            <a href="{% url 'songs:detail' submission.id %}" class="text-white font-semibold hover:text-ch-gold transition truncate">
+                {{ submission.title }}
+            </a>
+            <span class="text-xs px-2 py-0.5 rounded
+                {% if submission.status == 'pending' %}bg-ch-gold/20 text-ch-gold
+                {% elif submission.status == 'reviewed' %}bg-white/10 text-white
+                {% elif submission.status == 'approved' %}bg-green-900/30 text-green-400
+                {% else %}bg-gray-800 text-gray-500{% endif %}">
+                {{ submission.get_status_display }}
+            </span>
+        </div>
+        <div class="text-gray-400 text-sm mt-1">
+            {{ submission.artist }}
+            &middot; {{ submission.submitter_name|default:"Anonymous" }}
+            &middot; {{ submission.created_at|timesince }} ago
+        </div>
+        {% if submission.submitter_comment %}
+        <div class="text-gray-600 text-xs mt-1 italic truncate">"{{ submission.submitter_comment }}"</div>
+        {% endif %}
+    </div>
+
+    <div class="flex items-center gap-2 shrink-0">
+        {% if submission.link %}
+        <a href="{{ submission.link }}" target="_blank" rel="noopener"
+           class="text-ch-gold text-xs hover:text-ch-gold/80 transition whitespace-nowrap">
+            &#127911; Listen
+        </a>
+        {% else %}
+        <span class="text-gray-600 text-xs whitespace-nowrap">No link</span>
+        {% endif %}
+    </div>
+
+    <div class="shrink-0">
+        {% with user_rating=user_votes|get_item:submission.id show_count=True %}
+        {% include 'songs/partials/star_rating.html' %}
+        {% endwith %}
+    </div>
+</div>

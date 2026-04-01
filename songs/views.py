@@ -1,10 +1,12 @@
 import logging
+from django.db.models import Count, Avg, Q
 from django.http import Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 
 from core.models import Organization
+from core.middleware import require_organization
 from .models import SongSubmission, SongVote
 
 logger = logging.getLogger(__name__)
@@ -77,9 +79,63 @@ def song_submit(request, org_slug):
     })
 
 
+@login_required
+@require_organization
 def song_dashboard(request):
-    """Team song submission dashboard. Implemented in Task 4."""
-    raise Http404
+    """Team dashboard for reviewing song submissions."""
+    org = request.organization
+    submissions = SongSubmission.objects.filter(organization=org)
+
+    # Stats
+    total_count = submissions.count()
+    pending_count = submissions.filter(status='pending').count()
+    approved_count = submissions.filter(status='approved').count()
+    rejected_count = submissions.filter(status='rejected').count()
+    reviewed_count = submissions.filter(status='reviewed').count()
+    avg_rating = submissions.filter(vote_count__gt=0).aggregate(avg=Avg('average_rating'))['avg'] or 0.0
+
+    # Insights
+    top_rated_pending = submissions.filter(status='pending', vote_count__gt=0).order_by('-average_rating').first()
+    most_submitted_artist = submissions.values('artist').annotate(count=Count('id')).order_by('-count').first()
+
+    # Filter
+    status_filter = request.GET.get('status', '')
+    if status_filter:
+        submissions = submissions.filter(status=status_filter)
+
+    # Sort
+    sort = request.GET.get('sort', 'newest')
+    if sort == 'oldest':
+        submissions = submissions.order_by('created_at')
+    elif sort == 'highest_rated':
+        submissions = submissions.order_by('-average_rating', '-vote_count')
+    elif sort == 'most_votes':
+        submissions = submissions.order_by('-vote_count', '-average_rating')
+    else:
+        submissions = submissions.order_by('-created_at')
+
+    # User votes for inline display
+    user_votes = {}
+    if request.user.is_authenticated:
+        votes = SongVote.objects.filter(submission__organization=org, user=request.user).values_list('submission_id', 'rating')
+        user_votes = dict(votes)
+
+    context = {
+        'submissions': submissions,
+        'total_count': total_count,
+        'pending_count': pending_count,
+        'approved_count': approved_count,
+        'rejected_count': rejected_count,
+        'reviewed_count': reviewed_count,
+        'avg_rating': round(avg_rating, 1),
+        'top_rated_pending': top_rated_pending,
+        'most_submitted_artist': most_submitted_artist,
+        'status_filter': status_filter,
+        'sort': sort,
+        'user_votes': user_votes,
+        'org_slug': org.slug,
+    }
+    return render(request, 'songs/dashboard.html', context)
 
 
 def song_detail(request, pk):

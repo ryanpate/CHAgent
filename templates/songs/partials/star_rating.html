@@ -1,0 +1,18 @@
+{# Inline star rating — used in dashboard rows and detail page #}
+{# Context: submission, user_rating (0-5), show_count (bool) #}
+<div class="flex items-center gap-1" id="stars-{{ submission.id }}">
+    {% for i in "12345" %}
+    <button hx-post="{% url 'songs:vote' submission.id %}"
+            hx-vals='{"rating": "{{ i }}"}'
+            hx-target="#stars-{{ submission.id }}"
+            hx-swap="outerHTML"
+            class="text-lg {% if forloop.counter <= user_rating %}text-ch-gold{% else %}text-gray-700{% endif %} hover:text-ch-gold transition cursor-pointer">
+        &#9733;
+    </button>
+    {% endfor %}
+    {% if show_count %}
+    <span class="text-xs text-gray-500 ml-1">
+        {% if submission.vote_count > 0 %}{{ submission.average_rating }} ({{ submission.vote_count }}){% else %}No votes{% endif %}
+    </span>
+    {% endif %}
+</div>
