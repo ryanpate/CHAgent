@@ -1,0 +1,72 @@
+{% extends 'core/onboarding/base_public.html' %}
+
+{% block title %}Suggest a Song — {{ org.name }}{% endblock %}
+{% block meta_description %}Suggest a song for the {{ org.name }} worship team to consider adding to their rotation.{% endblock %}
+
+{% block container_class %}max-w-lg{% endblock %}
+
+{% block content %}
+<div class="text-center mb-8">
+    <div class="text-ch-gold text-3xl font-bold tracking-wider mb-1">ARIA</div>
+    <div class="text-gray-400 text-sm">{{ org.name }}</div>
+</div>
+
+<div class="bg-ch-dark rounded-lg p-6 md:p-8">
+    <h2 class="text-xl font-bold text-white mb-1">Suggest a Song</h2>
+    <p class="text-gray-400 text-sm mb-6">Know a song that would be great for worship? Let the team know!</p>
+
+    {% if errors %}
+    <div class="bg-red-900/30 border border-red-700 rounded-lg p-4 mb-6">
+        {% for error in errors %}
+        <p class="text-red-400 text-sm">{{ error }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="POST">
+        {% csrf_token %}
+
+        <div class="mb-4">
+            <label class="block text-xs text-gray-400 uppercase tracking-wider mb-1">Song Title <span class="text-red-400">*</span></label>
+            <input type="text" name="title" value="{{ title|default:'' }}"
+                   class="w-full bg-ch-gray border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-ch-gold focus:outline-none"
+                   placeholder="e.g. Goodness of God" required>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-xs text-gray-400 uppercase tracking-wider mb-1">Artist / Band <span class="text-red-400">*</span></label>
+            <input type="text" name="artist" value="{{ artist|default:'' }}"
+                   class="w-full bg-ch-gray border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-ch-gold focus:outline-none"
+                   placeholder="e.g. Bethel Music" required>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-xs text-gray-400 uppercase tracking-wider mb-1">Link <span class="text-gray-600">(optional)</span></label>
+            <input type="url" name="link" value="{{ link|default:'' }}"
+                   class="w-full bg-ch-gray border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-ch-gold focus:outline-none"
+                   placeholder="YouTube, Spotify, or Apple Music URL">
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-xs text-gray-400 uppercase tracking-wider mb-1">Your Name <span class="text-gray-600">(optional)</span></label>
+            <input type="text" name="submitter_name" value="{{ submitter_name|default:'' }}"
+                   class="w-full bg-ch-gray border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-ch-gold focus:outline-none"
+                   placeholder="So the team knows who suggested it">
+        </div>
+
+        <div class="mb-6">
+            <label class="block text-xs text-gray-400 uppercase tracking-wider mb-1">Why this song? <span class="text-gray-600">(optional)</span></label>
+            <textarea name="submitter_comment" rows="3"
+                      class="w-full bg-ch-gray border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-ch-gold focus:outline-none resize-y"
+                      placeholder="e.g. Would be perfect for Easter, the lyrics really speak to...">{{ submitter_comment|default:'' }}</textarea>
+        </div>
+
+        <button type="submit"
+                class="w-full bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-3 rounded-lg transition">
+            Submit Song
+        </button>
+    </form>
+</div>
+
+<p class="text-center text-gray-600 text-xs mt-6">Powered by ARIA</p>
+{% endblock %}

@@ -85,3 +85,83 @@ class TestSongVoteModel:
         sub.update_rating()
         assert sub.average_rating == 0.0
         assert sub.vote_count == 0
+
+
+@pytest.mark.django_db
+class TestPublicSubmissionForm:
+    def test_form_renders(self, org_alpha):
+        client = Client()
+        response = client.get(f'/{org_alpha.slug}/songs/submit/')
+        assert response.status_code == 200
+        assert b'Suggest a Song' in response.content
+
+    def test_form_shows_org_name(self, org_alpha):
+        client = Client()
+        response = client.get(f'/{org_alpha.slug}/songs/submit/')
+        assert org_alpha.name.encode() in response.content
+
+    def test_invalid_org_slug_404(self):
+        client = Client()
+        response = client.get('/nonexistent-org/songs/submit/')
+        assert response.status_code == 404
+
+    def test_submit_song(self, org_alpha):
+        client = Client()
+        response = client.post(f'/{org_alpha.slug}/songs/submit/', {
+            'title': 'Goodness of God',
+            'artist': 'Bethel Music',
+            'link': 'https://youtube.com/watch?v=example',
+            'submitter_name': 'Jane Doe',
+            'submitter_comment': 'Perfect for Easter',
+        })
+        assert response.status_code == 200
+        assert b'Song Submitted' in response.content
+        sub = SongSubmission.objects.get(title='Goodness of God')
+        assert sub.organization == org_alpha
+        assert sub.artist == 'Bethel Music'
+        assert sub.submitter_name == 'Jane Doe'
+
+    def test_submit_requires_title(self, org_alpha):
+        client = Client()
+        response = client.post(f'/{org_alpha.slug}/songs/submit/', {
+            'title': '',
+            'artist': 'Bethel Music',
+        })
+        assert response.status_code == 200
+        assert b'Song title is required' in response.content
+        assert SongSubmission.objects.count() == 0
+
+    def test_submit_requires_artist(self, org_alpha):
+        client = Client()
+        response = client.post(f'/{org_alpha.slug}/songs/submit/', {
+            'title': 'Goodness of God',
+            'artist': '',
+        })
+        assert response.status_code == 200
+        assert b'Artist is required' in response.content
+        assert SongSubmission.objects.count() == 0
+
+    def test_submit_minimal_fields(self, org_alpha):
+        client = Client()
+        response = client.post(f'/{org_alpha.slug}/songs/submit/', {
+            'title': 'Way Maker',
+            'artist': 'Sinach',
+        })
+        assert response.status_code == 200
+        sub = SongSubmission.objects.get(title='Way Maker')
+        assert sub.submitter_name == ''
+        assert sub.link == ''
+
+    def test_logged_in_user_prefills(self, org_alpha, user_alpha_owner):
+        client = Client()
+        client.force_login(user_alpha_owner)
+        session = client.session
+        session['organization_id'] = org_alpha.id
+        session.save()
+        response = client.post(f'/{org_alpha.slug}/songs/submit/', {
+            'title': 'Holy Spirit',
+            'artist': 'Francesca Battistelli',
+        })
+        assert response.status_code == 200
+        sub = SongSubmission.objects.get(title='Holy Spirit')
+        assert sub.submitted_by == user_alpha_owner

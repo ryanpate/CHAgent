@@ -10,6 +10,7 @@ import os
 
 from core.sitemaps import StaticViewSitemap
 from blog.sitemaps import BlogSitemap
+from songs.views import song_submit, song_submit_thanks
 
 # Sitemap configuration
 sitemaps = {
@@ -113,6 +114,9 @@ urlpatterns = [
     path('.well-known/apple-app-site-association', apple_app_site_association, name='aasa'),
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
+    path('<slug:org_slug>/songs/submit/', song_submit, name='song_submit'),
+    path('<slug:org_slug>/songs/submit/thanks/', song_submit_thanks, name='song_submit_thanks'),
+    path('songs/', include('songs.urls', namespace='songs')),
     path('blog/', include('blog.urls', namespace='blog')),
     path('api/', include('core.api_urls')),
     path('', include('core.urls')),
