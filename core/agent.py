@@ -1183,14 +1183,17 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
             teams[team_name] = []
         teams[team_name].append(member)
 
-    # Process each team member and get their contact info
-    # NOTE: person_id from Services API is a Services person ID, NOT a People person ID.
-    # We must resolve the People person ID by name search before fetching contact info.
+    # Process each team member and get their contact info using single API call per person.
+    # Uses search_person_with_contact_info() which sideloads emails/phone_numbers
+    # via PCO's include parameter (1 API call instead of 3 per person).
+    import time
     contact_info_cache = {}  # Cache by name to avoid duplicate lookups
 
     # Collect all phones and emails for group action links
     all_phones = []  # List of (name, clean_phone) tuples
     all_emails = []  # List of (name, email) tuples
+
+    lookup_count = 0  # Track API calls for throttling
 
     for team_name in sorted(teams.keys()):
         parts.append(f"\n  {team_name}:")
@@ -1204,15 +1207,25 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
                 member_line += f" ({position})"
             member_line += f" - {status}"
 
-            # Resolve People API person ID by name (Services person IDs != People person IDs)
+            # Look up contact info via People API search with sideloaded includes
             contact_info = None
             if name and name != 'Unknown' and people_api.is_configured:
                 if name in contact_info_cache:
                     contact_info = contact_info_cache[name]
                 else:
-                    people_person_id = people_api.find_people_person_id_by_name(name)
-                    if people_person_id:
-                        contact_info = people_api.get_person_contact_info_only(people_person_id)
+                    # Throttle to avoid PCO rate limits (100 req/20s)
+                    if lookup_count > 0 and lookup_count % 5 == 0:
+                        time.sleep(1.0)
+                    elif lookup_count > 0:
+                        time.sleep(0.3)
+
+                    try:
+                        contact_info = people_api.search_person_with_contact_info(name)
+                    except Exception as e:
+                        logger.warning(f"Error looking up contact for {name}: {e}")
+                        contact_info = None
+                    lookup_count += 1
+
                     if contact_info:
                         # Filter based on contact_type requested
                         if contact_type == 'phone':

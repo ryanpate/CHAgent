@@ -162,12 +162,14 @@ class PlanningCenterAPI:
         """Fetch all teams from Planning Center Services."""
         return self._get("/services/v2/teams")
 
-    def search_people(self, query: str) -> list:
+    def search_people(self, query: str, include: str = None) -> list:
         """
         Search for people in Planning Center by name.
 
         Args:
             query: Name to search for.
+            include: Comma-separated related resources to include
+                     (e.g., 'emails,phone_numbers').
 
         Returns:
             List of matching person records.
@@ -181,9 +183,38 @@ class PlanningCenterAPI:
             'where[search_name]': query,
             'per_page': 25
         }
+        if include:
+            params['include'] = include
 
         result = self._get(endpoint, params)
+        # Attach included resources to their parent records
+        if include and 'included' in result:
+            self._attach_included(result.get('data', []), result['included'])
         return result.get('data', [])
+
+    @staticmethod
+    def _attach_included(data: list, included: list):
+        """Attach PCO sideloaded 'included' resources onto their parent records."""
+        # Group included by (type, id)
+        included_map = {}
+        for item in included:
+            key = (item['type'], item['id'])
+            included_map.setdefault(key, [])
+            included_map[key].append(item)
+
+        # Build a lookup: parent_id -> list of included items
+        parent_items = {}
+        for item in included:
+            rels = item.get('relationships', {})
+            person_rel = rels.get('person', {})
+            person_data = person_rel.get('data', {})
+            parent_id = person_data.get('id') if isinstance(person_data, dict) else None
+            if parent_id:
+                parent_items.setdefault(parent_id, [])
+                parent_items[parent_id].append(item)
+
+        for record in data:
+            record['_included'] = parent_items.get(record['id'], [])
 
     def get_person_by_id(self, person_id: str) -> Optional[dict]:
         """
@@ -403,6 +434,60 @@ class PlanningCenterAPI:
         except Exception as e:
             logger.warning(f"Error getting contact info for person {person_id}: {e}")
             return None
+
+        return contact_info
+
+    def search_person_with_contact_info(self, full_name: str) -> Optional[dict]:
+        """
+        Search for a person by name and return their contact info in 1 API call.
+
+        Uses PCO's include parameter to sideload emails and phone_numbers,
+        avoiding separate API calls per person. This is critical for compound
+        team contact queries where we need contact info for many people.
+
+        Args:
+            full_name: Full name of the person (e.g., "John Smith").
+
+        Returns:
+            Dict with 'phones' and 'emails' lists, or None if not found.
+        """
+        if not self.is_configured or not full_name:
+            return None
+
+        results = self.search_people(full_name, include='emails,phone_numbers')
+        if not results:
+            return None
+
+        # Find best match (exact or first result)
+        person = None
+        if len(results) == 1:
+            person = results[0]
+        else:
+            name_lower = full_name.lower().strip()
+            for p in results:
+                attrs = p.get('attributes', {})
+                first = (attrs.get('first_name') or '').strip()
+                last = (attrs.get('last_name') or '').strip()
+                if f"{first} {last}".lower() == name_lower:
+                    person = p
+                    break
+            if not person:
+                person = results[0]
+
+        # Extract contact info from sideloaded included resources
+        contact_info = {'phones': [], 'emails': []}
+        for item in person.get('_included', []):
+            if item['type'] == 'PhoneNumber':
+                phone_str = item.get('attributes', {}).get('number', '')
+                if phone_str:
+                    location = item.get('attributes', {}).get('location', '')
+                    if location:
+                        phone_str += f" ({location})"
+                    contact_info['phones'].append(phone_str)
+            elif item['type'] == 'Email':
+                address = item.get('attributes', {}).get('address', '')
+                if address:
+                    contact_info['emails'].append(address)
 
         return contact_info
 
