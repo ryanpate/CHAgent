@@ -1133,6 +1133,61 @@ def _clean_phone_for_link(phone: str) -> str:
     return re.sub(r'\D', '', phone)
 
 
+def add_contact_action_links(text: str) -> str:
+    """
+    Post-process AI response to add sms:/tel:/mailto: action links to phone
+    numbers and email addresses that aren't already linked.
+
+    Works on markdown text BEFORE marked.parse() converts it to HTML.
+    Adds inline action buttons so users can text/call/email directly from
+    iOS, Android, Mac, or any platform that supports sms:/tel:/mailto: URIs.
+    """
+    import re
+
+    # Skip if no phone-like or email-like content
+    if not re.search(r'\d{3}.*\d{4}|@', text):
+        return text
+
+    lines = text.split('\n')
+    result = []
+
+    for line in lines:
+        # Skip lines that already have sms:/tel:/mailto: links
+        if re.search(r'\]\((?:sms|tel|mailto):', line):
+            result.append(line)
+            continue
+
+        # Match phone numbers: (xxx) xxx-xxxx, xxx-xxx-xxxx, xxx.xxx.xxxx,
+        # +1xxxxxxxxxx, etc. — but not inside markdown link syntax
+        phone_pattern = r'(\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}|\+\d{10,})'
+        phones_found = list(re.finditer(phone_pattern, line))
+
+        if phones_found:
+            # Process from end to start so indices remain valid
+            for match in reversed(phones_found):
+                phone = match.group(1).strip()
+                clean = _clean_phone_for_link(phone)
+                # Only link numbers with at least 10 digits
+                digits_only = re.sub(r'\D', '', clean)
+                if len(digits_only) >= 10:
+                    replacement = f"{phone} [Text](sms:{clean}) [Call](tel:{clean})"
+                    line = line[:match.start(1)] + replacement + line[match.end(1):]
+
+        # Match email addresses not already inside markdown links
+        email_pattern = r'(?<!\[)(?<!\()([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?!\]|\))'
+        emails_found = list(re.finditer(email_pattern, line))
+
+        if emails_found:
+            for match in reversed(emails_found):
+                email = match.group(1)
+                replacement = f"{email} [Email](mailto:{email})"
+                line = line[:match.start(1)] + replacement + line[match.end(1):]
+
+        result.append(line)
+
+    return '\n'.join(result)
+
+
 def handle_compound_team_contact_query(date_reference: str, contact_type: str, organization=None) -> str:
     """
     Handle compound queries that ask for contact info of people serving on a date.
@@ -4351,6 +4406,9 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             logger.error(f"Error querying Claude for compound query: {e}")
             answer = "I encountered an error retrieving the team contact information. Please try again."
 
+        # Post-process: add sms/tel/mailto action links to phone numbers and emails
+        answer = add_contact_action_links(answer)
+
         # Save assistant response to chat history
         ChatMessage.objects.create(
             user=user,
@@ -5044,6 +5102,9 @@ Summary: {interaction.ai_summary or 'No summary'}
     if organization:
         from .views import render_image_refs
         answer = render_image_refs(answer, organization)
+
+    # Add sms/tel/mailto action links to phone numbers and emails
+    answer = add_contact_action_links(answer)
 
     # Step 5: Save to chat history
     ChatMessage.objects.create(
