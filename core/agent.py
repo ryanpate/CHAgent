@@ -1238,17 +1238,39 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
             teams[team_name] = []
         teams[team_name].append(member)
 
-    # Process each team member and get their contact info using single API call per person.
-    # Uses search_person_with_contact_info() which sideloads emails/phone_numbers
-    # via PCO's include parameter (1 API call instead of 3 per person).
-    import time
-    contact_info_cache = {}  # Cache by name to avoid duplicate lookups
+    # Fetch contact info for all team members in parallel using ThreadPoolExecutor.
+    # Each lookup is 1 API call (search with sideloaded emails/phone_numbers).
+    # Parallel execution avoids Gunicorn worker timeout on sequential lookups.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # Deduplicate names to avoid redundant API calls
+    unique_names = list({m.get('name', 'Unknown') for m in team_members if m.get('name') and m.get('name') != 'Unknown'})
+    contact_info_cache = {}
+
+    def _fetch_contact(name):
+        try:
+            return name, people_api.search_person_with_contact_info(name)
+        except Exception as e:
+            logger.warning(f"Error looking up contact for {name}: {e}")
+            return name, None
+
+    if people_api.is_configured and unique_names:
+        # Use 4 workers to stay well under PCO rate limit (100 req/20s)
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {executor.submit(_fetch_contact, name): name for name in unique_names}
+            for future in as_completed(futures):
+                name, info = future.result()
+                if info:
+                    # Filter based on contact_type requested
+                    if contact_type == 'phone':
+                        info = {'phones': info.get('phones', [])}
+                    elif contact_type == 'email':
+                        info = {'emails': info.get('emails', [])}
+                    contact_info_cache[name] = info
 
     # Collect all phones and emails for group action links
     all_phones = []  # List of (name, clean_phone) tuples
     all_emails = []  # List of (name, email) tuples
-
-    lookup_count = 0  # Track API calls for throttling
 
     for team_name in sorted(teams.keys()):
         parts.append(f"\n  {team_name}:")
@@ -1262,33 +1284,7 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
                 member_line += f" ({position})"
             member_line += f" - {status}"
 
-            # Look up contact info via People API search with sideloaded includes
-            contact_info = None
-            if name and name != 'Unknown' and people_api.is_configured:
-                if name in contact_info_cache:
-                    contact_info = contact_info_cache[name]
-                else:
-                    # Throttle to avoid PCO rate limits (100 req/20s)
-                    if lookup_count > 0 and lookup_count % 5 == 0:
-                        time.sleep(1.0)
-                    elif lookup_count > 0:
-                        time.sleep(0.3)
-
-                    try:
-                        contact_info = people_api.search_person_with_contact_info(name)
-                    except Exception as e:
-                        logger.warning(f"Error looking up contact for {name}: {e}")
-                        contact_info = None
-                    lookup_count += 1
-
-                    if contact_info:
-                        # Filter based on contact_type requested
-                        if contact_type == 'phone':
-                            contact_info = {'phones': contact_info.get('phones', [])}
-                        elif contact_type == 'email':
-                            contact_info = {'emails': contact_info.get('emails', [])}
-                        # 'contact' type keeps both
-                        contact_info_cache[name] = contact_info
+            contact_info = contact_info_cache.get(name)
 
             # Add contact info to the member line with inline action links
             if contact_info:
