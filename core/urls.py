@@ -102,6 +102,7 @@ urlpatterns = [
     path('tasks/<int:pk>/recurrence/remove/', views.task_remove_recurrence, name='task_remove_recurrence'),
     path('tasks/<int:pk>/comment/', views.task_comment, name='task_comment'),
     path('task-comments/<int:pk>/mark-decision/', views.task_comment_mark_decision, name='task_comment_mark_decision'),
+    path('tasks/<int:pk>/toggle-watch/', views.task_toggle_watch, name='task_toggle_watch'),
     path('tasks/<int:parent_pk>/subtasks/create/', views.task_create_subtask, name='task_create_subtask'),
     path('tasks/<int:pk>/subtasks/', views.task_subtasks_partial, name='task_subtasks_partial'),
     # Reactions

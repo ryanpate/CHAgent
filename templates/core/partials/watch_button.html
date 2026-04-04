@@ -1,0 +1,17 @@
+<button
+  hx-post="{% url 'task_toggle_watch' task.pk %}"
+  hx-target="this"
+  hx-swap="outerHTML"
+  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border transition-colors
+    {% if is_watching %}
+      bg-[#2a1a0a] border-[#c9a227]/30 text-[#c9a227] hover:bg-[#3a2a1a]
+    {% else %}
+      bg-[#1a1a1a] border-[#333] text-[#888] hover:border-[#c9a227]/30 hover:text-[#c9a227]
+    {% endif %}"
+>
+  {% if is_watching %}
+    <span>&#128065;</span><span>Watching</span>
+  {% else %}
+    <span>&#128065;</span><span>Watch</span>
+  {% endif %}
+</button>

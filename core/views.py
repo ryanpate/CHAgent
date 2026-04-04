@@ -3547,6 +3547,42 @@ def task_comment_mark_decision(request, pk):
 
 @login_required
 @require_POST
+def task_toggle_watch(request, pk):
+    """Subscribe or unsubscribe the current user from a task's updates."""
+    from .models import Task, TaskWatcher
+
+    task = get_object_or_404(Task, pk=pk)
+    project = task.project
+
+    # Access control: must be project member/owner, or assignee/creator for standalone
+    if project:
+        if project.owner != request.user and request.user not in project.members.all():
+            return HttpResponse('Access denied', status=403)
+    else:
+        if request.user not in task.assignees.all() and task.created_by != request.user:
+            return HttpResponse('Access denied', status=403)
+
+    watcher_qs = TaskWatcher.objects.filter(user=request.user, task=task)
+    if watcher_qs.exists():
+        watcher_qs.delete()
+        is_watching = False
+    else:
+        TaskWatcher.objects.create(user=request.user, task=task)
+        is_watching = True
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/watch_button.html', {
+            'task': task,
+            'is_watching': is_watching,
+        })
+
+    if project:
+        return redirect('task_detail', project_pk=project.pk, pk=task.pk)
+    return redirect('standalone_task_detail', pk=task.pk)
+
+
+@login_required
+@require_POST
 def toggle_reaction(request):
     """Toggle an emoji reaction on a message. Adds if not present, removes if already reacted."""
     from .models import MessageReaction

@@ -309,3 +309,62 @@ class TestMarkDecisionView:
         assert response.status_code == 403
         comment.refresh_from_db()
         assert comment.is_decision is False
+
+
+@pytest.mark.django_db
+class TestTaskWatchToggle:
+    """Tests for the toggle-watch view."""
+
+    def _setup(self, user_owner, org, user_member):
+        from core.models import Project, Task
+        project = Project.objects.create(
+            organization=org, name='P', owner=user_owner,
+        )
+        project.members.add(user_member)
+        task = Task.objects.create(
+            project=project, title='T', created_by=user_owner,
+        )
+        return project, task
+
+    def test_watch_creates_watcher(self, client, user_alpha_owner, user_alpha_member, org_alpha):
+        """POST creates a TaskWatcher record when not watching."""
+        from core.models import TaskWatcher
+
+        _, task = self._setup(user_alpha_owner, org_alpha, user_alpha_member)
+        client.force_login(user_alpha_member)
+
+        response = client.post(reverse('task_toggle_watch', args=[task.pk]))
+
+        assert response.status_code in (200, 302)
+        assert TaskWatcher.objects.filter(user=user_alpha_member, task=task).exists()
+
+    def test_unwatch_removes_watcher(self, client, user_alpha_owner, user_alpha_member, org_alpha):
+        """POST removes TaskWatcher record when already watching."""
+        from core.models import TaskWatcher
+
+        _, task = self._setup(user_alpha_owner, org_alpha, user_alpha_member)
+        TaskWatcher.objects.create(user=user_alpha_member, task=task)
+        client.force_login(user_alpha_member)
+
+        response = client.post(reverse('task_toggle_watch', args=[task.pk]))
+
+        assert response.status_code in (200, 302)
+        assert not TaskWatcher.objects.filter(user=user_alpha_member, task=task).exists()
+
+    def test_watch_denied_for_non_project_member(
+        self, client, user_alpha_owner, user_beta_owner, org_alpha
+    ):
+        """Users outside the project cannot watch its tasks."""
+        from core.models import Project, Task, TaskWatcher
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='T', created_by=user_alpha_owner,
+        )
+        client.force_login(user_beta_owner)
+
+        response = client.post(reverse('task_toggle_watch', args=[task.pk]))
+
+        assert response.status_code == 403
+        assert not TaskWatcher.objects.filter(user=user_beta_owner, task=task).exists()
