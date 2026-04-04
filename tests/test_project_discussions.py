@@ -452,3 +452,66 @@ class TestDiscussionMessageMarkDecision:
         )
 
         assert response.status_code == 403
+
+
+@pytest.mark.django_db
+class TestDecisionsTab:
+    """Tests for the aggregated decisions tab."""
+
+    def _setup_decisions(self, user, org):
+        from core.models import (
+            Project, Task, TaskComment, ProjectDiscussion, ProjectDiscussionMessage,
+        )
+        project = Project.objects.create(organization=org, name='P', owner=user)
+        task = Task.objects.create(project=project, title='T', created_by=user)
+        # Task comment decision
+        tc = TaskComment.objects.create(task=task, author=user, content='Task decision')
+        tc.is_decision = True
+        tc.decision_marked_by = user
+        tc.decision_marked_at = timezone.now()
+        tc.save()
+        # Discussion message decision
+        disc = ProjectDiscussion.objects.create(
+            organization=org, project=project, title='D', created_by=user,
+        )
+        dm = ProjectDiscussionMessage.objects.create(
+            discussion=disc, author=user, content='Disc decision',
+        )
+        dm.is_decision = True
+        dm.decision_marked_by = user
+        dm.decision_marked_at = timezone.now()
+        dm.save()
+        return project, tc, dm
+
+    def test_tab_shows_both_sources(self, client, user_alpha_owner, org_alpha):
+        """Decisions tab lists decisions from TaskComments AND discussion messages."""
+        project, tc, dm = self._setup_decisions(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('decisions_tab', args=[project.pk]))
+
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert 'Task decision' in body
+        assert 'Disc decision' in body
+
+    def test_tab_excludes_non_decisions(self, client, user_alpha_owner, org_alpha):
+        """Non-decision comments/messages don't appear."""
+        from core.models import Project, Task, TaskComment
+        project = Project.objects.create(organization=org_alpha, name='P', owner=user_alpha_owner)
+        task = Task.objects.create(project=project, title='T', created_by=user_alpha_owner)
+        TaskComment.objects.create(task=task, author=user_alpha_owner, content='Not a decision')
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('decisions_tab', args=[project.pk]))
+
+        assert response.status_code == 200
+        assert 'Not a decision' not in response.content.decode()
+
+    def test_non_member_denied(self, client, user_alpha_owner, user_beta_owner, org_alpha):
+        project, _, _ = self._setup_decisions(user_alpha_owner, org_alpha)
+        client.force_login(user_beta_owner)
+
+        response = client.get(reverse('decisions_tab', args=[project.pk]))
+
+        assert response.status_code in (302, 403, 404)

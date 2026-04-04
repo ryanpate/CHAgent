@@ -11,6 +11,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse, FileResponse
 from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db import models
@@ -2851,16 +2852,64 @@ def discussion_detail(request, project_pk, pk):
 
 @login_required
 def decisions_tab(request, project_pk):
-    """Stub — replaced in P2 Task 9."""
-    from .models import Project
+    """Aggregated view of all decisions across task comments and discussion messages."""
+    from .models import Project, TaskComment, ProjectDiscussionMessage
+
     org = get_org(request)
     queryset = Project.objects.all()
     if org:
         queryset = queryset.filter(organization=org)
     project = get_object_or_404(queryset, pk=project_pk)
+
+    # Access control
     if project.owner != request.user and request.user not in project.members.all():
         return redirect('project_list')
-    return HttpResponse('Decisions tab — coming in Task 9', status=200)
+
+    # Decisions from TaskComments
+    task_decisions = TaskComment.objects.filter(
+        task__project=project,
+        is_decision=True,
+    ).select_related('author', 'task', 'decision_marked_by').order_by('-decision_marked_at')
+
+    # Decisions from ProjectDiscussionMessages
+    discussion_decisions = ProjectDiscussionMessage.objects.filter(
+        discussion__project=project,
+        is_decision=True,
+    ).select_related('author', 'discussion', 'decision_marked_by').order_by('-decision_marked_at')
+
+    # Merge into one timeline
+    combined = []
+    for c in task_decisions:
+        combined.append({
+            'content': c.content,
+            'marked_at': c.decision_marked_at,
+            'marked_by': c.decision_marked_by,
+            'author': c.author,
+            'source_label': f'Task: {c.task.title}',
+            'source_url': reverse('task_detail', kwargs={
+                'project_pk': project.pk, 'pk': c.task.pk,
+            }),
+        })
+    for m in discussion_decisions:
+        combined.append({
+            'content': m.content,
+            'marked_at': m.decision_marked_at,
+            'marked_by': m.decision_marked_by,
+            'author': m.author,
+            'source_label': f'Discussion: {m.discussion.title}',
+            'source_url': reverse('discussion_detail', kwargs={
+                'project_pk': project.pk, 'pk': m.discussion.pk,
+            }),
+        })
+
+    combined.sort(key=lambda x: x['marked_at'] or timezone.now(), reverse=True)
+
+    context = {
+        'project': project,
+        'decisions': combined,
+        'active_tab': 'decisions',
+    }
+    return render(request, 'core/comms/decisions_tab.html', context)
 
 
 @login_required
