@@ -461,3 +461,78 @@ class TestTaskDetailAutoMarkRead:
 
         assert response.status_code == 200
         assert response.context['is_watching'] is True
+
+
+@pytest.mark.django_db
+class TestNotifyWatchersOnComment:
+    """Verify watchers receive notifications about new comments."""
+
+    def test_watchers_are_notified(
+        self, user_alpha_owner, user_alpha_member, org_alpha, monkeypatch
+    ):
+        """A watcher who is not the author receives a notification."""
+        from core.models import (
+            Project, Task, TaskComment, TaskWatcher, NotificationPreference,
+        )
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        project.members.add(user_alpha_member)
+        task = Task.objects.create(
+            project=project, title='T', created_by=user_alpha_owner,
+        )
+        TaskWatcher.objects.create(user=user_alpha_member, task=task)
+        NotificationPreference.get_or_create_for_user(user_alpha_member)
+
+        comment = TaskComment.objects.create(
+            task=task, author=user_alpha_owner, content='New update'
+        )
+
+        notified_users = []
+
+        def fake_send(user, notification_type, title, body, url, data=None, priority='normal'):
+            notified_users.append(user)
+
+        monkeypatch.setattr('core.notifications.send_notification_to_user', fake_send)
+
+        from core.notifications import notify_task_comment
+        notify_task_comment(comment)
+
+        assert user_alpha_member in notified_users
+        assert user_alpha_owner not in notified_users  # author excluded
+
+    def test_watcher_pref_disabled_no_notification(
+        self, user_alpha_owner, user_alpha_member, org_alpha, monkeypatch
+    ):
+        """A watcher with task_comment_on_watched=False is NOT notified."""
+        from core.models import (
+            Project, Task, TaskComment, TaskWatcher, NotificationPreference,
+        )
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        project.members.add(user_alpha_member)
+        task = Task.objects.create(
+            project=project, title='T', created_by=user_alpha_owner,
+        )
+        TaskWatcher.objects.create(user=user_alpha_member, task=task)
+        prefs = NotificationPreference.get_or_create_for_user(user_alpha_member)
+        prefs.task_comment_on_watched = False
+        prefs.save()
+
+        comment = TaskComment.objects.create(
+            task=task, author=user_alpha_owner, content='Update'
+        )
+
+        notified_users = []
+        monkeypatch.setattr(
+            'core.notifications.send_notification_to_user',
+            lambda user, **kwargs: notified_users.append(user)
+        )
+
+        from core.notifications import notify_task_comment
+        notify_task_comment(comment)
+
+        assert user_alpha_member not in notified_users

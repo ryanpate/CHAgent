@@ -664,41 +664,76 @@ def notify_task_due_soon(task):
 
 def notify_task_comment(comment):
     """
-    Send notification when someone comments on a task.
+    Notify assignees, mentioned users, and watchers about a new task comment.
+    Respects per-user NotificationPreference toggles.
     """
+    from .models import TaskWatcher, NotificationPreference
+
     task = comment.task
     author = comment.author
-    author_name = author.display_name or author.username if author else 'Someone'
 
-    # Handle standalone tasks vs project tasks
-    if task.project:
-        url = f'/comms/projects/{task.project.id}/tasks/{task.id}/'
+    # Collect all candidate recipients with their reason
+    author_pk = author.pk if author else None
+    assignee_ids = set(task.assignees.exclude(pk=author_pk).values_list('pk', flat=True))
+    mentioned_ids = set(comment.mentioned_users.exclude(pk=author_pk).values_list('pk', flat=True))
+    watcher_ids = set(
+        TaskWatcher.objects.filter(task=task)
+        .exclude(user__pk=author_pk)
+        .values_list('user__pk', flat=True)
+    )
+
+    # Remove assignees from watcher set to avoid double-notifying
+    watcher_only_ids = watcher_ids - assignee_ids - mentioned_ids
+    # Remove mentioned users from assignee set (mentions take precedence for flag check)
+    assignee_only_ids = assignee_ids - mentioned_ids
+
+    from accounts.models import User
+
+    project = task.project
+    if project:
+        url = f"/comms/projects/{project.pk}/tasks/{task.pk}/"
     else:
-        url = f'/tasks/{task.id}/'
+        url = f"/tasks/{task.pk}/"
 
-    # Notify all assignees except the commenter
-    users_to_notify = set(task.assignees.all())
+    title = f"New comment on: {task.title}"
+    body_text = comment.content[:140]
 
-    # Also notify mentioned users
-    for mentioned_user in comment.mentioned_users.all():
-        users_to_notify.add(mentioned_user)
+    # Always notify mentioned users (respects no special flag beyond @mention)
+    for uid in mentioned_ids:
+        try:
+            user = User.objects.get(pk=uid)
+            send_notification_to_user(
+                user, 'task', title, body_text, url,
+                data={'task_id': task.pk, 'reason': 'mention'},
+            )
+        except User.DoesNotExist:
+            continue
 
-    # Remove the author from notifications
-    if author:
-        users_to_notify.discard(author)
+    # Notify assignees per their preference
+    for uid in assignee_only_ids:
+        try:
+            user = User.objects.get(pk=uid)
+            prefs = NotificationPreference.get_or_create_for_user(user)
+            if prefs.task_comment_on_assigned:
+                send_notification_to_user(
+                    user, 'task', title, body_text, url,
+                    data={'task_id': task.pk, 'reason': 'assigned'},
+                )
+        except User.DoesNotExist:
+            continue
 
-    total_sent = 0
-    for user in users_to_notify:
-        sent = send_notification_to_user(
-            user=user,
-            notification_type='channel',  # Reuse channel type for task comments
-            title=f"Comment on: {task.title}",
-            body=f"{author_name}: {comment.content[:80]}...",
-            url=url,
-            data={'task_id': task.id, 'comment_id': comment.id},
-        )
-        total_sent += sent
-    return total_sent
+    # Notify watchers per their preference
+    for uid in watcher_only_ids:
+        try:
+            user = User.objects.get(pk=uid)
+            prefs = NotificationPreference.get_or_create_for_user(user)
+            if prefs.task_comment_on_watched:
+                send_notification_to_user(
+                    user, 'task', title, body_text, url,
+                    data={'task_id': task.pk, 'reason': 'watching'},
+                )
+        except User.DoesNotExist:
+            continue
 
 
 def notify_user_mentioned(message, mentioned_users):
