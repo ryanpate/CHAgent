@@ -229,3 +229,38 @@ class TestDiscussionCreateView:
         )
 
         assert response.status_code in (302, 403, 404)
+
+@pytest.mark.django_db
+class TestDiscussionDetailView:
+    """Tests for the discussion detail/thread view."""
+
+    def _setup(self, user, org):
+        from core.models import Project, ProjectDiscussion, ProjectDiscussionMessage
+        project = Project.objects.create(organization=org, name='P', owner=user)
+        disc = ProjectDiscussion.objects.create(
+            organization=org, project=project, title='Topic', created_by=user,
+        )
+        msg1 = ProjectDiscussionMessage.objects.create(
+            discussion=disc, author=user, content='First reply',
+        )
+        return project, disc, msg1
+
+    def test_detail_renders(self, client, user_alpha_owner, org_alpha):
+        """GET renders discussion with its messages."""
+        project, disc, msg = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('discussion_detail', args=[project.pk, disc.pk]))
+
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert 'Topic' in body
+        assert 'First reply' in body
+
+    def test_non_member_denied(self, client, user_alpha_owner, user_beta_owner, org_alpha):
+        project, disc, _ = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_beta_owner)
+
+        response = client.get(reverse('discussion_detail', args=[project.pk, disc.pk]))
+
+        assert response.status_code in (302, 403, 404)

@@ -1,0 +1,53 @@
+<div id="disc-msg-{{ message.pk }}" class="flex gap-3 group">
+  <!-- Avatar -->
+  <div class="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-xs text-[#c9a227] flex-shrink-0">
+    {{ message.author.display_name|default:message.author.username|slice:":1"|upper }}
+  </div>
+
+  <div class="flex-1 min-w-0">
+    <!-- Author + timestamp + decision chip -->
+    <div class="flex items-center gap-2 mb-1 flex-wrap">
+      <span class="text-sm font-semibold text-[#c9a227]">
+        {{ message.author.display_name|default:message.author.username }}
+      </span>
+      <span class="text-xs text-[#555]">{{ message.created_at|timesince }} ago</span>
+      {% if message.is_decision %}
+        <span class="px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-[#1a2a0a] text-[#4ade80] rounded border border-[#2a3a1a]">
+          Decision
+        </span>
+      {% endif %}
+    </div>
+
+    <!-- Content (highlighted if decision) -->
+    {% if message.is_decision %}
+      <div class="mt-1 bg-[#1a2a0a] border border-[#2a3a1a] rounded px-3 py-2">
+        <p class="text-xs uppercase tracking-wide text-[#4ade80] mb-1">Decision</p>
+        <p class="text-sm text-[#ccc] whitespace-pre-wrap">{{ message.content }}</p>
+      </div>
+    {% else %}
+      <p class="text-sm text-[#ccc] whitespace-pre-wrap">{{ message.content }}</p>
+    {% endif %}
+
+    <!-- Linked tasks -->
+    {% if message.linked_tasks.exists %}
+      <div class="mt-2 flex flex-wrap gap-1.5">
+        {% for t in message.linked_tasks.all %}
+          <a href="{% url 'task_detail' project_pk=message.discussion.project.pk pk=t.pk %}"
+             class="inline-flex items-center gap-1 text-xs text-[#888] bg-[#0f0f0f] border border-[#333] rounded px-2 py-0.5 hover:border-[#c9a227]/30 hover:text-[#c9a227]">
+            &#128203; {{ t.title|truncatechars:40 }}
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <!-- Action row: mark decision -->
+    <div class="flex items-center gap-3 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <button hx-post="{% url 'discussion_message_mark_decision' message.pk %}"
+              hx-target="#disc-msg-{{ message.pk }}"
+              hx-swap="outerHTML"
+              class="text-xs text-[#555] hover:text-[#4ade80]">
+        {% if message.is_decision %}Unmark decision{% else %}Mark as decision{% endif %}
+      </button>
+    </div>
+  </div>
+</div>

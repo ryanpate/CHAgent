@@ -2822,8 +2822,31 @@ def discussion_create(request, project_pk):
 
 @login_required
 def discussion_detail(request, project_pk, pk):
-    """Stub — replaced in P2 Task 5."""
-    return HttpResponse('Discussion detail — coming in Task 5', status=200)
+    """View a discussion thread with all messages."""
+    from .models import Project, ProjectDiscussion
+
+    org = get_org(request)
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    project = get_object_or_404(queryset, pk=project_pk)
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return redirect('project_list')
+
+    discussion = get_object_or_404(ProjectDiscussion, pk=pk, project=project)
+    messages_qs = discussion.messages.select_related('author').prefetch_related(
+        'mentioned_users', 'linked_tasks'
+    )
+
+    context = {
+        'project': project,
+        'discussion': discussion,
+        'messages_list': messages_qs,
+        'active_tab': 'discussions',
+    }
+    return render(request, 'core/comms/discussion_detail.html', context)
 
 
 @login_required

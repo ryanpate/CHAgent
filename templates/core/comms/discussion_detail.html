@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ discussion.title }} - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-6">
+  <div class="mb-4 text-sm text-[#888]">
+    <a href="{% url 'project_detail' pk=project.pk %}" class="hover:text-[#c9a227]">{{ project.name }}</a>
+    <span class="mx-2">/</span>
+    <a href="{% url 'discussion_list' project.pk %}" class="hover:text-[#c9a227]">Discussions</a>
+  </div>
+
+  <!-- Discussion header -->
+  <div class="flex items-start justify-between gap-4 mb-4">
+    <h1 class="text-xl font-semibold text-[#eee] flex-1">
+      {% if discussion.is_resolved %}<span class="text-[#4ade80] mr-1">&#10003;</span>{% endif %}
+      {{ discussion.title }}
+    </h1>
+    <form method="post" action="{% url 'discussion_toggle_resolved' discussion.pk %}">
+      {% csrf_token %}
+      <button type="submit"
+              class="px-3 py-1.5 text-sm rounded-md border
+                     {% if discussion.is_resolved %}bg-[#1a2a0a] border-[#2a3a1a] text-[#4ade80]{% else %}bg-[#1a1a1a] border-[#333] text-[#888] hover:border-[#4ade80]/30 hover:text-[#4ade80]{% endif %}">
+        {% if discussion.is_resolved %}Resolved &middot; Reopen{% else %}Mark Resolved{% endif %}
+      </button>
+    </form>
+  </div>
+
+  <div class="pb-4 mb-6 border-b border-[#333] text-xs text-[#666]">
+    Started by {{ discussion.created_by.display_name|default:discussion.created_by.username }} &middot;
+    {{ discussion.created_at|timesince }} ago
+  </div>
+
+  <!-- Messages -->
+  <div id="discussion-messages" class="space-y-4 mb-6">
+    {% for msg in messages_list %}
+      {% include 'core/partials/discussion_message.html' with message=msg %}
+    {% empty %}
+      <p class="text-sm text-[#666] italic">No messages yet. Start the conversation below.</p>
+    {% endfor %}
+  </div>
+
+  <!-- Reply form -->
+  <form hx-post="{% url 'discussion_post_message' discussion.pk %}"
+        hx-target="#discussion-messages"
+        hx-swap="beforeend"
+        hx-on::after-request="this.reset()"
+        class="bg-[#1a1a1a] border border-[#333] rounded-lg p-3">
+    {% csrf_token %}
+    <textarea name="content" rows="3" required
+              placeholder="Reply..."
+              class="w-full bg-transparent text-[#ccc] placeholder-[#555] text-sm focus:outline-none resize-none"></textarea>
+    <div class="flex items-center justify-end mt-2 pt-2 border-t border-[#2a2a2a]">
+      <button type="submit" class="px-4 py-1.5 bg-[#c9a227] text-[#0f0f0f] text-sm font-semibold rounded hover:bg-[#d9b237]">
+        Reply
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
