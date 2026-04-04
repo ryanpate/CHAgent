@@ -4375,8 +4375,58 @@ def project_template_create(request):
 
 @login_required
 def project_template_detail(request, pk):
-    """Stub — replaced in P3 Task 5."""
-    return HttpResponse('Detail — Task 5', status=200)
+    """View + edit a ProjectTemplate."""
+    from .models import ProjectTemplate, ProjectTemplateTask
+
+    org = get_org(request)
+    queryset = ProjectTemplate.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    template = get_object_or_404(queryset, pk=pk)
+
+    # Visibility: own template or shared in same org
+    if template.created_by != request.user and not template.is_shared:
+        return redirect('project_template_list')
+
+    if request.method == 'POST':
+        # Only creator can edit
+        if template.created_by != request.user:
+            return redirect('project_template_detail', pk=template.pk)
+
+        name = request.POST.get('name', '').strip()
+        if name:
+            template.name = name
+            template.description = request.POST.get('description', '').strip()
+            template.is_shared = request.POST.get('is_shared') == 'on'
+            template.save()
+
+            # Replace all template tasks
+            template.template_tasks.all().delete()
+            titles = request.POST.getlist('task_title')
+            offsets = request.POST.getlist('task_offset')
+            roles = request.POST.getlist('task_role')
+            for i, title in enumerate(titles):
+                title = title.strip()
+                if not title:
+                    continue
+                try:
+                    offset = int(offsets[i]) if i < len(offsets) and offsets[i] else 0
+                except (ValueError, IndexError):
+                    offset = 0
+                role = roles[i].strip() if i < len(roles) else ''
+                ProjectTemplateTask.objects.create(
+                    template=template, title=title,
+                    relative_due_offset_days=offset, role_placeholder=role,
+                    order=i,
+                )
+
+        return redirect('project_template_detail', pk=template.pk)
+
+    return render(request, 'core/comms/project_template_detail.html', {
+        'template': template,
+        'template_tasks': template.template_tasks.all(),
+        'can_edit': template.created_by == request.user,
+    })
 
 
 @login_required

@@ -220,3 +220,66 @@ class TestProjectTemplateCreateView:
         })
 
         assert not ProjectTemplate.objects.filter(organization=org_alpha).exists()
+
+
+@pytest.mark.django_db
+class TestProjectTemplateDetailView:
+    """Tests for viewing/editing a ProjectTemplate."""
+
+    def test_detail_renders(self, client, user_alpha_owner, org_alpha):
+        """GET shows template with its tasks."""
+        from core.models import ProjectTemplate, ProjectTemplateTask
+        t = ProjectTemplate.objects.create(
+            organization=org_alpha, name='Sunday', created_by=user_alpha_owner,
+        )
+        ProjectTemplateTask.objects.create(
+            template=t, title='Stage setup', relative_due_offset_days=-3, order=0,
+        )
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('project_template_detail', args=[t.pk]))
+
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert 'Sunday' in body
+        assert 'Stage setup' in body
+
+    def test_detail_denies_other_org(
+        self, client, user_alpha_owner, user_beta_owner, org_alpha
+    ):
+        """Users from other orgs cannot view a template."""
+        from core.models import ProjectTemplate
+        t = ProjectTemplate.objects.create(
+            organization=org_alpha, name='T', created_by=user_alpha_owner,
+        )
+        client.force_login(user_beta_owner)
+        response = client.get(reverse('project_template_detail', args=[t.pk]))
+        assert response.status_code in (302, 403, 404)
+
+    def test_post_updates_template(self, client, user_alpha_owner, org_alpha):
+        """POST replaces tasks and updates name/description."""
+        from core.models import ProjectTemplate, ProjectTemplateTask
+        t = ProjectTemplate.objects.create(
+            organization=org_alpha, name='Old', created_by=user_alpha_owner,
+        )
+        ProjectTemplateTask.objects.create(
+            template=t, title='Old task', relative_due_offset_days=0, order=0,
+        )
+        client.force_login(user_alpha_owner)
+
+        response = client.post(
+            reverse('project_template_detail', args=[t.pk]),
+            {
+                'name': 'New Name',
+                'description': 'Updated',
+                'task_title': ['Fresh task'],
+                'task_offset': ['-2'],
+                'task_role': [''],
+            },
+        )
+
+        assert response.status_code == 302
+        t.refresh_from_db()
+        assert t.name == 'New Name'
+        assert t.template_tasks.count() == 1
+        assert t.template_tasks.first().title == 'Fresh task'
