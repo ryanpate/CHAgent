@@ -9,9 +9,9 @@
       bg-[#1a1a1a] border-[#333] text-[#888] hover:border-[#c9a227]/30 hover:text-[#c9a227]
     {% endif %}"
 >
-  {% if is_watching %}
-    <span>&#128065;</span><span>Watching</span>
-  {% else %}
-    <span>&#128065;</span><span>Watch</span>
-  {% endif %}
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+    <circle cx="12" cy="12" r="3"></circle>
+  </svg>
+  {% if is_watching %}Watching{% else %}Watch{% endif %}
 </button>

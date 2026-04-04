@@ -1,0 +1,14 @@
+{
+    "Simulator Target Bundle": "church.aria.app",
+    "aps": {
+        "alert": {
+            "title": "Test from Aria",
+            "body": "Prayer request reminder for Sarah Johnson"
+        },
+        "badge": 3,
+        "sound": "default"
+    },
+    "data": {
+        "url": "/followups/"
+    }
+}
