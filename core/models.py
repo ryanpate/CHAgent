@@ -3247,6 +3247,41 @@ class TaskTemplate(models.Model):
         if from_date is None:
             from_date = timezone.now().date()
 
+        # PCO service-linked recurrence: fetch plan dates from Planning Center
+        if self.recurrence_type == 'pco_service':
+            if not self.pco_service_type_id:
+                return []
+            try:
+                from .planning_center import PlanningCenterServicesAPI
+                from datetime import timedelta as _td
+                api = PlanningCenterServicesAPI()
+                start_str = from_date.strftime('%Y-%m-%d')
+                end_str = (from_date + _td(days=365)).strftime('%Y-%m-%d')
+                plans = api.get_plans_by_date_range(
+                    service_type_id=self.pco_service_type_id,
+                    start_date=start_str,
+                    end_date=end_str,
+                    limit=count * 2,
+                )
+                results = []
+                for plan in plans:
+                    sort_date = plan.get('sort_date') or plan.get('date')
+                    if not sort_date:
+                        continue
+                    date_str = sort_date[:10]
+                    try:
+                        service_date = timezone.datetime.strptime(date_str, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        continue
+                    target_date = service_date - _td(days=self.pco_days_before_service)
+                    if target_date >= from_date:
+                        results.append(target_date)
+                    if len(results) >= count:
+                        break
+                return results
+            except Exception:
+                return []
+
         occurrences = []
         current = from_date
 
