@@ -3506,6 +3506,47 @@ def task_comment(request, pk):
 
 @login_required
 @require_POST
+def task_comment_mark_decision(request, pk):
+    """Toggle a TaskComment's is_decision flag. Only project members can mark decisions."""
+    from .models import TaskComment
+
+    comment = get_object_or_404(TaskComment, pk=pk)
+    task = comment.task
+    project = task.project
+
+    # Access control: must be project member/owner, or assignee/creator for standalone
+    if project:
+        if project.owner != request.user and request.user not in project.members.all():
+            return HttpResponse('Access denied', status=403)
+    else:
+        if request.user not in task.assignees.all() and task.created_by != request.user:
+            return HttpResponse('Access denied', status=403)
+
+    if comment.is_decision:
+        comment.is_decision = False
+        comment.decision_marked_by = None
+        comment.decision_marked_at = None
+    else:
+        comment.is_decision = True
+        comment.decision_marked_by = request.user
+        comment.decision_marked_at = timezone.now()
+    comment.save(update_fields=['is_decision', 'decision_marked_by', 'decision_marked_at'])
+
+    if request.headers.get('HX-Request'):
+        from .models import MessageReaction
+        comment.reaction_list = list(comment.reactions.all()) if hasattr(comment, 'reactions') else []
+        return render(request, 'core/partials/task_comment.html', {
+            'comment': comment,
+            'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
+        })
+
+    if project:
+        return redirect('task_detail', project_pk=project.pk, pk=task.pk)
+    return redirect('standalone_task_detail', pk=task.pk)
+
+
+@login_required
+@require_POST
 def toggle_reaction(request):
     """Toggle an emoji reaction on a message. Adds if not present, removes if already reacted."""
     from .models import MessageReaction

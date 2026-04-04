@@ -238,3 +238,74 @@ class TestNotificationPreferenceExtensions:
         assert prefs.task_comment_on_assigned is True
         assert prefs.task_comment_on_watched is True
         assert prefs.decision_notifications is True
+
+
+@pytest.mark.django_db
+class TestMarkDecisionView:
+    """Tests for the mark-as-decision view."""
+
+    def _setup(self, user_owner, org):
+        from core.models import Project, Task, TaskComment
+        project = Project.objects.create(
+            organization=org, name='P', owner=user_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='T', created_by=user_owner,
+        )
+        comment = TaskComment.objects.create(
+            task=task, author=user_owner, content='Decision text'
+        )
+        return project, task, comment
+
+    def test_mark_as_decision_sets_fields(self, client, user_alpha_owner, org_alpha):
+        """POST to mark-decision view flips is_decision=True."""
+        from core.models import TaskComment
+
+        _, _, comment = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.post(
+            reverse('task_comment_mark_decision', args=[comment.pk]),
+        )
+
+        assert response.status_code in (200, 302)
+        comment.refresh_from_db()
+        assert comment.is_decision is True
+        assert comment.decision_marked_by == user_alpha_owner
+        assert comment.decision_marked_at is not None
+
+    def test_unmark_decision_clears_fields(self, client, user_alpha_owner, org_alpha):
+        """POST again flips is_decision back to False."""
+        from core.models import TaskComment
+
+        _, _, comment = self._setup(user_alpha_owner, org_alpha)
+        comment.is_decision = True
+        comment.decision_marked_by = user_alpha_owner
+        comment.decision_marked_at = timezone.now()
+        comment.save()
+
+        client.force_login(user_alpha_owner)
+        response = client.post(
+            reverse('task_comment_mark_decision', args=[comment.pk]),
+        )
+
+        assert response.status_code in (200, 302)
+        comment.refresh_from_db()
+        assert comment.is_decision is False
+        assert comment.decision_marked_by is None
+        assert comment.decision_marked_at is None
+
+    def test_mark_decision_denies_non_project_members(
+        self, client, user_alpha_owner, user_beta_owner, org_alpha
+    ):
+        """Users outside the project cannot mark decisions."""
+        _, _, comment = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_beta_owner)
+
+        response = client.post(
+            reverse('task_comment_mark_decision', args=[comment.pk]),
+        )
+
+        assert response.status_code == 403
+        comment.refresh_from_db()
+        assert comment.is_decision is False
