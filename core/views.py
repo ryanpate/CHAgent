@@ -2960,8 +2960,30 @@ def discussion_post_message(request, pk):
 @login_required
 @require_POST
 def discussion_message_mark_decision(request, pk):
-    """Stub — replaced in P2 Task 8."""
-    return HttpResponse('Stub', status=200)
+    """Toggle is_decision flag on a ProjectDiscussionMessage."""
+    from .models import ProjectDiscussionMessage
+
+    msg = get_object_or_404(ProjectDiscussionMessage, pk=pk)
+    project = msg.discussion.project
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return HttpResponse('Access denied', status=403)
+
+    if msg.is_decision:
+        msg.is_decision = False
+        msg.decision_marked_by = None
+        msg.decision_marked_at = None
+    else:
+        msg.is_decision = True
+        msg.decision_marked_by = request.user
+        msg.decision_marked_at = timezone.now()
+    msg.save(update_fields=['is_decision', 'decision_marked_by', 'decision_marked_at', 'updated_at'])
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/discussion_message.html', {'message': msg})
+
+    return redirect('discussion_detail', project_pk=project.pk, pk=msg.discussion.pk)
 
 
 @login_required

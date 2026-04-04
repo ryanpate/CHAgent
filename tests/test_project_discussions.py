@@ -395,3 +395,60 @@ class TestDiscussionToggleResolved:
         response = client.post(reverse('discussion_toggle_resolved', args=[disc.pk]))
 
         assert response.status_code == 403
+
+
+@pytest.mark.django_db
+class TestDiscussionMessageMarkDecision:
+    """Tests for marking discussion messages as decisions."""
+
+    def _setup(self, user, org):
+        from core.models import Project, ProjectDiscussion, ProjectDiscussionMessage
+        project = Project.objects.create(organization=org, name='P', owner=user)
+        disc = ProjectDiscussion.objects.create(
+            organization=org, project=project, title='T', created_by=user,
+        )
+        msg = ProjectDiscussionMessage.objects.create(
+            discussion=disc, author=user, content='Text',
+        )
+        return project, disc, msg
+
+    def test_mark(self, client, user_alpha_owner, org_alpha):
+        """POST marks message as decision."""
+        _, _, msg = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.post(
+            reverse('discussion_message_mark_decision', args=[msg.pk]),
+        )
+
+        assert response.status_code in (200, 302)
+        msg.refresh_from_db()
+        assert msg.is_decision is True
+        assert msg.decision_marked_by == user_alpha_owner
+        assert msg.decision_marked_at is not None
+
+    def test_unmark(self, client, user_alpha_owner, org_alpha):
+        """POST again clears decision state."""
+        _, _, msg = self._setup(user_alpha_owner, org_alpha)
+        msg.is_decision = True
+        msg.decision_marked_by = user_alpha_owner
+        msg.decision_marked_at = timezone.now()
+        msg.save()
+
+        client.force_login(user_alpha_owner)
+        client.post(reverse('discussion_message_mark_decision', args=[msg.pk]))
+
+        msg.refresh_from_db()
+        assert msg.is_decision is False
+        assert msg.decision_marked_by is None
+        assert msg.decision_marked_at is None
+
+    def test_non_member_denied(self, client, user_alpha_owner, user_beta_owner, org_alpha):
+        _, _, msg = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_beta_owner)
+
+        response = client.post(
+            reverse('discussion_message_mark_decision', args=[msg.pk]),
+        )
+
+        assert response.status_code == 403
