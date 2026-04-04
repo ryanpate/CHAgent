@@ -131,3 +131,44 @@ class TestProjectDiscussionMessageModel:
         assert msg.is_decision is True
         assert msg.decision_marked_by == user_alpha_owner
         assert msg.decision_marked_at is not None
+
+
+@pytest.mark.django_db
+class TestDiscussionListView:
+    """Tests for the discussion list view."""
+
+    def _setup(self, user, org):
+        from core.models import Project, ProjectDiscussion
+        project = Project.objects.create(
+            organization=org, name='P', owner=user,
+        )
+        open_disc = ProjectDiscussion.objects.create(
+            organization=org, project=project, title='Open one', created_by=user,
+        )
+        resolved_disc = ProjectDiscussion.objects.create(
+            organization=org, project=project, title='Resolved one',
+            created_by=user, is_resolved=True,
+        )
+        return project, open_disc, resolved_disc
+
+    def test_list_view_renders(self, client, user_alpha_owner, org_alpha):
+        """GET renders the list of discussions for a project."""
+        project, open_disc, resolved_disc = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('discussion_list', args=[project.pk]))
+
+        assert response.status_code == 200
+        assert 'Open one' in response.content.decode()
+        assert 'Resolved one' in response.content.decode()
+
+    def test_list_view_denies_non_members(
+        self, client, user_alpha_owner, user_beta_owner, org_alpha
+    ):
+        """Non-project-members cannot view the list."""
+        project, _, _ = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_beta_owner)
+
+        response = client.get(reverse('discussion_list', args=[project.pk]))
+
+        assert response.status_code in (302, 403, 404)

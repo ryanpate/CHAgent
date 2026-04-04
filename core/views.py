@@ -2754,6 +2754,80 @@ def project_detail(request, pk):
 
 
 @login_required
+def discussion_list(request, project_pk):
+    """List all discussions for a project."""
+    from .models import Project, ProjectDiscussion
+
+    org = get_org(request)
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    project = get_object_or_404(queryset, pk=project_pk)
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return redirect('project_list')
+
+    discussions = project.discussions.select_related('created_by').prefetch_related(
+        'messages'
+    ).order_by('is_resolved', '-created_at')
+
+    context = {
+        'project': project,
+        'discussions': discussions,
+        'active_tab': 'discussions',
+    }
+    return render(request, 'core/comms/discussion_list.html', context)
+
+
+@login_required
+def discussion_create(request, project_pk):
+    """Stub — replaced in P2 Task 4."""
+    return HttpResponse('New discussion form — coming in Task 4', status=200)
+
+
+@login_required
+def discussion_detail(request, project_pk, pk):
+    """Stub — replaced in P2 Task 5."""
+    return HttpResponse('Discussion detail — coming in Task 5', status=200)
+
+
+@login_required
+def decisions_tab(request, project_pk):
+    """Stub — replaced in P2 Task 9."""
+    from .models import Project
+    org = get_org(request)
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    project = get_object_or_404(queryset, pk=project_pk)
+    if project.owner != request.user and request.user not in project.members.all():
+        return redirect('project_list')
+    return HttpResponse('Decisions tab — coming in Task 9', status=200)
+
+
+@login_required
+@require_POST
+def discussion_toggle_resolved(request, pk):
+    """Stub — replaced in P2 Task 7."""
+    return HttpResponse('Stub', status=200)
+
+
+@login_required
+@require_POST
+def discussion_post_message(request, pk):
+    """Stub — replaced in P2 Task 6."""
+    return HttpResponse('Stub', status=200)
+
+
+@login_required
+@require_POST
+def discussion_message_mark_decision(request, pk):
+    """Stub — replaced in P2 Task 8."""
+    return HttpResponse('Stub', status=200)
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def project_create(request):
     """Create a new project."""

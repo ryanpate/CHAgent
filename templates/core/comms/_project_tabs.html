@@ -1,0 +1,14 @@
+<div class="flex border-b border-[#333] mb-6">
+  <a href="{% url 'project_detail' pk=project.pk %}"
+     class="px-4 py-2 text-sm {% if active_tab == 'tasks' %}text-[#c9a227] border-b-2 border-[#c9a227] font-semibold{% else %}text-[#888] hover:text-[#eee]{% endif %}">
+    Tasks
+  </a>
+  <a href="{% url 'discussion_list' project.pk %}"
+     class="px-4 py-2 text-sm {% if active_tab == 'discussions' %}text-[#c9a227] border-b-2 border-[#c9a227] font-semibold{% else %}text-[#888] hover:text-[#eee]{% endif %}">
+    Discussions
+  </a>
+  <a href="{% url 'decisions_tab' project.pk %}"
+     class="px-4 py-2 text-sm {% if active_tab == 'decisions' %}text-[#c9a227] border-b-2 border-[#c9a227] font-semibold{% else %}text-[#888] hover:text-[#eee]{% endif %}">
+    Decisions
+  </a>
+</div>
