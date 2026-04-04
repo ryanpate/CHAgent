@@ -339,3 +339,59 @@ class TestDiscussionPostMessage:
 
         assert response.status_code == 403
         assert not ProjectDiscussionMessage.objects.filter(discussion=disc).exists()
+
+
+@pytest.mark.django_db
+class TestDiscussionToggleResolved:
+    """Tests for marking discussions as resolved/unresolved."""
+
+    def _setup(self, user, org):
+        from core.models import Project, ProjectDiscussion
+        project = Project.objects.create(organization=org, name='P', owner=user)
+        disc = ProjectDiscussion.objects.create(
+            organization=org, project=project, title='T', created_by=user,
+        )
+        return project, disc
+
+    def test_resolve(self, client, user_alpha_owner, org_alpha):
+        """POST sets is_resolved=True with metadata."""
+        from core.models import ProjectDiscussion
+
+        _, disc = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.post(
+            reverse('discussion_toggle_resolved', args=[disc.pk]),
+        )
+
+        assert response.status_code in (200, 302)
+        disc.refresh_from_db()
+        assert disc.is_resolved is True
+        assert disc.resolved_by == user_alpha_owner
+        assert disc.resolved_at is not None
+
+    def test_unresolve(self, client, user_alpha_owner, org_alpha):
+        """POST again clears resolved state."""
+        from core.models import ProjectDiscussion
+
+        _, disc = self._setup(user_alpha_owner, org_alpha)
+        disc.is_resolved = True
+        disc.resolved_by = user_alpha_owner
+        disc.resolved_at = timezone.now()
+        disc.save()
+
+        client.force_login(user_alpha_owner)
+        client.post(reverse('discussion_toggle_resolved', args=[disc.pk]))
+
+        disc.refresh_from_db()
+        assert disc.is_resolved is False
+        assert disc.resolved_by is None
+        assert disc.resolved_at is None
+
+    def test_non_member_denied(self, client, user_alpha_owner, user_beta_owner, org_alpha):
+        _, disc = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_beta_owner)
+
+        response = client.post(reverse('discussion_toggle_resolved', args=[disc.pk]))
+
+        assert response.status_code == 403

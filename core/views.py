@@ -2866,8 +2866,27 @@ def decisions_tab(request, project_pk):
 @login_required
 @require_POST
 def discussion_toggle_resolved(request, pk):
-    """Stub — replaced in P2 Task 7."""
-    return HttpResponse('Stub', status=200)
+    """Toggle a discussion's is_resolved flag."""
+    from .models import ProjectDiscussion
+
+    discussion = get_object_or_404(ProjectDiscussion, pk=pk)
+    project = discussion.project
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return HttpResponse('Access denied', status=403)
+
+    if discussion.is_resolved:
+        discussion.is_resolved = False
+        discussion.resolved_by = None
+        discussion.resolved_at = None
+    else:
+        discussion.is_resolved = True
+        discussion.resolved_by = request.user
+        discussion.resolved_at = timezone.now()
+    discussion.save(update_fields=['is_resolved', 'resolved_by', 'resolved_at', 'updated_at'])
+
+    return redirect('discussion_detail', project_pk=project.pk, pk=discussion.pk)
 
 
 @login_required
