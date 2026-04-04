@@ -315,3 +315,66 @@ class TestProjectTemplateDeleteView:
         client.post(reverse('project_template_delete', args=[t.pk]))
 
         assert ProjectTemplate.objects.filter(pk=t.pk).exists()
+
+
+@pytest.mark.django_db
+class TestProjectTemplateApplyView:
+    """Tests for creating a Project from a template."""
+
+    def _template(self, user, org):
+        from core.models import ProjectTemplate, ProjectTemplateTask
+        t = ProjectTemplate.objects.create(
+            organization=org, name='Sunday', created_by=user,
+        )
+        ProjectTemplateTask.objects.create(
+            template=t, title='Stage', relative_due_offset_days=-3, order=0,
+        )
+        return t
+
+    def test_get_apply_form(self, client, user_alpha_owner, org_alpha):
+        """GET shows form to pick event date and project name."""
+        t = self._template(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('project_template_apply', args=[t.pk]))
+
+        assert response.status_code == 200
+        body = response.content.decode().lower()
+        assert 'event date' in body or 'event_date' in body
+
+    def test_post_creates_project(self, client, user_alpha_owner, org_alpha):
+        """POST spawns a new Project with tasks from the template."""
+        from core.models import Project
+        t = self._template(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.post(
+            reverse('project_template_apply', args=[t.pk]),
+            {
+                'project_name': 'Easter 2026',
+                'event_date': '2026-04-05',
+            },
+        )
+
+        assert response.status_code == 302
+        p = Project.objects.get(name='Easter 2026')
+        assert p.organization == org_alpha
+        assert p.owner == user_alpha_owner
+        assert p.tasks.count() == 1
+        stage = p.tasks.first()
+        assert stage.title == 'Stage'
+        assert str(stage.due_date) == '2026-04-02'
+
+    def test_post_requires_fields(self, client, user_alpha_owner, org_alpha):
+        """POST without name or date re-renders form."""
+        from core.models import Project
+        t = self._template(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.post(
+            reverse('project_template_apply', args=[t.pk]),
+            {'project_name': '', 'event_date': ''},
+        )
+
+        assert response.status_code == 200
+        assert not Project.objects.filter(organization=org_alpha).exists()

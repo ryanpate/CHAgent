@@ -4450,8 +4450,55 @@ def project_template_delete(request, pk):
 
 @login_required
 def project_template_apply(request, pk):
-    """Stub — replaced in P3 Task 7."""
-    return HttpResponse('Apply — Task 7', status=200)
+    """Create a new Project from a ProjectTemplate."""
+    from .models import ProjectTemplate
+    from datetime import datetime
+
+    org = get_org(request)
+    queryset = ProjectTemplate.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    template = get_object_or_404(queryset, pk=pk)
+
+    # Visibility check
+    if template.created_by != request.user and not template.is_shared:
+        return redirect('project_template_list')
+
+    if request.method == 'POST':
+        project_name = request.POST.get('project_name', '').strip()
+        event_date_str = request.POST.get('event_date', '').strip()
+        project_description = request.POST.get('project_description', '').strip()
+
+        error = None
+        event_date = None
+        if not project_name:
+            error = 'Project name is required.'
+        elif not event_date_str:
+            error = 'Event date is required.'
+        else:
+            try:
+                event_date = datetime.strptime(event_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                error = 'Invalid date format.'
+
+        if error:
+            return render(request, 'core/comms/project_template_apply.html', {
+                'template': template,
+                'error': error,
+                'form': request.POST,
+            })
+
+        project = template.apply(
+            event_date=event_date,
+            project_name=project_name,
+            user=request.user,
+            project_description=project_description,
+        )
+        return redirect('project_detail', pk=project.pk)
+
+    return render(request, 'core/comms/project_template_apply.html', {
+        'template': template,
+    })
 
 
 @login_required
