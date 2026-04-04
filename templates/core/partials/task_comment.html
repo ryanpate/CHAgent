@@ -1,7 +1,7 @@
 <!-- Task Comment -->
 {% if comment.is_system %}
 <!-- System comment (status change, assignment, etc.) -->
-<div class="flex items-center gap-2 py-2">
+<div id="comment-{{ comment.pk }}" class="flex items-center gap-2 py-2">
     <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
     </svg>
@@ -13,7 +13,7 @@
 </div>
 {% else %}
 <!-- User comment -->
-<div class="flex gap-3 group">
+<div id="comment-{{ comment.pk }}" class="flex gap-3 group">
     <div class="flex-shrink-0">
         <div class="w-8 h-8 rounded-full bg-ch-gold text-black flex items-center justify-center text-sm font-medium">
             {{ comment.author.display_name|default:comment.author.username|slice:":1"|upper }}
@@ -23,13 +23,29 @@
         <div class="reactions-container absolute -top-3 right-0 z-10" id="reactions-tc-{{ comment.id }}">
             {% include 'core/partials/reaction_bar.html' with reactions=comment.reaction_list tc_id=comment.id reaction_emoji_choices=reaction_emoji_choices %}
         </div>
-        <div class="flex items-center gap-2 mb-1">
+        <!-- Author + timestamp + decision badge -->
+        <div class="flex items-center gap-2 mb-1 flex-wrap">
             <span class="font-medium text-sm">{{ comment.author.display_name|default:comment.author.username }}</span>
             <span class="text-xs text-gray-500">{{ comment.created_at|timesince }} ago</span>
+            {% if comment.is_decision %}
+            <span class="px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-green-900/30 text-green-400 rounded border border-green-800/50">
+                Decision
+            </span>
+            {% endif %}
         </div>
+        <!-- Comment content (highlighted if decision) -->
+        {% if comment.is_decision %}
+        <div class="mt-1 bg-green-900/20 border border-green-800/50 rounded px-3 py-2">
+            <p class="text-xs uppercase tracking-wide text-green-400 mb-1">Decision</p>
+            <div class="text-sm text-gray-300">
+                {{ comment.content|linebreaks }}
+            </div>
+        </div>
+        {% else %}
         <div class="text-sm text-gray-300">
             {{ comment.content|linebreaks }}
         </div>
+        {% endif %}
         {% with attachments=comment.attachments.all %}
         {% include 'core/partials/attachment_display.html' %}
         {% endwith %}
@@ -40,6 +56,17 @@
             {% endfor %}
         </div>
         {% endif %}
+        <!-- Action row: mark as decision (visible on hover) -->
+        <div class="flex items-center gap-3 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+                hx-post="{% url 'task_comment_mark_decision' comment.pk %}"
+                hx-target="#comment-{{ comment.pk }}"
+                hx-swap="outerHTML"
+                class="text-xs text-gray-500 hover:text-green-400 transition-colors"
+            >
+                {% if comment.is_decision %}Unmark decision{% else %}Mark as decision{% endif %}
+            </button>
+        </div>
     </div>
 </div>
 {% endif %}
