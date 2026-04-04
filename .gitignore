@@ -136,3 +136,6 @@ mobile/android/app/build/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Superpowers brainstorm sessions (local only)
+.superpowers/
