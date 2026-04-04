@@ -2825,6 +2825,55 @@ class TaskChecklist(models.Model):
         self.save(update_fields=['is_completed', 'completed_by', 'completed_at', 'updated_at'])
 
 
+class ProjectDiscussion(models.Model):
+    """
+    A threaded conversation at the project level. Can link to multiple tasks.
+    Use for topics that span multiple tasks or are project-wide.
+    """
+    organization = models.ForeignKey(
+        'Organization',
+        on_delete=models.CASCADE,
+        related_name='project_discussions',
+    )
+    project = models.ForeignKey(
+        'Project',
+        on_delete=models.CASCADE,
+        related_name='discussions',
+    )
+    title = models.CharField(max_length=200)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_discussions',
+    )
+    is_resolved = models.BooleanField(default=False)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resolved_discussions',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Project Discussion'
+        verbose_name_plural = 'Project Discussions'
+
+    def __str__(self):
+        return f"{self.title} ({self.project.name})"
+
+    def save(self, *args, **kwargs):
+        """Inherit organization from project if not set."""
+        if not self.organization_id and self.project_id:
+            self.organization = self.project.organization
+        super().save(*args, **kwargs)
+
+
 class ProjectMilestone(models.Model):
     """
     Key dates/deliverables within a project.
