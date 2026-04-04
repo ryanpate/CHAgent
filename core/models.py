@@ -3401,6 +3401,46 @@ class ProjectTemplate(models.Model):
     def __str__(self):
         return self.name
 
+    def apply(self, event_date, project_name, user, project_description=''):
+        """
+        Create a new Project populated with tasks from this template.
+        Each template task's due_date is event_date + relative_due_offset_days.
+        """
+        from datetime import timedelta
+
+        project_kwargs = dict(
+            organization=self.organization,
+            name=project_name,
+            description=project_description,
+            owner=user,
+        )
+        # Set service_date if the Project model supports it
+        try:
+            Project._meta.get_field('service_date')
+            project_kwargs['service_date'] = event_date
+        except Exception:
+            pass
+
+        project = Project.objects.create(**project_kwargs)
+
+        for tt in self.template_tasks.all():
+            due_date = event_date + timedelta(days=tt.relative_due_offset_days)
+            task = Task.objects.create(
+                project=project,
+                title=tt.title,
+                description=tt.description,
+                priority=tt.priority,
+                due_date=due_date,
+                created_by=user,
+                order=tt.order,
+            )
+            for i, item_title in enumerate(tt.checklist_items):
+                TaskChecklist.objects.create(
+                    task=task, title=item_title, order=i,
+                )
+
+        return project
+
 
 class ProjectTemplateTask(models.Model):
     """
