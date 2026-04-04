@@ -2782,8 +2782,42 @@ def discussion_list(request, project_pk):
 
 @login_required
 def discussion_create(request, project_pk):
-    """Stub — replaced in P2 Task 4."""
-    return HttpResponse('New discussion form — coming in Task 4', status=200)
+    """GET shows form, POST creates a new ProjectDiscussion."""
+    from .models import Project, ProjectDiscussion
+
+    org = get_org(request)
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    project = get_object_or_404(queryset, pk=project_pk)
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return redirect('project_list')
+
+    if request.method == 'POST':
+        title = request.POST.get('title', '').strip()
+        first_message = request.POST.get('content', '').strip()
+        if title:
+            discussion = ProjectDiscussion.objects.create(
+                project=project,
+                title=title,
+                created_by=request.user,
+            )
+            # Optional first message
+            if first_message:
+                from .models import ProjectDiscussionMessage
+                ProjectDiscussionMessage.objects.create(
+                    discussion=discussion,
+                    author=request.user,
+                    content=first_message,
+                )
+            return redirect('discussion_detail', project_pk=project.pk, pk=discussion.pk)
+
+    return render(request, 'core/comms/discussion_create.html', {
+        'project': project,
+        'active_tab': 'discussions',
+    })
 
 
 @login_required

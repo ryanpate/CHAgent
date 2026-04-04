@@ -172,3 +172,60 @@ class TestDiscussionListView:
         response = client.get(reverse('discussion_list', args=[project.pk]))
 
         assert response.status_code in (302, 403, 404)
+
+
+@pytest.mark.django_db
+class TestDiscussionCreateView:
+    """Tests for creating new discussions."""
+
+    def _project(self, user, org):
+        from core.models import Project
+        return Project.objects.create(organization=org, name='P', owner=user)
+
+    def test_get_form(self, client, user_alpha_owner, org_alpha):
+        """GET renders the new-discussion form."""
+        project = self._project(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('discussion_create', args=[project.pk]))
+
+        assert response.status_code == 200
+        assert b'title' in response.content.lower()
+
+    def test_post_creates_discussion(self, client, user_alpha_owner, org_alpha):
+        """POST creates a ProjectDiscussion and redirects to it."""
+        from core.models import ProjectDiscussion
+        project = self._project(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.post(
+            reverse('discussion_create', args=[project.pk]),
+            {'title': 'New discussion topic'},
+        )
+
+        assert response.status_code == 302
+        assert ProjectDiscussion.objects.filter(
+            project=project, title='New discussion topic'
+        ).exists()
+
+    def test_post_empty_title_rejected(self, client, user_alpha_owner, org_alpha):
+        """POST with empty title doesn't create a discussion."""
+        from core.models import ProjectDiscussion
+        project = self._project(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        client.post(reverse('discussion_create', args=[project.pk]), {'title': ''})
+
+        assert not ProjectDiscussion.objects.filter(project=project).exists()
+
+    def test_non_member_denied(self, client, user_alpha_owner, user_beta_owner, org_alpha):
+        """Non-project-members cannot create discussions."""
+        project = self._project(user_alpha_owner, org_alpha)
+        client.force_login(user_beta_owner)
+
+        response = client.post(
+            reverse('discussion_create', args=[project.pk]),
+            {'title': 'Hack'},
+        )
+
+        assert response.status_code in (302, 403, 404)
