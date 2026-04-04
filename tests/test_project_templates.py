@@ -171,3 +171,52 @@ class TestProjectTemplateListView:
         assert 'Shared' in body
         assert 'My private' in body
         assert 'Private owner' not in body
+
+
+@pytest.mark.django_db
+class TestProjectTemplateCreateView:
+    """Tests for creating a new ProjectTemplate."""
+
+    def test_get_form(self, client, user_alpha_owner, org_alpha):
+        """GET renders the new-template form."""
+        client.force_login(user_alpha_owner)
+        response = client.get(reverse('project_template_create'))
+        assert response.status_code == 200
+        body = response.content.decode().lower()
+        assert 'name' in body
+        assert 'task' in body
+
+    def test_post_creates_template_with_tasks(self, client, user_alpha_owner, org_alpha):
+        """POST creates ProjectTemplate + tasks from repeated form fields."""
+        from core.models import ProjectTemplate
+        client.force_login(user_alpha_owner)
+
+        response = client.post(reverse('project_template_create'), {
+            'name': 'Sunday Prep',
+            'description': 'Standard Sunday',
+            'is_shared': 'on',
+            'task_title': ['Stage setup', 'Rehearsal'],
+            'task_offset': ['-3', '-1'],
+            'task_role': ['tech_lead', ''],
+        })
+
+        assert response.status_code == 302
+        t = ProjectTemplate.objects.get(name='Sunday Prep')
+        assert t.is_shared is True
+        assert t.template_tasks.count() == 2
+        assert t.template_tasks.filter(title='Stage setup', relative_due_offset_days=-3).exists()
+        assert t.template_tasks.filter(title='Rehearsal', relative_due_offset_days=-1).exists()
+
+    def test_post_empty_name_rejected(self, client, user_alpha_owner, org_alpha):
+        """POST with empty name doesn't create template."""
+        from core.models import ProjectTemplate
+        client.force_login(user_alpha_owner)
+
+        client.post(reverse('project_template_create'), {
+            'name': '',
+            'task_title': ['A'],
+            'task_offset': ['-1'],
+            'task_role': [''],
+        })
+
+        assert not ProjectTemplate.objects.filter(organization=org_alpha).exists()

@@ -4323,8 +4323,54 @@ def project_template_list(request):
 
 @login_required
 def project_template_create(request):
-    """Stub — replaced in P3 Task 4."""
-    return HttpResponse('Create form — Task 4', status=200)
+    """GET shows form, POST creates a ProjectTemplate + its ProjectTemplateTasks."""
+    from .models import ProjectTemplate, ProjectTemplateTask
+
+    org = get_org(request)
+    if not org:
+        return redirect('project_template_list')
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        if not name:
+            return render(request, 'core/comms/project_template_create.html', {
+                'error': 'Name is required',
+                'form': request.POST,
+            })
+
+        template = ProjectTemplate.objects.create(
+            organization=org,
+            name=name,
+            description=request.POST.get('description', '').strip(),
+            is_shared=request.POST.get('is_shared') == 'on',
+            created_by=request.user,
+        )
+
+        # Parse repeated form fields for tasks
+        titles = request.POST.getlist('task_title')
+        offsets = request.POST.getlist('task_offset')
+        roles = request.POST.getlist('task_role')
+
+        for i, title in enumerate(titles):
+            title = title.strip()
+            if not title:
+                continue
+            try:
+                offset = int(offsets[i]) if i < len(offsets) and offsets[i] else 0
+            except (ValueError, IndexError):
+                offset = 0
+            role = roles[i].strip() if i < len(roles) else ''
+            ProjectTemplateTask.objects.create(
+                template=template,
+                title=title,
+                relative_due_offset_days=offset,
+                role_placeholder=role,
+                order=i,
+            )
+
+        return redirect('project_template_detail', pk=template.pk)
+
+    return render(request, 'core/comms/project_template_create.html', {})
 
 
 @login_required
