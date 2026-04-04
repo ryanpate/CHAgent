@@ -2733,6 +2733,12 @@ def project_detail(request, pk):
     milestones = project.milestones.all()
     activities = project.activities.select_related('user', 'task')[:20]
 
+    # Compute unread comment counts per task for current user
+    from .models import unread_comment_count_for
+    unread_counts = {}
+    for t in project.tasks.all():
+        unread_counts[t.pk] = unread_comment_count_for(request.user, t)
+
     context = {
         'project': project,
         'tasks': tasks,
@@ -2742,6 +2748,7 @@ def project_detail(request, pk):
         'milestones': milestones,
         'activities': activities,
         'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
+        'unread_counts': unread_counts,
     }
     return render(request, 'core/comms/project_detail.html', context)
 
@@ -3506,6 +3513,108 @@ def task_comment(request, pk):
 
 @login_required
 @require_POST
+def task_comment_mark_decision(request, pk):
+    """Toggle a TaskComment's is_decision flag. Only project members can mark decisions."""
+    from .models import TaskComment
+
+    comment = get_object_or_404(TaskComment, pk=pk)
+    task = comment.task
+    project = task.project
+
+    # Access control: must be project member/owner, or assignee/creator for standalone
+    if project:
+        if project.owner != request.user and request.user not in project.members.all():
+            return HttpResponse('Access denied', status=403)
+    else:
+        if request.user not in task.assignees.all() and task.created_by != request.user:
+            return HttpResponse('Access denied', status=403)
+
+    if comment.is_decision:
+        comment.is_decision = False
+        comment.decision_marked_by = None
+        comment.decision_marked_at = None
+    else:
+        comment.is_decision = True
+        comment.decision_marked_by = request.user
+        comment.decision_marked_at = timezone.now()
+    comment.save(update_fields=['is_decision', 'decision_marked_by', 'decision_marked_at'])
+
+    if request.headers.get('HX-Request'):
+        from .models import MessageReaction
+        comment.reaction_list = list(comment.reactions.all()) if hasattr(comment, 'reactions') else []
+        return render(request, 'core/partials/task_comment.html', {
+            'comment': comment,
+            'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
+        })
+
+    if project:
+        return redirect('task_detail', project_pk=project.pk, pk=task.pk)
+    return redirect('standalone_task_detail', pk=task.pk)
+
+
+@login_required
+@require_POST
+def task_toggle_watch(request, pk):
+    """Subscribe or unsubscribe the current user from a task's updates."""
+    from .models import Task, TaskWatcher
+
+    task = get_object_or_404(Task, pk=pk)
+    project = task.project
+
+    # Access control: must be project member/owner, or assignee/creator for standalone
+    if project:
+        if project.owner != request.user and request.user not in project.members.all():
+            return HttpResponse('Access denied', status=403)
+    else:
+        if request.user not in task.assignees.all() and task.created_by != request.user:
+            return HttpResponse('Access denied', status=403)
+
+    watcher_qs = TaskWatcher.objects.filter(user=request.user, task=task)
+    if watcher_qs.exists():
+        watcher_qs.delete()
+        is_watching = False
+    else:
+        TaskWatcher.objects.create(user=request.user, task=task)
+        is_watching = True
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/watch_button.html', {
+            'task': task,
+            'is_watching': is_watching,
+        })
+
+    if project:
+        return redirect('task_detail', project_pk=project.pk, pk=task.pk)
+    return redirect('standalone_task_detail', pk=task.pk)
+
+
+@login_required
+@require_POST
+def task_mark_read(request, pk):
+    """Update the current user's TaskReadState to now."""
+    from .models import Task, TaskReadState
+
+    task = get_object_or_404(Task, pk=pk)
+    project = task.project
+
+    # Access control
+    if project:
+        if project.owner != request.user and request.user not in project.members.all():
+            return HttpResponse('Access denied', status=403)
+    else:
+        if request.user not in task.assignees.all() and task.created_by != request.user:
+            return HttpResponse('Access denied', status=403)
+
+    TaskReadState.objects.update_or_create(
+        user=request.user,
+        task=task,
+        defaults={'last_read_at': timezone.now()},
+    )
+    return HttpResponse(status=204)
+
+
+@login_required
+@require_POST
 def toggle_reaction(request):
     """Toggle an emoji reaction on a message. Adds if not present, removes if already reacted."""
     from .models import MessageReaction
@@ -3652,6 +3761,15 @@ def task_detail(request, project_pk, pk):
     else:
         available_users = UserModel.objects.filter(is_active=True).order_by('display_name', 'username')
 
+    # Mark task as read for current user
+    from .models import TaskReadState, TaskWatcher
+    TaskReadState.objects.update_or_create(
+        user=request.user,
+        task=task,
+        defaults={'last_read_at': timezone.now()},
+    )
+    is_watching = TaskWatcher.objects.filter(user=request.user, task=task).exists()
+
     context = {
         'project': project,
         'task': task,
@@ -3663,6 +3781,7 @@ def task_detail(request, project_pk, pk):
         'subtasks': subtasks,
         'ancestors': ancestors,
         'available_users': available_users,
+        'is_watching': is_watching,
     }
     return render(request, 'core/comms/task_detail.html', context)
 
@@ -3718,6 +3837,15 @@ def standalone_task_detail(request, pk):
     else:
         available_users = UserModel.objects.filter(is_active=True).order_by('display_name', 'username')
 
+    # Mark task as read for current user
+    from .models import TaskReadState, TaskWatcher
+    TaskReadState.objects.update_or_create(
+        user=request.user,
+        task=task,
+        defaults={'last_read_at': timezone.now()},
+    )
+    is_watching = TaskWatcher.objects.filter(user=request.user, task=task).exists()
+
     context = {
         'project': None,
         'task': task,
@@ -3729,6 +3857,7 @@ def standalone_task_detail(request, pk):
         'subtasks': subtasks,
         'ancestors': ancestors,
         'available_users': available_users,
+        'is_watching': is_watching,
     }
     return render(request, 'core/comms/task_detail.html', context)
 

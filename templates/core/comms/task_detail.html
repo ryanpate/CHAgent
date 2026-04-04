@@ -3,392 +3,376 @@
 {% block title %}{{ task.title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto">
-    <!-- Breadcrumb -->
-    <div class="flex items-center gap-2 text-sm text-gray-400 mb-4 flex-wrap">
-        {% if project %}
-        <a href="{% url 'project_list' %}" class="hover:text-white">Projects</a>
-        <span>/</span>
-        <a href="{% url 'project_detail' project.pk %}" class="hover:text-white">{{ project.name }}</a>
-        {% else %}
-        <a href="{% url 'my_tasks' %}" class="hover:text-white">My Tasks</a>
-        {% endif %}
-        {% for ancestor in ancestors %}
-        <span>/</span>
-        <a href="{% if project %}{% url 'task_detail' project.pk ancestor.pk %}{% else %}{% url 'standalone_task_detail' ancestor.pk %}{% endif %}"
-           class="hover:text-white">{{ ancestor.title }}</a>
-        {% endfor %}
-        <span>/</span>
-        <span class="text-white">{{ task.title }}</span>
+<div class="max-w-3xl mx-auto px-4 py-6">
+
+  <!-- Breadcrumb -->
+  <div class="flex items-center gap-2 text-sm text-gray-400 mb-4 flex-wrap">
+    {% if project %}
+    <a href="{% url 'project_list' %}" class="hover:text-white">Projects</a>
+    <span>/</span>
+    <a href="{% url 'project_detail' project.pk %}" class="hover:text-white">{{ project.name }}</a>
+    {% else %}
+    <a href="{% url 'my_tasks' %}" class="hover:text-white">My Tasks</a>
+    {% endif %}
+    {% for ancestor in ancestors %}
+    <span>/</span>
+    <a href="{% if project %}{% url 'task_detail' project.pk ancestor.pk %}{% else %}{% url 'standalone_task_detail' ancestor.pk %}{% endif %}"
+       class="hover:text-white">{{ ancestor.title }}</a>
+    {% endfor %}
+    <span>/</span>
+    <span class="text-white">{{ task.title }}</span>
+  </div>
+
+  <!-- Title row + watch button + action buttons -->
+  <div class="flex items-start justify-between gap-4 mb-3">
+    <h1 class="text-xl font-bold text-white flex-1">{{ task.title }}</h1>
+    <div class="flex items-center gap-2 flex-shrink-0">
+      {% include 'core/partials/watch_button.html' with is_watching=is_watching task=task %}
+
+      <!-- Edit Button -->
+      <a href="{% url 'task_edit' task.pk %}"
+         class="px-3 py-1.5 bg-ch-gray hover:bg-ch-gold hover:text-black rounded text-sm transition">
+        Edit
+      </a>
+
+      <!-- Delete Button -->
+      <form hx-post="{% url 'task_delete' task.pk %}"
+            hx-confirm="Delete this task? This cannot be undone."
+            class="inline">
+        {% csrf_token %}
+        <button type="submit" class="p-1.5 text-gray-500 hover:text-red-400 rounded-lg hover:bg-red-900/20 transition"
+                title="Delete task">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+          </svg>
+        </button>
+      </form>
     </div>
+  </div>
 
-    <!-- Task Header -->
-    <div class="bg-ch-dark rounded-lg p-6 mb-6">
-        <div class="flex items-start justify-between mb-4">
-            <div class="flex-1">
-                <div class="flex items-center gap-3 mb-2">
-                    <h1 class="text-2xl font-bold">{{ task.title }}</h1>
-                    <span class="px-2 py-1 text-xs rounded-full
-                        {% if task.priority == 'urgent' %}bg-red-900/50 text-red-400
-                        {% elif task.priority == 'high' %}bg-orange-900/50 text-orange-400
-                        {% elif task.priority == 'medium' %}bg-yellow-900/50 text-yellow-400
-                        {% else %}bg-gray-700 text-gray-400{% endif %}">
-                        {{ task.get_priority_display }}
-                    </span>
-                </div>
-                {% if task.description %}
-                <p class="text-gray-400">{{ task.description }}</p>
-                {% endif %}
-            </div>
+  <!-- Metadata row: status chip, priority, assignees, due date, recurrence -->
+  <div class="flex flex-wrap items-center gap-3 mb-4 pb-4 border-b border-gray-700">
 
-            <div class="flex items-center gap-2">
-                <!-- Status Dropdown -->
-                <div class="relative" x-data="{ open: false }">
-                    <button @click="open = !open"
-                            class="px-3 py-2 rounded-lg text-sm
-                                {% if task.status == 'completed' %}bg-green-900/50 text-green-400
-                                {% elif task.status == 'in_progress' %}bg-blue-900/50 text-blue-400
-                                {% elif task.status == 'review' %}bg-yellow-900/50 text-yellow-400
-                                {% else %}bg-gray-700 text-gray-400{% endif %}">
-                        {{ task.get_status_display }}
-                        <svg class="w-4 h-4 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                        </svg>
-                    </button>
-                    <div x-show="open" @click.away="open = false"
-                         class="absolute right-0 mt-2 w-40 bg-ch-dark border border-gray-700 rounded-lg shadow-xl z-10">
-                        <form hx-post="{% url 'task_update_status' task.pk %}"
-                              hx-swap="none"
-                              hx-on::after-request="location.reload()"
-                              class="p-2">
-                            {% csrf_token %}
-                            <button type="submit" name="status" value="todo"
-                                    class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">To Do</button>
-                            <button type="submit" name="status" value="in_progress"
-                                    class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">In Progress</button>
-                            <button type="submit" name="status" value="review"
-                                    class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">In Review</button>
-                            <button type="submit" name="status" value="completed"
-                                    class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">Completed</button>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Edit Button -->
-                <a href="{% url 'task_edit' task.pk %}"
-                   class="px-3 py-1.5 bg-ch-gray hover:bg-ch-gold hover:text-black rounded text-sm transition">
-                    Edit
-                </a>
-
-                <!-- Delete Button -->
-                <form hx-post="{% url 'task_delete' task.pk %}"
-                      hx-confirm="Delete this task? This cannot be undone."
-                      class="inline">
-                    {% csrf_token %}
-                    <button type="submit" class="p-2 text-gray-500 hover:text-red-400 rounded-lg hover:bg-red-900/20 transition"
-                            title="Delete task">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Task Meta -->
-        <div class="flex flex-wrap gap-6 text-sm">
-            {% if task.due_date %}
-            <div>
-                <span class="text-gray-500">Due Date</span>
-                <p class="{% if task.is_overdue %}text-red-400{% endif %}">
-                    {{ task.due_date|date:"M d, Y" }}
-                    {% if task.due_time %} at {{ task.due_time|time:"g:i A" }}{% endif %}
-                    {% if task.is_overdue %}(Overdue){% endif %}
-                </p>
-            </div>
-            {% endif %}
-
-            <div>
-                <span class="text-gray-500">Created</span>
-                <p>{{ task.created_at|date:"M d, Y" }} by {{ task.created_by.display_name|default:task.created_by.username }}</p>
-            </div>
-
-            <div>
-                <span class="text-gray-500">Assignees</span>
-                <div class="flex items-center gap-1 mt-1">
-                    {% for assignee in task.assignees.all %}
-                    <div class="px-2 py-1 bg-ch-gray rounded text-xs">
-                        {{ assignee.display_name|default:assignee.username }}
-                    </div>
-                    {% empty %}
-                    <span class="text-gray-400">Unassigned</span>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <div>
-                <span class="text-gray-500">Repeat</span>
-                {% include 'core/partials/recurrence_badge.html' with task=task rule=recurrence_rule %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Checklists Section -->
-    <div class="bg-ch-dark rounded-lg p-6 mb-6">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="font-semibold flex items-center gap-2">
-                <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
-                </svg>
-                Checklist
-                {% if checklists %}
-                <span class="text-sm font-normal text-gray-400">
-                    ({{ completed_count }}/{{ checklists|length }})
-                </span>
-                {% endif %}
-            </h2>
-            {% if checklists %}
-            <div class="w-32 h-2 bg-ch-gray rounded-full overflow-hidden">
-                <div class="h-full bg-green-600 transition-all"
-                     style="width: {% widthratio completed_count checklists|length 100 %}%"></div>
-            </div>
-            {% endif %}
-        </div>
-
-        <div id="checklist-items" class="space-y-1 mb-4">
-            {% for item in checklists %}
-            {% include 'core/partials/checklist_item.html' %}
-            {% empty %}
-            <p class="text-gray-400 text-sm text-center py-4" id="no-checklists">No checklist items yet.</p>
-            {% endfor %}
-        </div>
-
-        <!-- Add Checklist Item Form -->
-        <form hx-post="{% url 'checklist_add' task.pk %}"
-              hx-target="#checklist-items"
-              hx-swap="beforeend"
-              hx-on::after-request="this.reset(); document.getElementById('no-checklists')?.remove();"
-              class="flex gap-2">
-            {% csrf_token %}
-            <input type="text" name="title" required
-                   placeholder="Add a checklist item..."
-                   class="flex-1 bg-ch-gray border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
-            <button type="submit"
-                    class="px-4 py-2 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition text-sm">
-                Add
-            </button>
+    <!-- Status dropdown -->
+    <div class="relative" x-data="{ open: false }">
+      <button @click="open = !open"
+              class="px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1
+                {% if task.status == 'completed' %}bg-green-900/50 text-green-400
+                {% elif task.status == 'in_progress' %}bg-blue-900/50 text-blue-400
+                {% elif task.status == 'review' %}bg-yellow-900/50 text-yellow-400
+                {% else %}bg-gray-700 text-gray-400{% endif %}">
+        {{ task.get_status_display }}
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+        </svg>
+      </button>
+      <div x-show="open" @click.away="open = false"
+           class="absolute left-0 mt-1 w-40 bg-ch-dark border border-gray-700 rounded-lg shadow-xl z-10">
+        <form hx-post="{% url 'task_update_status' task.pk %}"
+              hx-swap="none"
+              hx-on::after-request="location.reload()"
+              class="p-2">
+          {% csrf_token %}
+          <button type="submit" name="status" value="todo"
+                  class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">To Do</button>
+          <button type="submit" name="status" value="in_progress"
+                  class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">In Progress</button>
+          <button type="submit" name="status" value="review"
+                  class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">In Review</button>
+          <button type="submit" name="status" value="completed"
+                  class="w-full text-left px-3 py-2 text-sm hover:bg-ch-gray rounded">Completed</button>
         </form>
+      </div>
     </div>
 
-    <!-- Subtasks Section -->
-    <div class="bg-ch-dark rounded-lg p-6 mb-6">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold flex items-center gap-2">
-                Subtasks
-                {% with progress=task.subtask_progress %}
-                {% if progress.1 > 0 %}
-                <span class="text-sm text-gray-400 font-normal">{{ progress.0 }}/{{ progress.1 }}</span>
-                <div class="w-20 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                    <div class="h-full bg-ch-gold rounded-full" style="width: {% widthratio progress.0 progress.1 100 %}%"></div>
-                </div>
-                {% endif %}
-                {% endwith %}
-            </h2>
-        </div>
+    <!-- Priority -->
+    <span class="px-2 py-0.5 rounded text-xs font-semibold
+      {% if task.priority == 'urgent' %}bg-red-900/50 text-red-400
+      {% elif task.priority == 'high' %}bg-orange-900/50 text-orange-400
+      {% elif task.priority == 'medium' %}bg-yellow-900/50 text-yellow-400
+      {% else %}bg-gray-700 text-gray-400{% endif %}">
+      {{ task.get_priority_display }}
+    </span>
 
-        <!-- Subtask list -->
-        <div class="space-y-1" id="subtask-list">
-            {% include 'core/partials/subtask_list.html' %}
-        </div>
+    <!-- Assignees -->
+    {% if task.assignees.all %}
+    <span class="text-sm text-gray-400">
+      {% for u in task.assignees.all %}{{ u.display_name|default:u.username }}{% if not forloop.last %}, {% endif %}{% endfor %}
+    </span>
+    {% else %}
+    <span class="text-sm text-gray-500">Unassigned</span>
+    {% endif %}
 
-        <!-- Completion nudge -->
-        {% with progress=task.subtask_progress %}
-        {% if progress.1 > 0 and progress.0 == progress.1 and task.status != 'completed' %}
-        <div class="mt-3 p-3 bg-green-900/20 border border-green-800 rounded-lg flex items-center justify-between">
-            <span class="text-green-400 text-sm">All subtasks done — mark complete?</span>
-            <form hx-post="{% url 'task_update_status' task.pk %}" hx-swap="none"
-                  hx-on::after-request="location.reload()">
-                {% csrf_token %}
-                <input type="hidden" name="status" value="completed">
-                <button type="submit"
-                        class="px-3 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm transition">
-                    Complete
-                </button>
-            </form>
-        </div>
+    <!-- Due date -->
+    {% if task.due_date %}
+    <span class="text-sm {% if task.is_overdue %}text-red-400{% else %}text-gray-400{% endif %}">
+      Due {{ task.due_date|date:"M j, Y" }}{% if task.due_time %} at {{ task.due_time|time:"g:i A" }}{% endif %}
+      {% if task.is_overdue %} &mdash; Overdue{% endif %}
+    </span>
+    {% endif %}
+
+    <!-- Recurrence -->
+    {% include 'core/partials/recurrence_badge.html' with task=task rule=recurrence_rule %}
+
+    <!-- Created by -->
+    <span class="text-xs text-gray-600">
+      Created {{ task.created_at|date:"M j" }} by {{ task.created_by.display_name|default:task.created_by.username }}
+    </span>
+  </div>
+
+  <!-- Description -->
+  {% if task.description %}
+  <div class="mb-5 text-sm text-gray-300">{{ task.description|linebreaks }}</div>
+  {% endif %}
+
+  <!-- Checklists -->
+  <div class="mb-6 bg-ch-dark rounded-lg p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-xs uppercase tracking-wide text-gray-500 flex items-center gap-2">
+        <svg class="w-4 h-4 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+        </svg>
+        Checklist
+        {% if checklists %}
+        <span class="font-normal text-gray-500">({{ completed_count }}/{{ checklists|length }})</span>
         {% endif %}
-        {% endwith %}
-
-        <!-- Add subtask form -->
-        {% include 'core/partials/subtask_form.html' with parent_task=task %}
+      </h3>
+      {% if checklists %}
+      <div class="w-24 h-1.5 bg-ch-gray rounded-full overflow-hidden">
+        <div class="h-full bg-green-600 transition-all"
+             style="width: {% widthratio completed_count checklists|length 100 %}%"></div>
+      </div>
+      {% endif %}
     </div>
 
-    <!-- Comments Section -->
-    <div class="bg-ch-dark rounded-lg p-6">
-        <h2 class="font-semibold mb-4">Comments</h2>
+    <div id="checklist-items" class="space-y-1 mb-3">
+      {% for item in checklists %}
+      {% include 'core/partials/checklist_item.html' %}
+      {% empty %}
+      <p class="text-gray-500 text-sm italic" id="no-checklists">No checklist items yet.</p>
+      {% endfor %}
+    </div>
 
-        <div class="space-y-4 mb-6" id="task-comments">
-            {% for comment in comments %}
-            {% include 'core/partials/task_comment.html' %}
-            {% empty %}
-            <p class="text-gray-400 text-sm text-center py-4">No comments yet. Be the first to comment!</p>
-            {% endfor %}
+    <form hx-post="{% url 'checklist_add' task.pk %}"
+          hx-target="#checklist-items"
+          hx-swap="beforeend"
+          hx-on::after-request="this.reset(); document.getElementById('no-checklists')?.remove();"
+          class="flex gap-2">
+      {% csrf_token %}
+      <input type="text" name="title" required
+             placeholder="Add a checklist item..."
+             class="flex-1 bg-ch-gray border border-gray-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-ch-gold">
+      <button type="submit"
+              class="px-3 py-1.5 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition text-sm">
+        Add
+      </button>
+    </form>
+  </div>
+
+  <!-- Subtasks -->
+  <div class="mb-6 bg-ch-dark rounded-lg p-4">
+    <h3 class="text-xs uppercase tracking-wide text-gray-500 mb-3 flex items-center gap-2">
+      Subtasks
+      {% with progress=task.subtask_progress %}
+      {% if progress.1 > 0 %}
+      <span class="font-normal text-gray-500">{{ progress.0 }}/{{ progress.1 }}</span>
+      <div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+        <div class="h-full bg-ch-gold rounded-full" style="width: {% widthratio progress.0 progress.1 100 %}%"></div>
+      </div>
+      {% endif %}
+      {% endwith %}
+    </h3>
+
+    <div class="space-y-1" id="subtask-list">
+      {% include 'core/partials/subtask_list.html' %}
+    </div>
+
+    {% with progress=task.subtask_progress %}
+    {% if progress.1 > 0 and progress.0 == progress.1 and task.status != 'completed' %}
+    <div class="mt-3 p-3 bg-green-900/20 border border-green-800 rounded-lg flex items-center justify-between">
+      <span class="text-green-400 text-sm">All subtasks done — mark complete?</span>
+      <form hx-post="{% url 'task_update_status' task.pk %}" hx-swap="none"
+            hx-on::after-request="location.reload()">
+        {% csrf_token %}
+        <input type="hidden" name="status" value="completed">
+        <button type="submit"
+                class="px-3 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm transition">
+          Complete
+        </button>
+      </form>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {% include 'core/partials/subtask_form.html' with parent_task=task %}
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- CONVERSATION (primary content)                           -->
+  <!-- ======================================================== -->
+  <div>
+    <h2 class="text-xs uppercase tracking-wide text-gray-500 mb-4">Conversation</h2>
+
+    <div id="task-comments" class="space-y-4 mb-6">
+      {% for comment in comments %}
+      {% include 'core/partials/task_comment.html' %}
+      {% empty %}
+      <p class="text-gray-500 text-sm italic">No conversation yet. Start the discussion below.</p>
+      {% endfor %}
+    </div>
+
+    <!-- Comment form -->
+    <form hx-post="{% url 'task_comment' task.pk %}"
+          hx-target="#task-comments"
+          hx-swap="beforeend"
+          hx-encoding="multipart/form-data"
+          hx-on::after-request="this.reset(); document.getElementById('mention-dropdown').classList.add('hidden'); document.getElementById('comment-file-preview').innerHTML = '';"
+          class="bg-ch-dark border border-gray-700 rounded-lg p-3">
+      {% csrf_token %}
+      <div id="comment-file-preview" class="flex flex-wrap gap-2 mb-2"></div>
+      <div class="relative">
+        <textarea id="comment-input" name="content" rows="2"
+                  placeholder="Reply... Use @name to mention someone"
+                  class="w-full bg-transparent text-gray-300 placeholder-gray-600 text-sm focus:outline-none resize-none"></textarea>
+        <!-- Mention autocomplete dropdown -->
+        <div id="mention-dropdown"
+             class="hidden absolute left-0 bottom-full mb-1 w-64 max-h-48 overflow-y-auto bg-ch-dark border border-gray-700 rounded-lg shadow-xl z-50">
         </div>
+      </div>
+      <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-800">
+        <label class="cursor-pointer p-1.5 text-gray-500 hover:text-ch-gold transition rounded-lg hover:bg-ch-gray" title="Attach file">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+          </svg>
+          <input type="file" name="attachments" multiple accept="image/*,.pdf,.doc,.docx,.txt" class="hidden"
+                 onchange="previewCommentFiles(this)">
+        </label>
+        <button type="submit"
+                class="px-4 py-1.5 bg-ch-gold text-black rounded font-medium hover:bg-yellow-500 transition text-sm">
+          Comment
+        </button>
+      </div>
+    </form>
+  </div>
 
-        <!-- Add Comment Form -->
-        <form hx-post="{% url 'task_comment' task.pk %}"
-              hx-target="#task-comments"
-              hx-swap="beforeend"
-              hx-encoding="multipart/form-data"
-              hx-on::after-request="this.reset(); document.getElementById('mention-dropdown').classList.add('hidden'); document.getElementById('comment-file-preview').innerHTML = '';"
-              class="border-t border-gray-700 pt-4">
-            {% csrf_token %}
-            <div id="comment-file-preview" class="flex flex-wrap gap-2 mb-2"></div>
-            <div class="relative">
-                <textarea id="comment-input" name="content" rows="2"
-                          placeholder="Add a comment... Use @name to mention someone"
-                          class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-ch-gold mb-2"></textarea>
-                <!-- Mention autocomplete dropdown -->
-                <div id="mention-dropdown"
-                     class="hidden absolute left-0 bottom-full mb-1 w-64 max-h-48 overflow-y-auto bg-ch-dark border border-gray-700 rounded-lg shadow-xl z-50">
-                </div>
-            </div>
-            <div class="flex justify-between items-center">
-                <label class="cursor-pointer p-2 text-gray-400 hover:text-ch-gold transition rounded-lg hover:bg-ch-gray" title="Attach file">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-                    </svg>
-                    <input type="file" name="attachments" multiple accept="image/*,.pdf,.doc,.docx,.txt" class="hidden"
-                           onchange="previewCommentFiles(this)">
-                </label>
-                <button type="submit"
-                        class="px-4 py-2 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition text-sm">
-                    Post Comment
-                </button>
-            </div>
-        </form>
-
-        <script>
-        (function() {
-            const input = document.getElementById('comment-input');
-            const dropdown = document.getElementById('mention-dropdown');
-            let mentionStart = -1;
-            let selectedIdx = 0;
-            let items = [];
-            let debounceTimer = null;
-
-            function getQuery() {
-                const pos = input.selectionStart;
-                const text = input.value.substring(0, pos);
-                const atIdx = text.lastIndexOf('@');
-                if (atIdx === -1) return null;
-                // @ must be at start or after whitespace
-                if (atIdx > 0 && !/\s/.test(text[atIdx - 1])) return null;
-                const query = text.substring(atIdx + 1);
-                // No spaces allowed after first word (keep it to "@FirstName" or "@First Last")
-                if ((query.match(/\s/g) || []).length > 1) return null;
-                mentionStart = atIdx;
-                return query;
-            }
-
-            function renderDropdown(results) {
-                items = results;
-                selectedIdx = 0;
-                if (!results.length) {
-                    dropdown.classList.add('hidden');
-                    return;
-                }
-                dropdown.innerHTML = results.map((r, i) =>
-                    `<div class="mention-item px-3 py-2 cursor-pointer flex items-center gap-2 ${i === 0 ? 'bg-ch-gray' : ''} hover:bg-ch-gray"
-                          data-idx="${i}">
-                        <div class="w-6 h-6 rounded-full bg-ch-gold text-black flex items-center justify-center text-xs font-medium flex-shrink-0">
-                            ${r.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium truncate">${r.name}</div>
-                            <div class="text-xs text-gray-500">${r.role}</div>
-                        </div>
-                    </div>`
-                ).join('');
-                dropdown.classList.remove('hidden');
-            }
-
-            function selectItem(idx) {
-                const item = items[idx];
-                if (!item) return;
-                const before = input.value.substring(0, mentionStart);
-                const after = input.value.substring(input.selectionStart);
-                const mention = '@' + item.name + ' ';
-                input.value = before + mention + after;
-                input.selectionStart = input.selectionEnd = before.length + mention.length;
-                dropdown.classList.add('hidden');
-                input.focus();
-            }
-
-            function highlightItem(idx) {
-                dropdown.querySelectorAll('.mention-item').forEach((el, i) => {
-                    el.classList.toggle('bg-ch-gray', i === idx);
-                });
-                selectedIdx = idx;
-            }
-
-            function fetchMembers(query) {
-                fetch(`{% url 'member_search' %}?q=${encodeURIComponent(query)}`)
-                    .then(r => r.json())
-                    .then(renderDropdown)
-                    .catch(() => dropdown.classList.add('hidden'));
-            }
-
-            input.addEventListener('input', function() {
-                const query = getQuery();
-                if (query === null) {
-                    dropdown.classList.add('hidden');
-                    return;
-                }
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => fetchMembers(query), 150);
-            });
-
-            input.addEventListener('keydown', function(e) {
-                if (dropdown.classList.contains('hidden') || !items.length) return;
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    highlightItem((selectedIdx + 1) % items.length);
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    highlightItem((selectedIdx - 1 + items.length) % items.length);
-                } else if (e.key === 'Enter' || e.key === 'Tab') {
-                    e.preventDefault();
-                    selectItem(selectedIdx);
-                } else if (e.key === 'Escape') {
-                    dropdown.classList.add('hidden');
-                }
-            });
-
-            dropdown.addEventListener('mousedown', function(e) {
-                e.preventDefault(); // Keep focus on textarea
-                const item = e.target.closest('.mention-item');
-                if (item) selectItem(parseInt(item.dataset.idx));
-            });
-
-            document.addEventListener('click', function(e) {
-                if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-                    dropdown.classList.add('hidden');
-                }
-            });
-        })();
-
-        function previewCommentFiles(input) {
-            var preview = document.getElementById('comment-file-preview');
-            preview.innerHTML = '';
-            Array.from(input.files).forEach(function(file) {
-                var tag = document.createElement('span');
-                tag.className = 'inline-flex items-center gap-1 px-2 py-1 bg-ch-gray rounded text-xs text-gray-300';
-                tag.textContent = file.name.length > 25 ? file.name.substring(0, 22) + '...' : file.name;
-                preview.appendChild(tag);
-            });
-        }
-        </script>
-    </div>
 </div>
+
+<script>
+(function() {
+    const input = document.getElementById('comment-input');
+    const dropdown = document.getElementById('mention-dropdown');
+    let mentionStart = -1;
+    let selectedIdx = 0;
+    let items = [];
+    let debounceTimer = null;
+
+    function getQuery() {
+        const pos = input.selectionStart;
+        const text = input.value.substring(0, pos);
+        const atIdx = text.lastIndexOf('@');
+        if (atIdx === -1) return null;
+        if (atIdx > 0 && !/\s/.test(text[atIdx - 1])) return null;
+        const query = text.substring(atIdx + 1);
+        if ((query.match(/\s/g) || []).length > 1) return null;
+        mentionStart = atIdx;
+        return query;
+    }
+
+    function renderDropdown(results) {
+        items = results;
+        selectedIdx = 0;
+        if (!results.length) {
+            dropdown.classList.add('hidden');
+            return;
+        }
+        const html = results.map((r, i) => {
+            const initial = r.name.charAt(0).toUpperCase();
+            const cls = i === 0 ? 'bg-ch-gray' : '';
+            return '<div class="mention-item px-3 py-2 cursor-pointer flex items-center gap-2 ' + cls + ' hover:bg-ch-gray" data-idx="' + i + '">'
+                + '<div class="w-6 h-6 rounded-full bg-ch-gold text-black flex items-center justify-center text-xs font-medium flex-shrink-0">' + initial + '</div>'
+                + '<div class="min-w-0">'
+                + '<div class="text-sm font-medium truncate">' + r.name.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>'
+                + '<div class="text-xs text-gray-500">' + r.role.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>'
+                + '</div></div>';
+        }).join('');
+        dropdown.innerHTML = html;
+        dropdown.classList.remove('hidden');
+    }
+
+    function selectItem(idx) {
+        const item = items[idx];
+        if (!item) return;
+        const before = input.value.substring(0, mentionStart);
+        const after = input.value.substring(input.selectionStart);
+        const mention = '@' + item.name + ' ';
+        input.value = before + mention + after;
+        input.selectionStart = input.selectionEnd = before.length + mention.length;
+        dropdown.classList.add('hidden');
+        input.focus();
+    }
+
+    function highlightItem(idx) {
+        dropdown.querySelectorAll('.mention-item').forEach((el, i) => {
+            el.classList.toggle('bg-ch-gray', i === idx);
+        });
+        selectedIdx = idx;
+    }
+
+    function fetchMembers(query) {
+        fetch('{% url "member_search" %}?q=' + encodeURIComponent(query))
+            .then(function(r) { return r.json(); })
+            .then(renderDropdown)
+            .catch(function() { dropdown.classList.add('hidden'); });
+    }
+
+    input.addEventListener('input', function() {
+        const query = getQuery();
+        if (query === null) {
+            dropdown.classList.add('hidden');
+            return;
+        }
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() { fetchMembers(query); }, 150);
+    });
+
+    input.addEventListener('keydown', function(e) {
+        if (dropdown.classList.contains('hidden') || !items.length) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            highlightItem((selectedIdx + 1) % items.length);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            highlightItem((selectedIdx - 1 + items.length) % items.length);
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            selectItem(selectedIdx);
+        } else if (e.key === 'Escape') {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    dropdown.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        const item = e.target.closest('.mention-item');
+        if (item) selectItem(parseInt(item.dataset.idx));
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.classList.add('hidden');
+        }
+    });
+})();
+
+function previewCommentFiles(input) {
+    var preview = document.getElementById('comment-file-preview');
+    preview.innerHTML = '';
+    Array.from(input.files).forEach(function(file) {
+        var tag = document.createElement('span');
+        tag.className = 'inline-flex items-center gap-1 px-2 py-1 bg-ch-gray rounded text-xs text-gray-300';
+        tag.textContent = file.name.length > 25 ? file.name.substring(0, 22) + '...' : file.name;
+        preview.appendChild(tag);
+    });
+}
+</script>
 {% endblock %}

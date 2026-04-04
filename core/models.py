@@ -2596,6 +2596,12 @@ class Task(models.Model):
         """Check if task has any subtasks."""
         return self.subtasks.exists()
 
+    def is_watched_by(self, user):
+        """Check if given user is watching this task."""
+        if not user or not user.is_authenticated:
+            return False
+        return self.watchers.filter(user=user).exists()
+
     def save(self, *args, **kwargs):
         """Ensure organization/project consistency and prevent circular references."""
         # Circular reference guard
@@ -2664,6 +2670,25 @@ class TaskComment(models.Model):
         related_name='task_comment_mentions'
     )
 
+    # Decision marking
+    is_decision = models.BooleanField(
+        default=False,
+        help_text="This comment captures a decision made by the team"
+    )
+    decision_marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='decisions_marked',
+        help_text="User who marked this comment as a decision"
+    )
+    decision_marked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this comment was marked as a decision"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2674,6 +2699,80 @@ class TaskComment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.author} on {self.task.title}"
+
+
+class TaskReadState(models.Model):
+    """
+    Per-user tracking of when a user last viewed a task's comment thread.
+    Used to compute unread comment counts and drive badge indicators.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='task_read_states'
+    )
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='read_states'
+    )
+    last_read_at = models.DateTimeField()
+
+    class Meta:
+        unique_together = ('user', 'task')
+        verbose_name = 'Task Read State'
+        verbose_name_plural = 'Task Read States'
+        indexes = [
+            models.Index(fields=['user', 'task']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} read {self.task.title} at {self.last_read_at}"
+
+
+def unread_comment_count_for(user, task):
+    """
+    Count comments on `task` that `user` has not seen.
+    A comment counts as unread if it was created after user's last_read_at
+    and was not authored by user. If no read-state exists, all non-self
+    comments count as unread.
+    """
+    try:
+        state = TaskReadState.objects.get(user=user, task=task)
+        last_read = state.last_read_at
+    except TaskReadState.DoesNotExist:
+        last_read = None
+
+    qs = task.comments.exclude(author=user)
+    if last_read is not None:
+        qs = qs.filter(created_at__gt=last_read)
+    return qs.count()
+
+
+class TaskWatcher(models.Model):
+    """
+    Users subscribed to a task they are not assigned to.
+    Watchers receive notifications for new comments and decisions.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='watched_tasks'
+    )
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='watchers'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'task')
+        verbose_name = 'Task Watcher'
+        verbose_name_plural = 'Task Watchers'
+
+    def __str__(self):
+        return f"{self.user.username} watches {self.task.title}"
 
 
 class TaskChecklist(models.Model):
@@ -3225,6 +3324,20 @@ class NotificationPreference(models.Model):
     care_urgent_only = models.BooleanField(default=False, help_text="Only urgent care alerts")
 
     followup_reminders = models.BooleanField(default=True, help_text="Follow-up due date reminders")
+
+    # Task-related notifications
+    task_comment_on_assigned = models.BooleanField(
+        default=True,
+        help_text="Notify me about new comments on tasks I'm assigned to"
+    )
+    task_comment_on_watched = models.BooleanField(
+        default=True,
+        help_text="Notify me about new comments on tasks I'm watching"
+    )
+    decision_notifications = models.BooleanField(
+        default=True,
+        help_text="Notify me when a decision is marked in a project I'm in"
+    )
 
     song_submissions = models.BooleanField(default=True, help_text="Song submission notifications")
 
