@@ -2664,6 +2664,25 @@ class TaskComment(models.Model):
         related_name='task_comment_mentions'
     )
 
+    # Decision marking
+    is_decision = models.BooleanField(
+        default=False,
+        help_text="This comment captures a decision made by the team"
+    )
+    decision_marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='decisions_marked',
+        help_text="User who marked this comment as a decision"
+    )
+    decision_marked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this comment was marked as a decision"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
