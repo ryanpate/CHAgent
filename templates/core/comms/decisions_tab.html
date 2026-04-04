@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}Decisions - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-6">
+  <div class="mb-4 text-sm text-[#888]">
+    <a href="{% url 'project_detail' pk=project.pk %}" class="hover:text-[#c9a227]">{{ project.name }}</a>
+    <span class="mx-2">/</span>
+    <span>Decisions</span>
+  </div>
+
+  {% include 'core/comms/_project_tabs.html' with project=project active_tab='decisions' %}
+
+  <h1 class="text-xl font-semibold text-[#eee] mb-4">Decisions</h1>
+
+  {% if decisions %}
+    <div class="space-y-3">
+      {% for d in decisions %}
+        <div class="bg-[#1a2a0a] border border-[#2a3a1a] rounded-lg p-4">
+          <p class="text-sm text-[#ccc] whitespace-pre-wrap mb-2">{{ d.content }}</p>
+          <div class="flex flex-wrap items-center gap-3 text-xs text-[#666]">
+            <span class="text-[#c9a227]">{{ d.author.display_name|default:d.author.username }}</span>
+            {% if d.marked_at %}
+              <span>{{ d.marked_at|timesince }} ago</span>
+            {% endif %}
+            <a href="{{ d.source_url }}" class="text-[#888] hover:text-[#c9a227] ml-auto">
+              in: {{ d.source_label }}
+            </a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="bg-[#1a1a1a] border border-[#333] rounded-lg p-8 text-center">
+      <p class="text-[#888] mb-2">No decisions yet.</p>
+      <p class="text-sm text-[#666]">Mark any task comment or discussion message as a decision to see it here.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

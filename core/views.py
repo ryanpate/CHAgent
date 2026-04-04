@@ -11,6 +11,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse, FileResponse
 from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db import models
@@ -2751,6 +2752,287 @@ def project_detail(request, pk):
         'unread_counts': unread_counts,
     }
     return render(request, 'core/comms/project_detail.html', context)
+
+
+@login_required
+def discussion_list(request, project_pk):
+    """List all discussions for a project."""
+    from .models import Project, ProjectDiscussion
+
+    org = get_org(request)
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    project = get_object_or_404(queryset, pk=project_pk)
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return redirect('project_list')
+
+    discussions = project.discussions.select_related('created_by').prefetch_related(
+        'messages'
+    ).order_by('is_resolved', '-created_at')
+
+    context = {
+        'project': project,
+        'discussions': discussions,
+        'active_tab': 'discussions',
+    }
+    return render(request, 'core/comms/discussion_list.html', context)
+
+
+@login_required
+def discussion_create(request, project_pk):
+    """GET shows form, POST creates a new ProjectDiscussion."""
+    from .models import Project, ProjectDiscussion
+
+    org = get_org(request)
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    project = get_object_or_404(queryset, pk=project_pk)
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return redirect('project_list')
+
+    if request.method == 'POST':
+        title = request.POST.get('title', '').strip()
+        first_message = request.POST.get('content', '').strip()
+        if title:
+            discussion = ProjectDiscussion.objects.create(
+                project=project,
+                title=title,
+                created_by=request.user,
+            )
+            # Optional first message
+            if first_message:
+                from .models import ProjectDiscussionMessage
+                ProjectDiscussionMessage.objects.create(
+                    discussion=discussion,
+                    author=request.user,
+                    content=first_message,
+                )
+            return redirect('discussion_detail', project_pk=project.pk, pk=discussion.pk)
+
+    return render(request, 'core/comms/discussion_create.html', {
+        'project': project,
+        'active_tab': 'discussions',
+    })
+
+
+@login_required
+def discussion_detail(request, project_pk, pk):
+    """View a discussion thread with all messages."""
+    from .models import Project, ProjectDiscussion
+
+    org = get_org(request)
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    project = get_object_or_404(queryset, pk=project_pk)
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return redirect('project_list')
+
+    discussion = get_object_or_404(ProjectDiscussion, pk=pk, project=project)
+    messages_qs = discussion.messages.select_related('author').prefetch_related(
+        'mentioned_users', 'linked_tasks'
+    )
+
+    context = {
+        'project': project,
+        'discussion': discussion,
+        'messages_list': messages_qs,
+        'active_tab': 'discussions',
+    }
+    return render(request, 'core/comms/discussion_detail.html', context)
+
+
+@login_required
+def decisions_tab(request, project_pk):
+    """Aggregated view of all decisions across task comments and discussion messages."""
+    from .models import Project, TaskComment, ProjectDiscussionMessage
+
+    org = get_org(request)
+    queryset = Project.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    project = get_object_or_404(queryset, pk=project_pk)
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return redirect('project_list')
+
+    # Decisions from TaskComments
+    task_decisions = TaskComment.objects.filter(
+        task__project=project,
+        is_decision=True,
+    ).select_related('author', 'task', 'decision_marked_by').order_by('-decision_marked_at')
+
+    # Decisions from ProjectDiscussionMessages
+    discussion_decisions = ProjectDiscussionMessage.objects.filter(
+        discussion__project=project,
+        is_decision=True,
+    ).select_related('author', 'discussion', 'decision_marked_by').order_by('-decision_marked_at')
+
+    # Merge into one timeline
+    combined = []
+    for c in task_decisions:
+        combined.append({
+            'content': c.content,
+            'marked_at': c.decision_marked_at,
+            'marked_by': c.decision_marked_by,
+            'author': c.author,
+            'source_label': f'Task: {c.task.title}',
+            'source_url': reverse('task_detail', kwargs={
+                'project_pk': project.pk, 'pk': c.task.pk,
+            }),
+        })
+    for m in discussion_decisions:
+        combined.append({
+            'content': m.content,
+            'marked_at': m.decision_marked_at,
+            'marked_by': m.decision_marked_by,
+            'author': m.author,
+            'source_label': f'Discussion: {m.discussion.title}',
+            'source_url': reverse('discussion_detail', kwargs={
+                'project_pk': project.pk, 'pk': m.discussion.pk,
+            }),
+        })
+
+    combined.sort(key=lambda x: x['marked_at'] or timezone.now(), reverse=True)
+
+    context = {
+        'project': project,
+        'decisions': combined,
+        'active_tab': 'decisions',
+    }
+    return render(request, 'core/comms/decisions_tab.html', context)
+
+
+@login_required
+@require_POST
+def discussion_toggle_resolved(request, pk):
+    """Toggle a discussion's is_resolved flag."""
+    from .models import ProjectDiscussion
+
+    discussion = get_object_or_404(ProjectDiscussion, pk=pk)
+    project = discussion.project
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return HttpResponse('Access denied', status=403)
+
+    if discussion.is_resolved:
+        discussion.is_resolved = False
+        discussion.resolved_by = None
+        discussion.resolved_at = None
+    else:
+        discussion.is_resolved = True
+        discussion.resolved_by = request.user
+        discussion.resolved_at = timezone.now()
+    discussion.save(update_fields=['is_resolved', 'resolved_by', 'resolved_at', 'updated_at'])
+
+    return redirect('discussion_detail', project_pk=project.pk, pk=discussion.pk)
+
+
+@login_required
+@require_POST
+def discussion_post_message(request, pk):
+    """Add a message to a discussion. Handles @mentions and optional task linking."""
+    from .models import ProjectDiscussion, ProjectDiscussionMessage, Task
+    from accounts.models import User
+    import re
+
+    discussion = get_object_or_404(ProjectDiscussion, pk=pk)
+    project = discussion.project
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return HttpResponse('Access denied', status=403)
+
+    content = request.POST.get('content', '').strip()
+    if not content:
+        if request.headers.get('HX-Request'):
+            return HttpResponse('', status=204)
+        return redirect('discussion_detail', project_pk=project.pk, pk=discussion.pk)
+
+    parent_id = request.POST.get('parent_id')
+    parent = None
+    if parent_id:
+        try:
+            parent = ProjectDiscussionMessage.objects.get(pk=parent_id, discussion=discussion)
+        except ProjectDiscussionMessage.DoesNotExist:
+            pass
+
+    msg = ProjectDiscussionMessage.objects.create(
+        discussion=discussion,
+        author=request.user,
+        content=content,
+        parent=parent,
+    )
+
+    # Parse @mentions
+    mention_tokens = re.findall(r'@(\w+(?:\s+\w+)?)', content)
+    if mention_tokens:
+        mentioned_users = set()
+        for token in mention_tokens:
+            matches = User.objects.filter(
+                models.Q(display_name__iexact=token) |
+                models.Q(first_name__iexact=token) |
+                models.Q(username__iexact=token)
+            )
+            mentioned_users.update(matches)
+        if mentioned_users:
+            msg.mentioned_users.set(mentioned_users)
+
+    # Parse linked_tasks from form (comma-separated task IDs)
+    task_ids_raw = request.POST.get('linked_task_ids', '').strip()
+    if task_ids_raw:
+        try:
+            task_ids = [int(x) for x in task_ids_raw.split(',') if x.strip().isdigit()]
+            tasks_to_link = Task.objects.filter(pk__in=task_ids, project=project)
+            msg.linked_tasks.set(tasks_to_link)
+        except (ValueError, TypeError):
+            pass
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/discussion_message.html', {
+            'message': msg,
+        })
+
+    return redirect('discussion_detail', project_pk=project.pk, pk=discussion.pk)
+
+
+@login_required
+@require_POST
+def discussion_message_mark_decision(request, pk):
+    """Toggle is_decision flag on a ProjectDiscussionMessage."""
+    from .models import ProjectDiscussionMessage
+
+    msg = get_object_or_404(ProjectDiscussionMessage, pk=pk)
+    project = msg.discussion.project
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return HttpResponse('Access denied', status=403)
+
+    if msg.is_decision:
+        msg.is_decision = False
+        msg.decision_marked_by = None
+        msg.decision_marked_at = None
+    else:
+        msg.is_decision = True
+        msg.decision_marked_by = request.user
+        msg.decision_marked_at = timezone.now()
+    msg.save(update_fields=['is_decision', 'decision_marked_by', 'decision_marked_at', 'updated_at'])
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/discussion_message.html', {'message': msg})
+
+    return redirect('discussion_detail', project_pk=project.pk, pk=msg.discussion.pk)
 
 
 @login_required
