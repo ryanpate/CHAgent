@@ -515,3 +515,23 @@ class TestDecisionsTab:
         response = client.get(reverse('decisions_tab', args=[project.pk]))
 
         assert response.status_code in (302, 403, 404)
+
+
+@pytest.mark.django_db
+class TestProjectDetailTabs:
+    """Verify project_detail renders the tabs navigation."""
+
+    def test_project_detail_shows_tabs(self, client, user_alpha_owner, org_alpha):
+        """Project detail page includes links to Discussions and Decisions tabs."""
+        from core.models import Project
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('project_detail', args=[project.pk]))
+
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert reverse('discussion_list', args=[project.pk]) in body
+        assert reverse('decisions_tab', args=[project.pk]) in body
