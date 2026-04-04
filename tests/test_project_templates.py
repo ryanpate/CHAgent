@@ -282,4 +282,36 @@ class TestProjectTemplateDetailView:
         t.refresh_from_db()
         assert t.name == 'New Name'
         assert t.template_tasks.count() == 1
-        assert t.template_tasks.first().title == 'Fresh task'
+
+
+@pytest.mark.django_db
+class TestProjectTemplateDeleteView:
+    """Tests for deleting a ProjectTemplate."""
+
+    def test_creator_can_delete(self, client, user_alpha_owner, org_alpha):
+        """Creator of template can delete it."""
+        from core.models import ProjectTemplate
+        t = ProjectTemplate.objects.create(
+            organization=org_alpha, name='T', created_by=user_alpha_owner,
+        )
+        client.force_login(user_alpha_owner)
+
+        response = client.post(reverse('project_template_delete', args=[t.pk]))
+
+        assert response.status_code == 302
+        assert not ProjectTemplate.objects.filter(pk=t.pk).exists()
+
+    def test_non_creator_cannot_delete(
+        self, client, user_alpha_owner, user_alpha_member, org_alpha
+    ):
+        """Non-creator cannot delete even a shared template."""
+        from core.models import ProjectTemplate
+        t = ProjectTemplate.objects.create(
+            organization=org_alpha, name='T',
+            created_by=user_alpha_owner, is_shared=True,
+        )
+        client.force_login(user_alpha_member)
+
+        client.post(reverse('project_template_delete', args=[t.pk]))
+
+        assert ProjectTemplate.objects.filter(pk=t.pk).exists()

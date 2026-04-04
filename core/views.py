@@ -4432,8 +4432,20 @@ def project_template_detail(request, pk):
 @login_required
 @require_POST
 def project_template_delete(request, pk):
-    """Stub — replaced in P3 Task 6."""
-    return HttpResponse('Delete — Task 6', status=200)
+    """Delete a ProjectTemplate. Only the creator can delete."""
+    from .models import ProjectTemplate
+
+    org = get_org(request)
+    queryset = ProjectTemplate.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    template = get_object_or_404(queryset, pk=pk)
+
+    if template.created_by != request.user:
+        return redirect('project_template_detail', pk=template.pk)
+
+    template.delete()
+    return redirect('project_template_list')
 
 
 @login_required
