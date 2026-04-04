@@ -2695,6 +2695,54 @@ class TaskComment(models.Model):
         return f"Comment by {self.author} on {self.task.title}"
 
 
+class TaskReadState(models.Model):
+    """
+    Per-user tracking of when a user last viewed a task's comment thread.
+    Used to compute unread comment counts and drive badge indicators.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='task_read_states'
+    )
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='read_states'
+    )
+    last_read_at = models.DateTimeField()
+
+    class Meta:
+        unique_together = ('user', 'task')
+        verbose_name = 'Task Read State'
+        verbose_name_plural = 'Task Read States'
+        indexes = [
+            models.Index(fields=['user', 'task']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} read {self.task.title} at {self.last_read_at}"
+
+
+def unread_comment_count_for(user, task):
+    """
+    Count comments on `task` that `user` has not seen.
+    A comment counts as unread if it was created after user's last_read_at
+    and was not authored by user. If no read-state exists, all non-self
+    comments count as unread.
+    """
+    try:
+        state = TaskReadState.objects.get(user=user, task=task)
+        last_read = state.last_read_at
+    except TaskReadState.DoesNotExist:
+        last_read = None
+
+    qs = task.comments.exclude(author=user)
+    if last_read is not None:
+        qs = qs.filter(created_at__gt=last_read)
+    return qs.count()
+
+
 class TaskChecklist(models.Model):
     """
     Checklist items (subtasks) within a task.
