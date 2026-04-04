@@ -1,11 +1,21 @@
+{% load task_filters %}
 <!-- Task Card for Kanban Board -->
 <a href="{% if task.project %}{% url 'task_detail' task.project.pk task.pk %}{% else %}{% url 'standalone_task_detail' task.pk %}{% endif %}"
    class="block bg-ch-gray rounded-lg p-4 hover:bg-gray-700 transition group">
     <div class="flex items-start justify-between mb-2">
-        <h4 class="font-medium group-hover:text-ch-gold transition">{{ task.title }}{% if task.is_recurring %}
+        <div class="flex items-center gap-2 min-w-0 flex-1 mr-2">
+            <h4 class="font-medium group-hover:text-ch-gold transition truncate">{{ task.title }}{% if task.is_recurring %}
 <svg class="w-3 h-3 text-ch-gold inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Recurring">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
 </svg>{% endif %}</h4>
+            {% with unread=unread_counts|get_item:task.pk %}
+            {% if unread and unread > 0 %}
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded bg-[#1a0a0a] text-[#e74c3c] flex-shrink-0" title="{{ unread }} unread comment{{ unread|pluralize }}">
+                &#128172; {{ unread }}
+            </span>
+            {% endif %}
+            {% endwith %}
+        </div>
         <span class="px-2 py-0.5 text-xs rounded-full flex-shrink-0
             {% if task.priority == 'urgent' %}bg-red-900/50 text-red-400
             {% elif task.priority == 'high' %}bg-orange-900/50 text-orange-400

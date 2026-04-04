@@ -2733,6 +2733,12 @@ def project_detail(request, pk):
     milestones = project.milestones.all()
     activities = project.activities.select_related('user', 'task')[:20]
 
+    # Compute unread comment counts per task for current user
+    from .models import unread_comment_count_for
+    unread_counts = {}
+    for t in project.tasks.all():
+        unread_counts[t.pk] = unread_comment_count_for(request.user, t)
+
     context = {
         'project': project,
         'tasks': tasks,
@@ -2742,6 +2748,7 @@ def project_detail(request, pk):
         'milestones': milestones,
         'activities': activities,
         'reaction_emoji_choices': MessageReaction.EMOJI_CHOICES,
+        'unread_counts': unread_counts,
     }
     return render(request, 'core/comms/project_detail.html', context)
 

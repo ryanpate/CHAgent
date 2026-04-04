@@ -536,3 +536,36 @@ class TestNotifyWatchersOnComment:
         notify_task_comment(comment)
 
         assert user_alpha_member not in notified_users
+
+
+@pytest.mark.django_db
+class TestProjectDetailUnreadCounts:
+    """Verify project_detail view provides per-task unread counts."""
+
+    def test_project_detail_includes_unread_map(
+        self, client, user_alpha_owner, user_alpha_member, org_alpha
+    ):
+        """project_detail context includes unread_counts dict keyed by task.pk."""
+        from core.models import Project, Task, TaskComment, TaskReadState
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        project.members.add(user_alpha_member)
+        task = Task.objects.create(
+            project=project, title='T', created_by=user_alpha_owner,
+        )
+        # user_alpha_owner viewed it in the past
+        past = timezone.now() - timezone.timedelta(days=1)
+        TaskReadState.objects.create(
+            user=user_alpha_owner, task=task, last_read_at=past,
+        )
+        # member posts 2 comments after
+        TaskComment.objects.create(task=task, author=user_alpha_member, content='A')
+        TaskComment.objects.create(task=task, author=user_alpha_member, content='B')
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('project_detail', args=[project.pk]))
+
+        assert response.status_code == 200
+        unread_counts = response.context['unread_counts']
+        assert unread_counts[task.pk] == 2
