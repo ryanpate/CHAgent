@@ -2,23 +2,67 @@
 <form hx-post="{% url 'task_create_subtask' parent_task.pk %}"
       hx-target="#subtask-list"
       hx-swap="beforeend"
-      hx-on::after-request="this.reset(); this.querySelector('input[name=title]').focus();"
-      class="flex flex-wrap gap-2 items-end bg-ch-dark rounded-lg p-3 mt-2">
+      hx-on::after-request="this.reset(); this.querySelector('input[name=title]').focus(); this.querySelector('[data-assignee-picker]').__x.$data.selected = [];"
+      class="flex flex-wrap gap-2 items-start bg-ch-dark rounded-lg p-3 mt-2">
     {% csrf_token %}
     <div class="flex-1 min-w-[200px]">
         <input type="text" name="title" placeholder="Subtask title..." required
                class="w-full bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ch-gold">
     </div>
-    <div>
-        <select name="assignees"
-                class="bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-ch-gold"
-                style="color-scheme: dark;">
-            <option value="">Assign to...</option>
-            {% for user in available_users %}
-            <option value="{{ user.pk }}">{{ user.display_name|default:user.username }}</option>
-            {% endfor %}
-        </select>
+
+    <!-- Assignee chip picker -->
+    <div data-assignee-picker
+         x-data='{
+            availableUsers: [{% for u in available_users %}{"id": {{ u.pk }}, "name": "{{ u.display_name|default:u.username|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}],
+            selected: [],
+            query: "",
+            isOpen: false,
+            get filtered() {
+                const q = this.query.toLowerCase();
+                const selectedIds = new Set(this.selected.map(s => s.id));
+                return this.availableUsers.filter(u => !selectedIds.has(u.id) && u.name.toLowerCase().includes(q));
+            },
+            addUser(u) {
+                this.selected.push(u);
+                this.query = "";
+                this.isOpen = false;
+                this.$nextTick(() => this.$refs.picker.focus());
+            },
+            removeUser(id) {
+                this.selected = this.selected.filter(u => u.id !== id);
+            }
+         }'
+         @click.outside="isOpen = false"
+         class="relative min-w-[220px]">
+        <div class="bg-ch-gray border border-gray-700 rounded-lg px-2 py-1 text-sm focus-within:border-ch-gold flex flex-wrap gap-1 items-center min-h-[38px]"
+             @click="$refs.picker.focus()">
+            <template x-for="user in selected" :key="user.id">
+                <span class="inline-flex items-center gap-1 bg-ch-gold/20 text-ch-gold border border-ch-gold/30 rounded px-1.5 py-0.5 text-xs">
+                    <span x-text="user.name"></span>
+                    <button type="button" @click.stop="removeUser(user.id)" class="hover:text-white leading-none" aria-label="Remove">&times;</button>
+                    <input type="hidden" name="assignees" :value="user.id">
+                </span>
+            </template>
+            <input type="text" x-ref="picker"
+                   x-model="query"
+                   @focus="isOpen = true"
+                   @input="isOpen = true"
+                   @keydown.escape="isOpen = false"
+                   @keydown.enter.prevent="if (filtered.length > 0) addUser(filtered[0])"
+                   :placeholder="selected.length === 0 ? 'Assign to...' : ''"
+                   class="flex-1 bg-transparent border-0 outline-none text-white text-sm min-w-[80px] py-1 px-1">
+        </div>
+        <div x-show="isOpen && filtered.length > 0" x-cloak
+             class="absolute z-20 mt-1 w-full bg-ch-dark border border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+            <template x-for="user in filtered" :key="user.id">
+                <button type="button" @click="addUser(user)"
+                        class="block w-full text-left px-3 py-2 text-sm text-white hover:bg-ch-gold/20">
+                    <span x-text="user.name"></span>
+                </button>
+            </template>
+        </div>
     </div>
+
     <div>
         <input type="date" name="due_date"
                class="bg-ch-gray border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-ch-gold"
