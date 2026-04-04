@@ -82,6 +82,7 @@
                         <option value="monthly">Monthly (same day)</option>
                         <option value="monthly_weekday">Monthly (same weekday)</option>
                         <option value="daily">Daily</option>
+                        <option value="pco_service">PCO Service</option>
                     </select>
                 </div>
 
@@ -118,6 +119,24 @@
                         <option value="4">4th occurrence</option>
                         <option value="-1">Last occurrence</option>
                     </select>
+                </div>
+
+                <!-- PCO Service Settings -->
+                <div id="pco_section" class="hidden space-y-3 pt-3 border-t border-gray-700 mt-3">
+                    <p class="text-xs text-gray-400">Configure which Planning Center service type triggers this task.</p>
+                    <div>
+                        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1.5">PCO Service Type ID</label>
+                        <input type="text" name="pco_service_type_id"
+                               placeholder="e.g. 12345 (from Planning Center)"
+                               class="w-full bg-ch-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-ch-gold">
+                        <p class="text-xs text-gray-500 mt-1">Find this ID in your Planning Center Services URL.</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1.5">Days Before Service</label>
+                        <input type="number" name="pco_days_before_service" value="0" min="0"
+                               class="w-24 bg-ch-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-ch-gold">
+                        <p class="text-xs text-gray-500 mt-1">0 = same day as service. 2 = task created 2 days before each service.</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -209,11 +228,13 @@ function updateRecurrenceUI() {
     const weekdaySection = document.getElementById('weekday_section');
     const monthlySection = document.getElementById('monthly_section');
     const monthlyWeekdaySection = document.getElementById('monthly_weekday_section');
+    const pcoSection = document.getElementById('pco_section');
 
     // Hide all
     weekdaySection.classList.add('hidden');
     monthlySection.classList.add('hidden');
     monthlyWeekdaySection.classList.add('hidden');
+    pcoSection.classList.add('hidden');
 
     // Show relevant
     if (type === 'weekly' || type === 'biweekly' || type === 'monthly_weekday') {
@@ -224,6 +245,9 @@ function updateRecurrenceUI() {
     }
     if (type === 'monthly_weekday') {
         monthlyWeekdaySection.classList.remove('hidden');
+    }
+    if (type === 'pco_service') {
+        pcoSection.classList.remove('hidden');
     }
 }
 

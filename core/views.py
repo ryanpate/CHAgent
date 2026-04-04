@@ -4539,6 +4539,13 @@ def template_create(request):
         checklist_str = request.POST.get('default_checklist', '')
         checklist = [item.strip() for item in checklist_str.split('\n') if item.strip()]
 
+        # PCO-linked recurrence fields
+        pco_service_type_id = request.POST.get('pco_service_type_id', '').strip()
+        try:
+            pco_days_before_service = int(request.POST.get('pco_days_before_service', '0') or 0)
+        except ValueError:
+            pco_days_before_service = 0
+
         template = TaskTemplate.objects.create(
             name=request.POST.get('name', ''),
             title_template=request.POST.get('title_template', ''),
@@ -4552,7 +4559,9 @@ def template_create(request):
             due_time=request.POST.get('due_time') or None,
             default_checklist=checklist,
             is_active=request.POST.get('is_active') == 'on',
-            created_by=request.user
+            created_by=request.user,
+            pco_service_type_id=pco_service_type_id,
+            pco_days_before_service=pco_days_before_service,
         )
 
         # Add default assignees
@@ -4620,6 +4629,13 @@ def template_detail(request, pk):
             template.recurrence_days = recurrence_days
 
             template.weekday_occurrence = int(request.POST.get('weekday_occurrence') or 0) or None
+
+            # PCO-linked recurrence fields
+            template.pco_service_type_id = request.POST.get('pco_service_type_id', '').strip()
+            try:
+                template.pco_days_before_service = int(request.POST.get('pco_days_before_service', '0') or 0)
+            except ValueError:
+                template.pco_days_before_service = 0
 
             # Parse checklist
             checklist_str = request.POST.get('default_checklist', '')
