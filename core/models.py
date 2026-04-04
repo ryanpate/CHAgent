@@ -2596,6 +2596,12 @@ class Task(models.Model):
         """Check if task has any subtasks."""
         return self.subtasks.exists()
 
+    def is_watched_by(self, user):
+        """Check if given user is watching this task."""
+        if not user or not user.is_authenticated:
+            return False
+        return self.watchers.filter(user=user).exists()
+
     def save(self, *args, **kwargs):
         """Ensure organization/project consistency and prevent circular references."""
         # Circular reference guard
@@ -2741,6 +2747,32 @@ def unread_comment_count_for(user, task):
     if last_read is not None:
         qs = qs.filter(created_at__gt=last_read)
     return qs.count()
+
+
+class TaskWatcher(models.Model):
+    """
+    Users subscribed to a task they are not assigned to.
+    Watchers receive notifications for new comments and decisions.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='watched_tasks'
+    )
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='watchers'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'task')
+        verbose_name = 'Task Watcher'
+        verbose_name_plural = 'Task Watchers'
+
+    def __str__(self):
+        return f"{self.user.username} watches {self.task.title}"
 
 
 class TaskChecklist(models.Model):

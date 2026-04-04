@@ -158,3 +158,68 @@ class TestTaskReadState:
         from core.models import unread_comment_count_for
         count = unread_comment_count_for(user_alpha_owner, task)
         assert count == 2
+
+
+@pytest.mark.django_db
+class TestTaskWatcher:
+    """Tests for task watcher subscriptions."""
+
+    def test_create_watcher(self, user_alpha_owner, user_alpha_member, org_alpha):
+        """Any user can watch a task they are not assigned to."""
+        from core.models import Project, Task, TaskWatcher
+
+        project = Project.objects.create(
+            organization=org_alpha,
+            name='Test Project',
+            owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project,
+            title='Test Task',
+            created_by=user_alpha_owner,
+        )
+
+        watcher = TaskWatcher.objects.create(user=user_alpha_member, task=task)
+
+        assert watcher.user == user_alpha_member
+        assert watcher.task == task
+        assert task.watchers.count() == 1
+
+    def test_watcher_unique_per_user_task(self, user_alpha_member, user_alpha_owner, org_alpha):
+        """A user can only watch a task once."""
+        from django.db import IntegrityError
+        from core.models import Project, Task, TaskWatcher
+
+        project = Project.objects.create(
+            organization=org_alpha,
+            name='Test Project',
+            owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project,
+            title='Test Task',
+            created_by=user_alpha_owner,
+        )
+
+        TaskWatcher.objects.create(user=user_alpha_member, task=task)
+        with pytest.raises(IntegrityError):
+            TaskWatcher.objects.create(user=user_alpha_member, task=task)
+
+    def test_is_watched_by_method(self, user_alpha_owner, user_alpha_member, org_alpha):
+        """Task.is_watched_by(user) returns True/False."""
+        from core.models import Project, Task, TaskWatcher
+
+        project = Project.objects.create(
+            organization=org_alpha,
+            name='Test Project',
+            owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project,
+            title='Test Task',
+            created_by=user_alpha_owner,
+        )
+
+        assert task.is_watched_by(user_alpha_member) is False
+        TaskWatcher.objects.create(user=user_alpha_member, task=task)
+        assert task.is_watched_by(user_alpha_member) is True
