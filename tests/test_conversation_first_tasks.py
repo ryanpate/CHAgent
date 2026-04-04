@@ -223,3 +223,18 @@ class TestTaskWatcher:
         assert task.is_watched_by(user_alpha_member) is False
         TaskWatcher.objects.create(user=user_alpha_member, task=task)
         assert task.is_watched_by(user_alpha_member) is True
+
+
+@pytest.mark.django_db
+class TestNotificationPreferenceExtensions:
+    """Tests for new task-related notification preference fields."""
+
+    def test_task_notification_preferences_default_values(self, user_alpha_owner):
+        """New preference fields default to sensible values."""
+        from core.models import NotificationPreference
+
+        prefs = NotificationPreference.get_or_create_for_user(user_alpha_owner)
+
+        assert prefs.task_comment_on_assigned is True
+        assert prefs.task_comment_on_watched is True
+        assert prefs.decision_notifications is True

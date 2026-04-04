@@ -3325,6 +3325,20 @@ class NotificationPreference(models.Model):
 
     followup_reminders = models.BooleanField(default=True, help_text="Follow-up due date reminders")
 
+    # Task-related notifications
+    task_comment_on_assigned = models.BooleanField(
+        default=True,
+        help_text="Notify me about new comments on tasks I'm assigned to"
+    )
+    task_comment_on_watched = models.BooleanField(
+        default=True,
+        help_text="Notify me about new comments on tasks I'm watching"
+    )
+    decision_notifications = models.BooleanField(
+        default=True,
+        help_text="Notify me when a decision is marked in a project I'm in"
+    )
+
     song_submissions = models.BooleanField(default=True, help_text="Song submission notifications")
 
     # Quiet hours (don't send notifications during these times)
