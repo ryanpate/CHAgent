@@ -3365,6 +3365,86 @@ class TaskTemplate(models.Model):
 
 
 # =============================================================================
+# Project Template Models
+# =============================================================================
+
+class ProjectTemplate(models.Model):
+    """
+    Blueprint for creating a new Project with pre-defined tasks.
+    Distinct from TaskTemplate (recurring task generator).
+    """
+    organization = models.ForeignKey(
+        'Organization',
+        on_delete=models.CASCADE,
+        related_name='project_templates',
+    )
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    is_shared = models.BooleanField(
+        default=False,
+        help_text="Visible to all org members (vs private to creator)",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_project_templates',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Project Template'
+        verbose_name_plural = 'Project Templates'
+
+    def __str__(self):
+        return self.name
+
+
+class ProjectTemplateTask(models.Model):
+    """
+    A task inside a ProjectTemplate with a relative due-date offset
+    from the event date.
+    """
+    template = models.ForeignKey(
+        ProjectTemplate,
+        on_delete=models.CASCADE,
+        related_name='template_tasks',
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    role_placeholder = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Free-text role hint (e.g., 'tech_lead'); not auto-resolved in v1",
+    )
+    relative_due_offset_days = models.IntegerField(
+        default=0,
+        help_text="Days from event date. Negative = before, positive = after.",
+    )
+    priority = models.CharField(
+        max_length=10,
+        choices=Task.PRIORITY_CHOICES,
+        default='medium',
+    )
+    checklist_items = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Checklist item titles to create with the task",
+    )
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name = 'Project Template Task'
+        verbose_name_plural = 'Project Template Tasks'
+
+    def __str__(self):
+        return f"{self.title} ({self.template.name})"
+
+
+# =============================================================================
 # Push Notification Models
 # =============================================================================
 
