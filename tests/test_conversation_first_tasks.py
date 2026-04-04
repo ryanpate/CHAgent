@@ -415,3 +415,49 @@ class TestMarkTaskRead:
 
         state.refresh_from_db()
         assert state.last_read_at > old_time
+
+
+@pytest.mark.django_db
+class TestTaskDetailAutoMarkRead:
+    """Verify that viewing the task_detail page updates the user's read state."""
+
+    def test_viewing_task_updates_read_state(self, client, user_alpha_owner, org_alpha):
+        """GET on task_detail creates or updates TaskReadState for the viewer."""
+        from core.models import Project, Task, TaskReadState
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='T', created_by=user_alpha_owner,
+        )
+        client.force_login(user_alpha_owner)
+
+        # No read state initially
+        assert not TaskReadState.objects.filter(
+            user=user_alpha_owner, task=task
+        ).exists()
+
+        client.get(reverse('task_detail', args=[project.pk, task.pk]))
+
+        assert TaskReadState.objects.filter(
+            user=user_alpha_owner, task=task
+        ).exists()
+
+    def test_task_detail_exposes_watch_state_in_context(
+        self, client, user_alpha_owner, org_alpha
+    ):
+        """Response context includes is_watching flag."""
+        from core.models import Project, Task, TaskWatcher
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='T', created_by=user_alpha_owner,
+        )
+        TaskWatcher.objects.create(user=user_alpha_owner, task=task)
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('task_detail', args=[project.pk, task.pk]))
+
+        assert response.status_code == 200
+        assert response.context['is_watching'] is True

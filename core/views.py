@@ -3754,6 +3754,15 @@ def task_detail(request, project_pk, pk):
     else:
         available_users = UserModel.objects.filter(is_active=True).order_by('display_name', 'username')
 
+    # Mark task as read for current user
+    from .models import TaskReadState, TaskWatcher
+    TaskReadState.objects.update_or_create(
+        user=request.user,
+        task=task,
+        defaults={'last_read_at': timezone.now()},
+    )
+    is_watching = TaskWatcher.objects.filter(user=request.user, task=task).exists()
+
     context = {
         'project': project,
         'task': task,
@@ -3765,6 +3774,7 @@ def task_detail(request, project_pk, pk):
         'subtasks': subtasks,
         'ancestors': ancestors,
         'available_users': available_users,
+        'is_watching': is_watching,
     }
     return render(request, 'core/comms/task_detail.html', context)
 
@@ -3820,6 +3830,15 @@ def standalone_task_detail(request, pk):
     else:
         available_users = UserModel.objects.filter(is_active=True).order_by('display_name', 'username')
 
+    # Mark task as read for current user
+    from .models import TaskReadState, TaskWatcher
+    TaskReadState.objects.update_or_create(
+        user=request.user,
+        task=task,
+        defaults={'last_read_at': timezone.now()},
+    )
+    is_watching = TaskWatcher.objects.filter(user=request.user, task=task).exists()
+
     context = {
         'project': None,
         'task': task,
@@ -3831,6 +3850,7 @@ def standalone_task_detail(request, pk):
         'subtasks': subtasks,
         'ancestors': ancestors,
         'available_users': available_users,
+        'is_watching': is_watching,
     }
     return render(request, 'core/comms/task_detail.html', context)
 
