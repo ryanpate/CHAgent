@@ -3583,6 +3583,31 @@ def task_toggle_watch(request, pk):
 
 @login_required
 @require_POST
+def task_mark_read(request, pk):
+    """Update the current user's TaskReadState to now."""
+    from .models import Task, TaskReadState
+
+    task = get_object_or_404(Task, pk=pk)
+    project = task.project
+
+    # Access control
+    if project:
+        if project.owner != request.user and request.user not in project.members.all():
+            return HttpResponse('Access denied', status=403)
+    else:
+        if request.user not in task.assignees.all() and task.created_by != request.user:
+            return HttpResponse('Access denied', status=403)
+
+    TaskReadState.objects.update_or_create(
+        user=request.user,
+        task=task,
+        defaults={'last_read_at': timezone.now()},
+    )
+    return HttpResponse(status=204)
+
+
+@login_required
+@require_POST
 def toggle_reaction(request):
     """Toggle an emoji reaction on a message. Adds if not present, removes if already reacted."""
     from .models import MessageReaction

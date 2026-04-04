@@ -368,3 +368,50 @@ class TestTaskWatchToggle:
 
         assert response.status_code == 403
         assert not TaskWatcher.objects.filter(user=user_beta_owner, task=task).exists()
+
+
+@pytest.mark.django_db
+class TestMarkTaskRead:
+    """Tests for mark-task-read view."""
+
+    def test_mark_task_read_creates_read_state(
+        self, client, user_alpha_owner, user_alpha_member, org_alpha
+    ):
+        """POST creates a new TaskReadState at current time."""
+        from core.models import Project, Task, TaskReadState
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        project.members.add(user_alpha_member)
+        task = Task.objects.create(
+            project=project, title='T', created_by=user_alpha_owner,
+        )
+        client.force_login(user_alpha_member)
+
+        response = client.post(reverse('task_mark_read', args=[task.pk]))
+
+        assert response.status_code in (200, 204, 302)
+        assert TaskReadState.objects.filter(user=user_alpha_member, task=task).exists()
+
+    def test_mark_task_read_updates_existing(
+        self, client, user_alpha_owner, org_alpha
+    ):
+        """POST updates the last_read_at on existing TaskReadState."""
+        from datetime import timedelta
+        from core.models import Project, Task, TaskReadState
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='T', created_by=user_alpha_owner,
+        )
+        old_time = timezone.now() - timedelta(days=1)
+        state = TaskReadState.objects.create(
+            user=user_alpha_owner, task=task, last_read_at=old_time,
+        )
+        client.force_login(user_alpha_owner)
+
+        client.post(reverse('task_mark_read', args=[task.pk]))
+
+        state.refresh_from_db()
+        assert state.last_read_at > old_time
