@@ -264,3 +264,78 @@ class TestDiscussionDetailView:
         response = client.get(reverse('discussion_detail', args=[project.pk, disc.pk]))
 
         assert response.status_code in (302, 403, 404)
+
+
+@pytest.mark.django_db
+class TestDiscussionPostMessage:
+    """Tests for posting messages to a discussion."""
+
+    def _setup(self, user, org):
+        from core.models import Project, ProjectDiscussion
+        project = Project.objects.create(organization=org, name='P', owner=user)
+        disc = ProjectDiscussion.objects.create(
+            organization=org, project=project, title='T', created_by=user,
+        )
+        return project, disc
+
+    def test_post_creates_message(self, client, user_alpha_owner, org_alpha):
+        """POST creates a ProjectDiscussionMessage."""
+        from core.models import ProjectDiscussionMessage
+
+        _, disc = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.post(
+            reverse('discussion_post_message', args=[disc.pk]),
+            {'content': 'Hello world'},
+        )
+
+        assert response.status_code in (200, 302)
+        assert ProjectDiscussionMessage.objects.filter(
+            discussion=disc, content='Hello world'
+        ).exists()
+
+    def test_post_empty_rejected(self, client, user_alpha_owner, org_alpha):
+        """Empty content is rejected."""
+        from core.models import ProjectDiscussionMessage
+
+        _, disc = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        client.post(
+            reverse('discussion_post_message', args=[disc.pk]),
+            {'content': ''},
+        )
+
+        assert not ProjectDiscussionMessage.objects.filter(discussion=disc).exists()
+
+    def test_htmx_returns_partial(self, client, user_alpha_owner, org_alpha):
+        """HTMX requests get a message partial back."""
+        _, disc = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_alpha_owner)
+
+        response = client.post(
+            reverse('discussion_post_message', args=[disc.pk]),
+            {'content': 'Hi'},
+            HTTP_HX_REQUEST='true',
+        )
+
+        assert response.status_code == 200
+        assert b'Hi' in response.content
+
+    def test_non_member_denied(
+        self, client, user_alpha_owner, user_beta_owner, org_alpha
+    ):
+        """Non-project-members cannot post messages."""
+        from core.models import ProjectDiscussionMessage
+
+        _, disc = self._setup(user_alpha_owner, org_alpha)
+        client.force_login(user_beta_owner)
+
+        response = client.post(
+            reverse('discussion_post_message', args=[disc.pk]),
+            {'content': 'Hack'},
+        )
+
+        assert response.status_code == 403
+        assert not ProjectDiscussionMessage.objects.filter(discussion=disc).exists()

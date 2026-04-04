@@ -2873,8 +2873,69 @@ def discussion_toggle_resolved(request, pk):
 @login_required
 @require_POST
 def discussion_post_message(request, pk):
-    """Stub — replaced in P2 Task 6."""
-    return HttpResponse('Stub', status=200)
+    """Add a message to a discussion. Handles @mentions and optional task linking."""
+    from .models import ProjectDiscussion, ProjectDiscussionMessage, Task
+    from accounts.models import User
+    import re
+
+    discussion = get_object_or_404(ProjectDiscussion, pk=pk)
+    project = discussion.project
+
+    # Access control
+    if project.owner != request.user and request.user not in project.members.all():
+        return HttpResponse('Access denied', status=403)
+
+    content = request.POST.get('content', '').strip()
+    if not content:
+        if request.headers.get('HX-Request'):
+            return HttpResponse('', status=204)
+        return redirect('discussion_detail', project_pk=project.pk, pk=discussion.pk)
+
+    parent_id = request.POST.get('parent_id')
+    parent = None
+    if parent_id:
+        try:
+            parent = ProjectDiscussionMessage.objects.get(pk=parent_id, discussion=discussion)
+        except ProjectDiscussionMessage.DoesNotExist:
+            pass
+
+    msg = ProjectDiscussionMessage.objects.create(
+        discussion=discussion,
+        author=request.user,
+        content=content,
+        parent=parent,
+    )
+
+    # Parse @mentions
+    mention_tokens = re.findall(r'@(\w+(?:\s+\w+)?)', content)
+    if mention_tokens:
+        mentioned_users = set()
+        for token in mention_tokens:
+            matches = User.objects.filter(
+                models.Q(display_name__iexact=token) |
+                models.Q(first_name__iexact=token) |
+                models.Q(username__iexact=token)
+            )
+            mentioned_users.update(matches)
+        if mentioned_users:
+            msg.mentioned_users.set(mentioned_users)
+
+    # Parse linked_tasks from form (comma-separated task IDs)
+    task_ids_raw = request.POST.get('linked_task_ids', '').strip()
+    if task_ids_raw:
+        try:
+            task_ids = [int(x) for x in task_ids_raw.split(',') if x.strip().isdigit()]
+            tasks_to_link = Task.objects.filter(pk__in=task_ids, project=project)
+            msg.linked_tasks.set(tasks_to_link)
+        except (ValueError, TypeError):
+            pass
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/discussion_message.html', {
+            'message': msg,
+        })
+
+    return redirect('discussion_detail', project_pk=project.pk, pk=discussion.pk)
 
 
 @login_required
