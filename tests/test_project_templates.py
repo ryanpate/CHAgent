@@ -109,3 +109,65 @@ class TestApplyTemplate:
         event = date(2026, 4, 5)
         project = t.apply(event_date=event, project_name='P', user=user_alpha_owner)
         assert project.tasks.get(title='Debrief').due_date == date(2026, 4, 6)
+
+
+@pytest.mark.django_db
+class TestProjectTemplateListView:
+    """Tests for the ProjectTemplate list view."""
+
+    def test_list_renders(self, client, user_alpha_owner, org_alpha):
+        """GET shows template list."""
+        from core.models import ProjectTemplate
+        ProjectTemplate.objects.create(
+            organization=org_alpha, name='Sunday Prep', created_by=user_alpha_owner,
+        )
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('project_template_list'))
+
+        assert response.status_code == 200
+        assert 'Sunday Prep' in response.content.decode()
+
+    def test_list_shows_only_own_org(self, client, user_alpha_owner, org_alpha, org_beta, user_beta_owner):
+        """Templates from other orgs are not visible."""
+        from core.models import ProjectTemplate
+        ProjectTemplate.objects.create(
+            organization=org_beta, name='Beta Template', created_by=user_beta_owner,
+        )
+        ProjectTemplate.objects.create(
+            organization=org_alpha, name='Alpha Template', created_by=user_alpha_owner,
+        )
+        client.force_login(user_alpha_owner)
+
+        response = client.get(reverse('project_template_list'))
+
+        body = response.content.decode()
+        assert 'Alpha Template' in body
+        assert 'Beta Template' not in body
+
+    def test_list_shows_shared_and_own(self, client, user_alpha_owner, user_alpha_member, org_alpha):
+        """Member sees own templates + shared ones in their org."""
+        from core.models import ProjectTemplate
+        # Shared by owner
+        ProjectTemplate.objects.create(
+            organization=org_alpha, name='Shared',
+            created_by=user_alpha_owner, is_shared=True,
+        )
+        # Private by owner — member should NOT see
+        ProjectTemplate.objects.create(
+            organization=org_alpha, name='Private owner',
+            created_by=user_alpha_owner, is_shared=False,
+        )
+        # Member's own private
+        ProjectTemplate.objects.create(
+            organization=org_alpha, name='My private',
+            created_by=user_alpha_member, is_shared=False,
+        )
+        client.force_login(user_alpha_member)
+
+        response = client.get(reverse('project_template_list'))
+
+        body = response.content.decode()
+        assert 'Shared' in body
+        assert 'My private' in body
+        assert 'Private owner' not in body

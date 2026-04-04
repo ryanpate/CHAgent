@@ -4300,6 +4300,52 @@ def template_list(request):
     return render(request, 'core/comms/template_list.html', context)
 
 
+# ============================================================================
+# Project Template Views
+# ============================================================================
+
+@login_required
+def project_template_list(request):
+    """List ProjectTemplates the current user can see (own + shared in org)."""
+    from .models import ProjectTemplate
+    from django.db.models import Q
+
+    org = get_org(request)
+    queryset = ProjectTemplate.objects.filter(organization=org) if org else ProjectTemplate.objects.none()
+    # Show: templates owned by user OR templates with is_shared=True
+    queryset = queryset.filter(Q(created_by=request.user) | Q(is_shared=True))
+    queryset = queryset.select_related('created_by').order_by('name')
+
+    return render(request, 'core/comms/project_template_list.html', {
+        'templates': queryset,
+    })
+
+
+@login_required
+def project_template_create(request):
+    """Stub — replaced in P3 Task 4."""
+    return HttpResponse('Create form — Task 4', status=200)
+
+
+@login_required
+def project_template_detail(request, pk):
+    """Stub — replaced in P3 Task 5."""
+    return HttpResponse('Detail — Task 5', status=200)
+
+
+@login_required
+@require_POST
+def project_template_delete(request, pk):
+    """Stub — replaced in P3 Task 6."""
+    return HttpResponse('Delete — Task 6', status=200)
+
+
+@login_required
+def project_template_apply(request, pk):
+    """Stub — replaced in P3 Task 7."""
+    return HttpResponse('Apply — Task 7', status=200)
+
+
 @login_required
 def template_create(request):
     """Create a new task template."""
