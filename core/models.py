@@ -3055,6 +3055,7 @@ class TaskTemplate(models.Model):
         ('monthly', 'Monthly (same day)'),
         ('monthly_weekday', 'Monthly (same weekday)'),  # e.g., "2nd Sunday"
         ('custom', 'Custom Days'),
+        ('pco_service', 'PCO Service (tied to Planning Center services)'),
     ]
 
     name = models.CharField(
@@ -3092,6 +3093,18 @@ class TaskTemplate(models.Model):
         null=True,
         blank=True,
         help_text="For monthly weekday: 1=first, 2=second, -1=last, etc."
+    )
+
+    # PCO-service-linked recurrence
+    pco_service_type_id = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        help_text="Planning Center service type ID (used when recurrence_type='pco_service')",
+    )
+    pco_days_before_service = models.IntegerField(
+        default=0,
+        help_text="Days before the service date to create the task (0 = same day)",
     )
 
     # Default task settings
