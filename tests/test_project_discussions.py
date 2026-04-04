@@ -45,3 +45,89 @@ class TestProjectDiscussionModel:
         )
         discussion.save()
         assert discussion.organization == org_alpha
+
+
+@pytest.mark.django_db
+class TestProjectDiscussionMessageModel:
+    """Tests for the ProjectDiscussionMessage model."""
+
+    def _make_discussion(self, user, org):
+        from core.models import Project, ProjectDiscussion
+        project = Project.objects.create(
+            organization=org, name='P', owner=user,
+        )
+        discussion = ProjectDiscussion.objects.create(
+            organization=org, project=project, title='T', created_by=user,
+        )
+        return discussion
+
+    def test_create_message(self, user_alpha_owner, org_alpha):
+        """Message created with author, content, defaults."""
+        from core.models import ProjectDiscussionMessage
+
+        discussion = self._make_discussion(user_alpha_owner, org_alpha)
+        msg = ProjectDiscussionMessage.objects.create(
+            discussion=discussion,
+            author=user_alpha_owner,
+            content='First post',
+        )
+        assert msg.discussion == discussion
+        assert msg.author == user_alpha_owner
+        assert msg.content == 'First post'
+        assert msg.parent is None
+        assert msg.is_decision is False
+        assert msg.decision_marked_by is None
+        assert msg.decision_marked_at is None
+
+    def test_threaded_reply(self, user_alpha_owner, org_alpha):
+        """parent FK creates threaded replies."""
+        from core.models import ProjectDiscussionMessage
+
+        discussion = self._make_discussion(user_alpha_owner, org_alpha)
+        root = ProjectDiscussionMessage.objects.create(
+            discussion=discussion, author=user_alpha_owner, content='Root',
+        )
+        reply = ProjectDiscussionMessage.objects.create(
+            discussion=discussion,
+            author=user_alpha_owner,
+            content='Reply',
+            parent=root,
+        )
+        assert reply.parent == root
+        assert list(root.replies.all()) == [reply]
+
+    def test_link_tasks(self, user_alpha_owner, org_alpha):
+        """Message can be linked to multiple tasks via M2M."""
+        from core.models import Project, Task, ProjectDiscussionMessage
+
+        discussion = self._make_discussion(user_alpha_owner, org_alpha)
+        project = discussion.project
+        task_a = Task.objects.create(project=project, title='A', created_by=user_alpha_owner)
+        task_b = Task.objects.create(project=project, title='B', created_by=user_alpha_owner)
+
+        msg = ProjectDiscussionMessage.objects.create(
+            discussion=discussion, author=user_alpha_owner, content='Multi',
+        )
+        msg.linked_tasks.set([task_a, task_b])
+
+        assert msg.linked_tasks.count() == 2
+        assert task_a in msg.linked_tasks.all()
+
+    def test_mark_as_decision(self, user_alpha_owner, org_alpha):
+        """Decision fields can be set together."""
+        from core.models import ProjectDiscussionMessage
+
+        discussion = self._make_discussion(user_alpha_owner, org_alpha)
+        msg = ProjectDiscussionMessage.objects.create(
+            discussion=discussion, author=user_alpha_owner, content='Decide',
+        )
+
+        msg.is_decision = True
+        msg.decision_marked_by = user_alpha_owner
+        msg.decision_marked_at = timezone.now()
+        msg.save()
+
+        msg.refresh_from_db()
+        assert msg.is_decision is True
+        assert msg.decision_marked_by == user_alpha_owner
+        assert msg.decision_marked_at is not None

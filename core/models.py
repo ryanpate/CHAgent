@@ -2874,6 +2874,68 @@ class ProjectDiscussion(models.Model):
         super().save(*args, **kwargs)
 
 
+class ProjectDiscussionMessage(models.Model):
+    """
+    A message in a ProjectDiscussion thread. Supports threading via parent FK,
+    @mentions, task linking, and decision-marking.
+    """
+    discussion = models.ForeignKey(
+        ProjectDiscussion,
+        on_delete=models.CASCADE,
+        related_name='messages',
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='discussion_messages',
+    )
+    content = models.TextField()
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='replies',
+    )
+    mentioned_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='discussion_mentions',
+    )
+    linked_tasks = models.ManyToManyField(
+        'Task',
+        blank=True,
+        related_name='linked_discussion_messages',
+    )
+
+    # Decision marking (mirrors TaskComment)
+    is_decision = models.BooleanField(
+        default=False,
+        help_text='This message captures a decision made by the team',
+    )
+    decision_marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='discussion_decisions_marked',
+    )
+    decision_marked_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Discussion Message'
+        verbose_name_plural = 'Discussion Messages'
+
+    def __str__(self):
+        author_name = self.author.username if self.author else '<deleted>'
+        return f"{author_name}: {self.content[:40]}"
+
+
 class ProjectMilestone(models.Model):
     """
     Key dates/deliverables within a project.
