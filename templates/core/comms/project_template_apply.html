@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Use Template: {{ template.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 py-6">
+  <div class="mb-4 text-sm text-[#888]">
+    <a href="{% url 'project_template_list' %}" class="hover:text-[#c9a227]">Project Templates</a>
+    <span class="mx-2">/</span>
+    <a href="{% url 'project_template_detail' template.pk %}" class="hover:text-[#c9a227]">{{ template.name }}</a>
+    <span class="mx-2">/</span>
+    <span>Use</span>
+  </div>
+
+  <h1 class="text-xl font-semibold text-[#eee] mb-5">Create Project from Template</h1>
+  <p class="text-sm text-[#888] mb-5">
+    Template "<span class="text-[#eee]">{{ template.name }}</span>" will spawn a new project with
+    {{ template.template_tasks.count }} task{{ template.template_tasks.count|pluralize }}
+    scheduled relative to the event date you pick.
+  </p>
+
+  {% if error %}
+    <div class="mb-4 p-3 bg-[#2a0a0a] border border-[#e74c3c]/30 text-[#e74c3c] rounded text-sm">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="block text-xs uppercase tracking-wide text-[#888] mb-1.5">Project Name</label>
+      <input type="text" name="project_name" required maxlength="200"
+             value="{{ form.project_name|default:'' }}"
+             placeholder="e.g. Easter Sunday 2026"
+             class="w-full bg-[#1a1a1a] border border-[#333] rounded-md px-3 py-2 text-[#eee] focus:border-[#c9a227] focus:outline-none">
+    </div>
+    <div>
+      <label class="block text-xs uppercase tracking-wide text-[#888] mb-1.5">Event Date</label>
+      <input type="date" name="event_date" required
+             value="{{ form.event_date|default:'' }}"
+             class="bg-[#1a1a1a] border border-[#333] rounded-md px-3 py-2 text-[#eee] focus:border-[#c9a227] focus:outline-none"
+             style="color-scheme: dark;">
+    </div>
+    <div>
+      <label class="block text-xs uppercase tracking-wide text-[#888] mb-1.5">Description (optional)</label>
+      <textarea name="project_description" rows="2"
+                class="w-full bg-[#1a1a1a] border border-[#333] rounded-md px-3 py-2 text-[#ccc] focus:border-[#c9a227] focus:outline-none resize-none">{{ form.project_description|default:'' }}</textarea>
+    </div>
+
+    <div class="pt-4">
+      <h3 class="text-xs uppercase tracking-wide text-[#888] mb-2">Tasks that will be created:</h3>
+      <ul class="space-y-1 text-sm text-[#ccc]">
+        {% for tt in template.template_tasks.all %}
+          <li class="flex items-center gap-2">
+            <span class="text-[#666] text-xs w-20">
+              {% if tt.relative_due_offset_days < 0 %}{{ tt.relative_due_offset_days }}d{% elif tt.relative_due_offset_days > 0 %}+{{ tt.relative_due_offset_days }}d{% else %}event{% endif %}
+            </span>
+            <span>{{ tt.title }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="flex items-center gap-3 pt-4">
+      <button type="submit" class="px-4 py-1.5 bg-[#c9a227] text-[#0f0f0f] text-sm font-semibold rounded hover:bg-[#d9b237]">
+        Create Project
+      </button>
+      <a href="{% url 'project_template_detail' template.pk %}" class="text-sm text-[#888] hover:text-[#eee]">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

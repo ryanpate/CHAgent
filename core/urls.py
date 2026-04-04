@@ -130,6 +130,12 @@ urlpatterns = [
     path('documents/<int:pk>/edit/', views.document_edit, name='document_edit'),
     path('documents/<int:pk>/delete/', views.document_delete, name='document_delete'),
     path('documents/<int:pk>/download/', views.document_download, name='document_download'),
+    # Project Templates
+    path('project-templates/', views.project_template_list, name='project_template_list'),
+    path('project-templates/new/', views.project_template_create, name='project_template_create'),
+    path('project-templates/<int:pk>/', views.project_template_detail, name='project_template_detail'),
+    path('project-templates/<int:pk>/delete/', views.project_template_delete, name='project_template_delete'),
+    path('project-templates/<int:pk>/apply/', views.project_template_apply, name='project_template_apply'),
     # Task Templates (Recurring Tasks)
     path('templates/', views.template_list, name='template_list'),
     path('templates/new/', views.template_create, name='template_create'),

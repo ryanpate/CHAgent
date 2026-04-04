@@ -3055,6 +3055,7 @@ class TaskTemplate(models.Model):
         ('monthly', 'Monthly (same day)'),
         ('monthly_weekday', 'Monthly (same weekday)'),  # e.g., "2nd Sunday"
         ('custom', 'Custom Days'),
+        ('pco_service', 'PCO Service (tied to Planning Center services)'),
     ]
 
     name = models.CharField(
@@ -3092,6 +3093,18 @@ class TaskTemplate(models.Model):
         null=True,
         blank=True,
         help_text="For monthly weekday: 1=first, 2=second, -1=last, etc."
+    )
+
+    # PCO-service-linked recurrence
+    pco_service_type_id = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        help_text="Planning Center service type ID (used when recurrence_type='pco_service')",
+    )
+    pco_days_before_service = models.IntegerField(
+        default=0,
+        help_text="Days before the service date to create the task (0 = same day)",
     )
 
     # Default task settings
@@ -3234,6 +3247,41 @@ class TaskTemplate(models.Model):
         if from_date is None:
             from_date = timezone.now().date()
 
+        # PCO service-linked recurrence: fetch plan dates from Planning Center
+        if self.recurrence_type == 'pco_service':
+            if not self.pco_service_type_id:
+                return []
+            try:
+                from .planning_center import PlanningCenterServicesAPI
+                from datetime import timedelta as _td
+                api = PlanningCenterServicesAPI()
+                start_str = from_date.strftime('%Y-%m-%d')
+                end_str = (from_date + _td(days=365)).strftime('%Y-%m-%d')
+                plans = api.get_plans_by_date_range(
+                    service_type_id=self.pco_service_type_id,
+                    start_date=start_str,
+                    end_date=end_str,
+                    limit=count * 2,
+                )
+                results = []
+                for plan in plans:
+                    sort_date = plan.get('sort_date') or plan.get('date')
+                    if not sort_date:
+                        continue
+                    date_str = sort_date[:10]
+                    try:
+                        service_date = timezone.datetime.strptime(date_str, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        continue
+                    target_date = service_date - _td(days=self.pco_days_before_service)
+                    if target_date >= from_date:
+                        results.append(target_date)
+                    if len(results) >= count:
+                        break
+                return results
+            except Exception:
+                return []
+
         occurrences = []
         current = from_date
 
@@ -3362,6 +3410,126 @@ class TaskTemplate(models.Model):
 
         self.save(update_fields=['next_occurrence', 'updated_at'])
         return self.next_occurrence
+
+
+# =============================================================================
+# Project Template Models
+# =============================================================================
+
+class ProjectTemplate(models.Model):
+    """
+    Blueprint for creating a new Project with pre-defined tasks.
+    Distinct from TaskTemplate (recurring task generator).
+    """
+    organization = models.ForeignKey(
+        'Organization',
+        on_delete=models.CASCADE,
+        related_name='project_templates',
+    )
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    is_shared = models.BooleanField(
+        default=False,
+        help_text="Visible to all org members (vs private to creator)",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_project_templates',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Project Template'
+        verbose_name_plural = 'Project Templates'
+
+    def __str__(self):
+        return self.name
+
+    def apply(self, event_date, project_name, user, project_description=''):
+        """
+        Create a new Project populated with tasks from this template.
+        Each template task's due_date is event_date + relative_due_offset_days.
+        """
+        from datetime import timedelta
+
+        project_kwargs = dict(
+            organization=self.organization,
+            name=project_name,
+            description=project_description,
+            owner=user,
+        )
+        # Set service_date if the Project model supports it
+        try:
+            Project._meta.get_field('service_date')
+            project_kwargs['service_date'] = event_date
+        except Exception:
+            pass
+
+        project = Project.objects.create(**project_kwargs)
+
+        for tt in self.template_tasks.all():
+            due_date = event_date + timedelta(days=tt.relative_due_offset_days)
+            task = Task.objects.create(
+                project=project,
+                title=tt.title,
+                description=tt.description,
+                priority=tt.priority,
+                due_date=due_date,
+                created_by=user,
+                order=tt.order,
+            )
+            for i, item_title in enumerate(tt.checklist_items):
+                TaskChecklist.objects.create(
+                    task=task, title=item_title, order=i,
+                )
+
+        return project
+
+
+class ProjectTemplateTask(models.Model):
+    """
+    A task inside a ProjectTemplate with a relative due-date offset
+    from the event date.
+    """
+    template = models.ForeignKey(
+        ProjectTemplate,
+        on_delete=models.CASCADE,
+        related_name='template_tasks',
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    role_placeholder = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Free-text role hint (e.g., 'tech_lead'); not auto-resolved in v1",
+    )
+    relative_due_offset_days = models.IntegerField(
+        default=0,
+        help_text="Days from event date. Negative = before, positive = after.",
+    )
+    priority = models.CharField(
+        max_length=10,
+        choices=Task.PRIORITY_CHOICES,
+        default='medium',
+    )
+    checklist_items = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Checklist item titles to create with the task",
+    )
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name = 'Project Template Task'
+        verbose_name_plural = 'Project Template Tasks'
+
+    def __str__(self):
+        return f"{self.title} ({self.template.name})"
 
 
 # =============================================================================

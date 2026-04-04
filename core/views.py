@@ -4300,6 +4300,207 @@ def template_list(request):
     return render(request, 'core/comms/template_list.html', context)
 
 
+# ============================================================================
+# Project Template Views
+# ============================================================================
+
+@login_required
+def project_template_list(request):
+    """List ProjectTemplates the current user can see (own + shared in org)."""
+    from .models import ProjectTemplate
+    from django.db.models import Q
+
+    org = get_org(request)
+    queryset = ProjectTemplate.objects.filter(organization=org) if org else ProjectTemplate.objects.none()
+    # Show: templates owned by user OR templates with is_shared=True
+    queryset = queryset.filter(Q(created_by=request.user) | Q(is_shared=True))
+    queryset = queryset.select_related('created_by').order_by('name')
+
+    return render(request, 'core/comms/project_template_list.html', {
+        'templates': queryset,
+    })
+
+
+@login_required
+def project_template_create(request):
+    """GET shows form, POST creates a ProjectTemplate + its ProjectTemplateTasks."""
+    from .models import ProjectTemplate, ProjectTemplateTask
+
+    org = get_org(request)
+    if not org:
+        return redirect('project_template_list')
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        if not name:
+            return render(request, 'core/comms/project_template_create.html', {
+                'error': 'Name is required',
+                'form': request.POST,
+            })
+
+        template = ProjectTemplate.objects.create(
+            organization=org,
+            name=name,
+            description=request.POST.get('description', '').strip(),
+            is_shared=request.POST.get('is_shared') == 'on',
+            created_by=request.user,
+        )
+
+        # Parse repeated form fields for tasks
+        titles = request.POST.getlist('task_title')
+        offsets = request.POST.getlist('task_offset')
+        roles = request.POST.getlist('task_role')
+
+        for i, title in enumerate(titles):
+            title = title.strip()
+            if not title:
+                continue
+            try:
+                offset = int(offsets[i]) if i < len(offsets) and offsets[i] else 0
+            except (ValueError, IndexError):
+                offset = 0
+            role = roles[i].strip() if i < len(roles) else ''
+            ProjectTemplateTask.objects.create(
+                template=template,
+                title=title,
+                relative_due_offset_days=offset,
+                role_placeholder=role,
+                order=i,
+            )
+
+        return redirect('project_template_detail', pk=template.pk)
+
+    return render(request, 'core/comms/project_template_create.html', {})
+
+
+@login_required
+def project_template_detail(request, pk):
+    """View + edit a ProjectTemplate."""
+    from .models import ProjectTemplate, ProjectTemplateTask
+
+    org = get_org(request)
+    queryset = ProjectTemplate.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    template = get_object_or_404(queryset, pk=pk)
+
+    # Visibility: own template or shared in same org
+    if template.created_by != request.user and not template.is_shared:
+        return redirect('project_template_list')
+
+    if request.method == 'POST':
+        # Only creator can edit
+        if template.created_by != request.user:
+            return redirect('project_template_detail', pk=template.pk)
+
+        name = request.POST.get('name', '').strip()
+        if name:
+            template.name = name
+            template.description = request.POST.get('description', '').strip()
+            template.is_shared = request.POST.get('is_shared') == 'on'
+            template.save()
+
+            # Replace all template tasks
+            template.template_tasks.all().delete()
+            titles = request.POST.getlist('task_title')
+            offsets = request.POST.getlist('task_offset')
+            roles = request.POST.getlist('task_role')
+            for i, title in enumerate(titles):
+                title = title.strip()
+                if not title:
+                    continue
+                try:
+                    offset = int(offsets[i]) if i < len(offsets) and offsets[i] else 0
+                except (ValueError, IndexError):
+                    offset = 0
+                role = roles[i].strip() if i < len(roles) else ''
+                ProjectTemplateTask.objects.create(
+                    template=template, title=title,
+                    relative_due_offset_days=offset, role_placeholder=role,
+                    order=i,
+                )
+
+        return redirect('project_template_detail', pk=template.pk)
+
+    return render(request, 'core/comms/project_template_detail.html', {
+        'template': template,
+        'template_tasks': template.template_tasks.all(),
+        'can_edit': template.created_by == request.user,
+    })
+
+
+@login_required
+@require_POST
+def project_template_delete(request, pk):
+    """Delete a ProjectTemplate. Only the creator can delete."""
+    from .models import ProjectTemplate
+
+    org = get_org(request)
+    queryset = ProjectTemplate.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    template = get_object_or_404(queryset, pk=pk)
+
+    if template.created_by != request.user:
+        return redirect('project_template_detail', pk=template.pk)
+
+    template.delete()
+    return redirect('project_template_list')
+
+
+@login_required
+def project_template_apply(request, pk):
+    """Create a new Project from a ProjectTemplate."""
+    from .models import ProjectTemplate
+    from datetime import datetime
+
+    org = get_org(request)
+    queryset = ProjectTemplate.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+    template = get_object_or_404(queryset, pk=pk)
+
+    # Visibility check
+    if template.created_by != request.user and not template.is_shared:
+        return redirect('project_template_list')
+
+    if request.method == 'POST':
+        project_name = request.POST.get('project_name', '').strip()
+        event_date_str = request.POST.get('event_date', '').strip()
+        project_description = request.POST.get('project_description', '').strip()
+
+        error = None
+        event_date = None
+        if not project_name:
+            error = 'Project name is required.'
+        elif not event_date_str:
+            error = 'Event date is required.'
+        else:
+            try:
+                event_date = datetime.strptime(event_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                error = 'Invalid date format.'
+
+        if error:
+            return render(request, 'core/comms/project_template_apply.html', {
+                'template': template,
+                'error': error,
+                'form': request.POST,
+            })
+
+        project = template.apply(
+            event_date=event_date,
+            project_name=project_name,
+            user=request.user,
+            project_description=project_description,
+        )
+        return redirect('project_detail', pk=project.pk)
+
+    return render(request, 'core/comms/project_template_apply.html', {
+        'template': template,
+    })
+
+
 @login_required
 def template_create(request):
     """Create a new task template."""
@@ -4338,6 +4539,13 @@ def template_create(request):
         checklist_str = request.POST.get('default_checklist', '')
         checklist = [item.strip() for item in checklist_str.split('\n') if item.strip()]
 
+        # PCO-linked recurrence fields
+        pco_service_type_id = request.POST.get('pco_service_type_id', '').strip()
+        try:
+            pco_days_before_service = int(request.POST.get('pco_days_before_service', '0') or 0)
+        except ValueError:
+            pco_days_before_service = 0
+
         template = TaskTemplate.objects.create(
             name=request.POST.get('name', ''),
             title_template=request.POST.get('title_template', ''),
@@ -4351,7 +4559,9 @@ def template_create(request):
             due_time=request.POST.get('due_time') or None,
             default_checklist=checklist,
             is_active=request.POST.get('is_active') == 'on',
-            created_by=request.user
+            created_by=request.user,
+            pco_service_type_id=pco_service_type_id,
+            pco_days_before_service=pco_days_before_service,
         )
 
         # Add default assignees
@@ -4419,6 +4629,13 @@ def template_detail(request, pk):
             template.recurrence_days = recurrence_days
 
             template.weekday_occurrence = int(request.POST.get('weekday_occurrence') or 0) or None
+
+            # PCO-linked recurrence fields
+            template.pco_service_type_id = request.POST.get('pco_service_type_id', '').strip()
+            try:
+                template.pco_days_before_service = int(request.POST.get('pco_days_before_service', '0') or 0)
+            except ValueError:
+                template.pco_days_before_service = 0
 
             # Parse checklist
             checklist_str = request.POST.get('default_checklist', '')

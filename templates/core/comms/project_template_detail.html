@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ template.name }} - Template{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-6">
+  <div class="mb-4 text-sm text-[#888]">
+    <a href="{% url 'project_template_list' %}" class="hover:text-[#c9a227]">Project Templates</a>
+    <span class="mx-2">/</span>
+    <span>{{ template.name }}</span>
+  </div>
+
+  <div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-semibold text-[#eee]">{{ template.name }}</h1>
+    <div class="flex items-center gap-2">
+      <a href="{% url 'project_template_apply' template.pk %}"
+         class="px-4 py-1.5 bg-[#c9a227] text-[#0f0f0f] text-sm font-semibold rounded hover:bg-[#d9b237]">
+        Use This Template
+      </a>
+      {% if can_edit %}
+        <form method="post" action="{% url 'project_template_delete' template.pk %}" class="inline"
+              onsubmit="return confirm('Delete this template?');">
+          {% csrf_token %}
+          <button type="submit" class="px-3 py-1.5 text-sm bg-[#1a1a1a] border border-[#333] text-[#888] rounded hover:border-[#e74c3c]/30 hover:text-[#e74c3c]">
+            Delete
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if can_edit %}
+    <form method="post" class="space-y-4" x-data='{
+      tasks: [{% for tt in template_tasks %}{ title: "{{ tt.title|escapejs }}", offset: {{ tt.relative_due_offset_days }}, role: "{{ tt.role_placeholder|escapejs }}" }{% if not forloop.last %},{% endif %}{% endfor %}{% if not template_tasks %}{ title: "", offset: 0, role: "" }{% endif %}]
+    }'>
+      {% csrf_token %}
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-[#888] mb-1.5">Name</label>
+        <input type="text" name="name" required maxlength="200" value="{{ template.name }}"
+               class="w-full bg-[#1a1a1a] border border-[#333] rounded-md px-3 py-2 text-[#eee] focus:border-[#c9a227] focus:outline-none">
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-[#888] mb-1.5">Description</label>
+        <textarea name="description" rows="2"
+                  class="w-full bg-[#1a1a1a] border border-[#333] rounded-md px-3 py-2 text-[#ccc] focus:border-[#c9a227] focus:outline-none resize-none">{{ template.description }}</textarea>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="checkbox" name="is_shared" id="is_shared" class="accent-[#c9a227]" {% if template.is_shared %}checked{% endif %}>
+        <label for="is_shared" class="text-sm text-[#ccc]">Share with other members of this organization</label>
+      </div>
+
+      <div class="pt-4 border-t border-[#333]">
+        <div class="flex items-center justify-between mb-3">
+          <label class="block text-xs uppercase tracking-wide text-[#888]">Tasks</label>
+          <button type="button" @click="tasks.push({ title: '', offset: 0, role: '' })"
+                  class="text-xs text-[#c9a227] hover:underline">+ Add Task</button>
+        </div>
+        <template x-for="(task, idx) in tasks" :key="idx">
+          <div class="flex flex-wrap items-center gap-2 mb-2 bg-[#1a1a1a] border border-[#333] rounded-md p-2">
+            <input type="text" name="task_title" x-model="task.title" placeholder="Task title"
+                   class="flex-1 min-w-[200px] bg-transparent border border-[#333] rounded px-2 py-1 text-sm text-[#eee] focus:border-[#c9a227] focus:outline-none">
+            <input type="number" name="task_offset" x-model="task.offset" placeholder="Offset days"
+                   class="w-24 bg-transparent border border-[#333] rounded px-2 py-1 text-sm text-[#eee] focus:border-[#c9a227] focus:outline-none">
+            <input type="text" name="task_role" x-model="task.role" placeholder="Role (optional)"
+                   class="w-32 bg-transparent border border-[#333] rounded px-2 py-1 text-sm text-[#eee] focus:border-[#c9a227] focus:outline-none">
+            <button type="button" @click="tasks.splice(idx, 1)" x-show="tasks.length > 1"
+                    class="text-[#888] hover:text-[#e74c3c] text-sm px-2">&times;</button>
+          </div>
+        </template>
+      </div>
+
+      <div class="pt-4">
+        <button type="submit" class="px-4 py-1.5 bg-[#c9a227] text-[#0f0f0f] text-sm font-semibold rounded hover:bg-[#d9b237]">
+          Save Changes
+        </button>
+      </div>
+    </form>
+  {% else %}
+    <!-- Read-only view -->
+    {% if template.description %}
+      <p class="text-sm text-[#ccc] mb-4">{{ template.description }}</p>
+    {% endif %}
+    <h2 class="text-xs uppercase tracking-wide text-[#888] mb-3">Tasks</h2>
+    <ul class="space-y-2">
+      {% for tt in template_tasks %}
+        <li class="bg-[#1a1a1a] border border-[#333] rounded-md p-3">
+          <div class="text-[#eee]">{{ tt.title }}</div>
+          <div class="text-xs text-[#666] mt-1">
+            {{ tt.relative_due_offset_days }} days from event
+            {% if tt.role_placeholder %}&middot; role: {{ tt.role_placeholder }}{% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+{% endblock %}
