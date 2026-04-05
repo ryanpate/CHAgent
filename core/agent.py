@@ -335,6 +335,104 @@ For detailed reports, visit the [Analytics Dashboard](/analytics/)."""
     return "I can provide team analytics. Try asking about:\n- Team overview/summary\n- Volunteer engagement\n- Proactive care / who needs attention\n- Team care needs\n- Interaction trends\n- Prayer request summary\n- AI performance"
 
 
+def is_task_query(message: str) -> Tuple[bool, str, dict]:
+    """
+    Detect if the user is asking about tasks, project status, or decisions.
+
+    Args:
+        message: The user's question.
+
+    Returns:
+        Tuple of (is_task_query, query_type, params) where:
+        - is_task_query: True if this is a task-related query
+        - query_type: One of 'my_tasks', 'team_tasks', 'overdue_tasks',
+                      'project_status', 'decision_search'
+        - params: dict with extracted parameters (person_name, project_name, topic)
+    """
+    message_lower = message.lower().strip()
+    params = {}
+
+    # Decision search patterns (check first, most specific)
+    decision_patterns = [
+        r'what\s+did\s+(we|you|they)\s+decide\s+(about|on|for|regarding)\s+(.+)',
+        r'(what|show|list|find)\s+(was|were)?\s*decid\w+\s+(about|on|for|regarding)\s+(.+)',
+        r'(show|list|find|get)\s+(me\s+)?(the\s+)?decisions?\s+(about|on|for|regarding)\s+(.+)',
+        r'decisions?\s+(about|on|regarding)\s+(.+)',
+    ]
+    for pattern in decision_patterns:
+        m = re.search(pattern, message_lower)
+        if m:
+            topic = m.groups()[-1].strip().rstrip('?.!')
+            if topic:
+                params['topic'] = topic
+                return True, 'decision_search', params
+
+    # Overdue tasks patterns
+    overdue_patterns = [
+        r"\bwhat'?s?\s+overdue\b",
+        r'\boverdue\s+tasks?\b',
+        r'\btasks?\s+(that\s+are|which\s+are)?\s*overdue\b',
+        r'\bpast\s+due\b',
+        r'\btasks?\s+(that\s+are|which\s+are)?\s*late\b',
+        r'\bwhat\s+tasks?\s+(are|is)\s+(overdue|past\s+due|late)\b',
+    ]
+    for pattern in overdue_patterns:
+        if re.search(pattern, message_lower):
+            return True, 'overdue_tasks', params
+
+    # Team tasks patterns - "what is X working on", "X's tasks"
+    team_patterns = [
+        (r'what\s+(is|are)\s+([\w\s]+?)\s+working\s+on\b', 2),
+        (r'what\'?s?\s+([\w\s]+?)\s+working\s+on\b', 1),
+        (r'show\s+me\s+([\w\s]+?)\'?s\s+tasks\b', 1),
+        (r"what\s+(tasks?|work)\s+(does|do)\s+([\w\s]+?)\s+have\b", 3),
+        (r'([\w\s]+?)\'?s\s+(tasks?|work|to-?dos?)\b', 1),
+    ]
+    for pattern, name_group in team_patterns:
+        m = re.search(pattern, message_lower)
+        if m:
+            person_name = m.group(name_group).strip()
+            if person_name in ('i', 'we', 'you', 'they', 'my', 'our', 'your', 'their', 'the team'):
+                continue
+            params['person_name'] = person_name
+            return True, 'team_tasks', params
+
+    # My tasks patterns
+    my_task_patterns = [
+        r"what'?s?\s+on\s+my\s+plate\b",
+        r'what\s+(do|should|must|can)\s+i\s+(need\s+to\s+)?(do|work\s+on)\b',
+        r'show\s+me\s+my\s+tasks?\b',
+        r'my\s+tasks?\b',
+        r'what\s+(tasks?|work|to-?dos?)\s+(do\s+)?i\s+have\b',
+        r"what'?s?\s+on\s+my\s+to-?do\s+list\b",
+    ]
+    for pattern in my_task_patterns:
+        if re.search(pattern, message_lower):
+            return True, 'my_tasks', params
+
+    # Project status patterns
+    project_status_patterns = [
+        (r'summariz\w+\s+(the\s+)?(.+?)(\s+project)?$', -1),
+        (r"how'?s?\s+(.+?)\s+(going|coming\s+along|progressing)", 1),
+        (r'status\s+of\s+(.+?)(\s+project)?$', 1),
+        (r'(.+?)\s+project\s+status\b', 1),
+        (r'where\s+are\s+we\s+(on|with)\s+(.+?)$', 2),
+    ]
+    for pattern, name_group in project_status_patterns:
+        m = re.search(pattern, message_lower)
+        if m:
+            if name_group == -1:
+                name = m.group(2).strip() if m.group(2) else ''
+            else:
+                name = m.group(name_group).strip()
+            name = name.rstrip('?.!').strip()
+            if name and len(name) > 2:
+                params['project_name'] = name
+                return True, 'project_status', params
+
+    return False, None, params
+
+
 def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
     """
     Detect if a question is asking for data that resides in Planning Center.
