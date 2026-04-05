@@ -465,3 +465,49 @@ class TestQueryAgentRouting:
         )
 
         assert 'wireless microphone' in captured_context.get('system', '').lower()
+
+
+@pytest.mark.django_db
+class TestTaskCreate:
+    """Tests for natural-language task creation."""
+
+    def test_detects_task_create(self):
+        from core.agent import is_task_create_request
+
+        is_create, title = is_task_create_request("create task: call Sarah about tracks")
+        assert is_create is True
+        assert 'call sarah' in title.lower()
+
+        is_create, title = is_task_create_request("add a task to send out rehearsal notes")
+        assert is_create is True
+        assert 'send out rehearsal notes' in title.lower()
+
+        is_create, title = is_task_create_request("remind me to test the new mixer")
+        assert is_create is True
+        assert 'test the new mixer' in title.lower()
+
+    def test_does_not_match_other_queries(self):
+        from core.agent import is_task_create_request
+        is_create, title = is_task_create_request("what's on my plate?")
+        assert is_create is False
+        is_create, title = is_task_create_request("who is on the team this Sunday?")
+        assert is_create is False
+
+    def test_handle_task_create_creates_standalone_task(
+        self, user_alpha_owner, org_alpha,
+    ):
+        from core.models import Task
+        from core.agent import handle_task_create
+
+        result = handle_task_create(
+            "call Sarah about the tracks",
+            user=user_alpha_owner,
+            organization=org_alpha,
+        )
+        assert 'created' in result.lower() or 'added' in result.lower()
+        assert 'sarah' in result.lower()
+
+        task = Task.objects.filter(organization=org_alpha, created_by=user_alpha_owner).first()
+        assert task is not None
+        assert 'sarah' in task.title.lower()
+        assert user_alpha_owner in task.assignees.all()

@@ -1806,6 +1806,51 @@ def handle_decision_search(topic: str, organization=None) -> str:
     return f"Decisions matching '{topic}':\n\n" + '\n'.join(results)
 
 
+def is_task_create_request(message: str) -> Tuple[bool, str]:
+    """
+    Detect a task creation request and extract the task title.
+
+    Returns (is_create, task_title).
+    """
+    import re
+    message_lower = message.lower().strip()
+
+    patterns = [
+        r'^(?:create|add|make)\s+(?:a\s+)?task(?:\s+to|\s*:)\s+(.+?)$',
+        r'^(?:add\s+)?remind\s+me\s+to\s+(.+?)$',
+        r'^(?:i\s+)?need\s+to\s+remember\s+to\s+(.+?)$',
+        r'^new\s+task(?:\s*:|\s+to)\s+(.+?)$',
+    ]
+    for pattern in patterns:
+        m = re.match(pattern, message_lower)
+        if m:
+            title = m.group(1).strip().rstrip('.!?')
+            if title and len(title) > 2:
+                return True, title
+
+    return False, ''
+
+
+def handle_task_create(task_title: str, user, organization=None) -> str:
+    """Create a standalone task assigned to the user."""
+    from .models import Task
+
+    # Capitalize first letter of the title
+    clean_title = task_title[:1].upper() + task_title[1:] if task_title else 'New task'
+    clean_title = clean_title[:200]
+
+    task = Task.objects.create(
+        title=clean_title,
+        organization=organization,
+        created_by=user,
+        status='todo',
+        priority='medium',
+    )
+    task.assignees.add(user)
+
+    return f"Created task: \"{clean_title}\". It's assigned to you with medium priority."
+
+
 def format_person_blockouts(blockout_data: dict) -> str:
     """
     Format a person's blockout dates for the AI context.
@@ -4623,6 +4668,24 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         conversation_context.save()
 
         return answer
+
+    # Detect task creation intent BEFORE read-only task queries
+    is_create, task_title = is_task_create_request(question)
+    if is_create:
+        logger.info(f"Task create request detected: '{task_title}'")
+        create_result = handle_task_create(task_title, user=user, organization=organization)
+
+        # Save as chat message
+        ChatMessage.objects.create(
+            user=user,
+            organization=organization,
+            session_id=session_id,
+            role='assistant',
+            content=create_result,
+        )
+        conversation_context.increment_message_count(2)
+        conversation_context.save()
+        return create_result
 
     # Task-related queries (my_tasks, team_tasks, overdue, project_status, decision_search)
     task_query_match, task_query_type, task_query_params = is_task_query(question)
