@@ -4624,6 +4624,62 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
 
         return answer
 
+    # Task-related queries (my_tasks, team_tasks, overdue, project_status, decision_search)
+    task_query_match, task_query_type, task_query_params = is_task_query(question)
+    if task_query_match:
+        logger.info(f"Task query detected: type={task_query_type}, params={task_query_params}")
+        task_context = ""
+        try:
+            if task_query_type == 'my_tasks':
+                task_context = handle_my_tasks(user, organization=organization)
+            elif task_query_type == 'overdue_tasks':
+                task_context = handle_overdue_tasks(user, organization=organization)
+            elif task_query_type == 'team_tasks':
+                task_context = handle_team_tasks(task_query_params.get('person_name', ''), organization=organization)
+            elif task_query_type == 'project_status':
+                task_context = handle_project_status(task_query_params.get('project_name', ''), organization=organization)
+            elif task_query_type == 'decision_search':
+                task_context = handle_decision_search(task_query_params.get('topic', ''), organization=organization)
+        except Exception as e:
+            logger.error(f"Error handling task query: {e}")
+            task_context = ""
+
+        if task_context:
+            # Short-circuit: use Claude to rephrase the task context into a natural answer
+            user_name = user.display_name if user.display_name else user.username
+            try:
+                response = call_claude(
+                    client,
+                    organization=organization,
+                    user=user,
+                    session_id=session_id,
+                    query_type='task_query',
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=1500,
+                    system=SYSTEM_PROMPT.format(
+                        context=task_context,
+                        current_date=datetime.now().strftime('%Y-%m-%d'),
+                        user_name=user_name,
+                    ),
+                    messages=[{"role": "user", "content": question}],
+                )
+                answer = response.content[0].text
+            except Exception as e:
+                logger.error(f"Error querying Claude for task query: {e}")
+                answer = task_context  # Fall back to raw context string
+
+            # Save assistant response to chat history
+            ChatMessage.objects.create(
+                user=user,
+                organization=organization,
+                session_id=session_id,
+                role='assistant',
+                content=answer,
+            )
+            conversation_context.increment_message_count(2)
+            conversation_context.save()
+            return answer
+
     # Check if this is an analytics/team metrics query
     analytics_query, analytics_type = is_analytics_query(question)
     if analytics_query:

@@ -372,3 +372,96 @@ class TestHandleDecisionSearch:
         # The "not found" message may echo the search term, but it must NOT
         # contain the beta org's decision content.
         assert 'beta decided' not in result.lower()
+
+
+@pytest.mark.django_db
+class TestQueryAgentRouting:
+    """Verifies query_agent routes task queries to the task handlers."""
+
+    def test_my_tasks_query_routed(
+        self, user_alpha_owner, org_alpha, monkeypatch,
+    ):
+        """query_agent detects and handles a my-tasks query."""
+        from core.models import Project, Task, ChatMessage
+        from core import agent
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='Unique task 98765',
+            created_by=user_alpha_owner, status='todo',
+        )
+        task.assignees.add(user_alpha_owner)
+
+        captured_context = {}
+        class FakeContentItem:
+            text = ''
+        class FakeResp:
+            content = [FakeContentItem()]
+
+        def fake_call_claude(client, **kwargs):
+            system = kwargs.get('system', '')
+            captured_context['system'] = system
+            r = FakeResp()
+            r.content[0].text = "Here is what you have to do: your task."
+            return r
+
+        monkeypatch.setattr('core.agent.call_claude', fake_call_claude)
+        monkeypatch.setattr('core.agent.get_anthropic_client', lambda: object())
+
+        result = agent.query_agent(
+            "what's on my plate?",
+            user=user_alpha_owner,
+            session_id='test-session',
+            organization=org_alpha,
+        )
+
+        # Verify our specific task title appeared in the Claude system context
+        assert 'Unique task 98765' in captured_context.get('system', '')
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_decision_search_query_routed(
+        self, user_alpha_owner, org_alpha, monkeypatch,
+    ):
+        """query_agent routes decision-search queries to decision search handler."""
+        from django.utils import timezone
+        from core.models import Project, Task, TaskComment
+        from core import agent
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(project=project, title='T', created_by=user_alpha_owner)
+        tc = TaskComment.objects.create(
+            task=task, author=user_alpha_owner,
+            content='Use wireless microphones only for Sunday.',
+        )
+        tc.is_decision = True
+        tc.decision_marked_by = user_alpha_owner
+        tc.decision_marked_at = timezone.now()
+        tc.save()
+
+        captured_context = {}
+        class FakeContentItem:
+            text = 'Decision answer.'
+        class FakeResp:
+            content = [FakeContentItem()]
+        def fake_call_claude(client, **kwargs):
+            captured_context['system'] = kwargs.get('system', '')
+            r = FakeResp()
+            r.content[0].text = 'Found a decision.'
+            return r
+
+        monkeypatch.setattr('core.agent.call_claude', fake_call_claude)
+        monkeypatch.setattr('core.agent.get_anthropic_client', lambda: object())
+
+        result = agent.query_agent(
+            "what did we decide about microphones?",
+            user=user_alpha_owner,
+            session_id='test-session-2',
+            organization=org_alpha,
+        )
+
+        assert 'wireless microphone' in captured_context.get('system', '').lower()
