@@ -335,6 +335,104 @@ For detailed reports, visit the [Analytics Dashboard](/analytics/)."""
     return "I can provide team analytics. Try asking about:\n- Team overview/summary\n- Volunteer engagement\n- Proactive care / who needs attention\n- Team care needs\n- Interaction trends\n- Prayer request summary\n- AI performance"
 
 
+def is_task_query(message: str) -> Tuple[bool, str, dict]:
+    """
+    Detect if the user is asking about tasks, project status, or decisions.
+
+    Args:
+        message: The user's question.
+
+    Returns:
+        Tuple of (is_task_query, query_type, params) where:
+        - is_task_query: True if this is a task-related query
+        - query_type: One of 'my_tasks', 'team_tasks', 'overdue_tasks',
+                      'project_status', 'decision_search'
+        - params: dict with extracted parameters (person_name, project_name, topic)
+    """
+    message_lower = message.lower().strip()
+    params = {}
+
+    # Decision search patterns (check first, most specific)
+    decision_patterns = [
+        r'what\s+did\s+(we|you|they)\s+decide\s+(about|on|for|regarding)\s+(.+)',
+        r'(what|show|list|find)\s+(was|were)?\s*decid\w+\s+(about|on|for|regarding)\s+(.+)',
+        r'(show|list|find|get)\s+(me\s+)?(the\s+)?decisions?\s+(about|on|for|regarding)\s+(.+)',
+        r'decisions?\s+(about|on|regarding)\s+(.+)',
+    ]
+    for pattern in decision_patterns:
+        m = re.search(pattern, message_lower)
+        if m:
+            topic = m.groups()[-1].strip().rstrip('?.!')
+            if topic:
+                params['topic'] = topic
+                return True, 'decision_search', params
+
+    # Overdue tasks patterns
+    overdue_patterns = [
+        r"\bwhat'?s?\s+overdue\b",
+        r'\boverdue\s+tasks?\b',
+        r'\btasks?\s+(that\s+are|which\s+are)?\s*overdue\b',
+        r'\bpast\s+due\b',
+        r'\btasks?\s+(that\s+are|which\s+are)?\s*late\b',
+        r'\bwhat\s+tasks?\s+(are|is)\s+(overdue|past\s+due|late)\b',
+    ]
+    for pattern in overdue_patterns:
+        if re.search(pattern, message_lower):
+            return True, 'overdue_tasks', params
+
+    # Team tasks patterns - "what is X working on", "X's tasks"
+    team_patterns = [
+        (r'what\s+(is|are)\s+([\w\s]+?)\s+working\s+on\b', 2),
+        (r'what\'?s?\s+([\w\s]+?)\s+working\s+on\b', 1),
+        (r'show\s+me\s+([\w\s]+?)\'?s\s+tasks\b', 1),
+        (r"what\s+(tasks?|work)\s+(does|do)\s+([\w\s]+?)\s+have\b", 3),
+        (r'([\w\s]+?)\'?s\s+(tasks?|work|to-?dos?)\b', 1),
+    ]
+    for pattern, name_group in team_patterns:
+        m = re.search(pattern, message_lower)
+        if m:
+            person_name = m.group(name_group).strip()
+            if person_name in ('i', 'we', 'you', 'they', 'my', 'our', 'your', 'their', 'the team'):
+                continue
+            params['person_name'] = person_name
+            return True, 'team_tasks', params
+
+    # My tasks patterns
+    my_task_patterns = [
+        r"what'?s?\s+on\s+my\s+plate\b",
+        r'what\s+(do|should|must|can)\s+i\s+(need\s+to\s+)?(do|work\s+on)\b',
+        r'show\s+me\s+my\s+tasks?\b',
+        r'my\s+tasks?\b',
+        r'what\s+(tasks?|work|to-?dos?)\s+(do\s+)?i\s+have\b',
+        r"what'?s?\s+on\s+my\s+to-?do\s+list\b",
+    ]
+    for pattern in my_task_patterns:
+        if re.search(pattern, message_lower):
+            return True, 'my_tasks', params
+
+    # Project status patterns
+    project_status_patterns = [
+        (r'summariz\w+\s+(the\s+)?(.+?)(\s+project)?$', -1),
+        (r"how'?s?\s+(.+?)\s+(going|coming\s+along|progressing)", 1),
+        (r'status\s+of\s+(.+?)(\s+project)?$', 1),
+        (r'(.+?)\s+project\s+status\b', 1),
+        (r'where\s+are\s+we\s+(on|with)\s+(.+?)$', 2),
+    ]
+    for pattern, name_group in project_status_patterns:
+        m = re.search(pattern, message_lower)
+        if m:
+            if name_group == -1:
+                name = m.group(2).strip() if m.group(2) else ''
+            else:
+                name = m.group(name_group).strip()
+            name = name.rstrip('?.!').strip()
+            if name and len(name) > 2:
+                params['project_name'] = name
+                return True, 'project_status', params
+
+    return False, None, params
+
+
 def is_pco_data_query(message: str) -> Tuple[bool, str, Optional[str]]:
     """
     Detect if a question is asking for data that resides in Planning Center.
@@ -1433,6 +1531,324 @@ def handle_team_roster_query(team_keyword: str, organization=None) -> str:
     parts.append(f"\nINSTRUCTION: Present this team roster to the user. The user asked about '{team_keyword}' and this is the '{matched_team_name}' team from Planning Center. List all {len(people)} members. If the user asked about a specific subset (e.g., 'female vocalists'), note that Planning Center does not track gender — present the full list and let the user know you're showing all members of the team.")
 
     return '\n'.join(parts)
+
+
+def handle_my_tasks(user, organization=None) -> str:
+    """Format context string listing the user's open assigned tasks."""
+    from .models import Task
+    from django.db.models import Q
+
+    qs = Task.objects.filter(
+        assignees=user,
+    ).exclude(
+        status__in=['completed', 'cancelled'],
+    )
+
+    if organization:
+        qs = qs.filter(
+            Q(project__organization=organization)
+            | Q(organization=organization)
+        )
+
+    qs = qs.select_related('project').order_by('due_date', '-priority')[:30]
+
+    if not qs:
+        return "You have no open tasks assigned to you."
+
+    lines = [f"Open tasks assigned to {user.display_name or user.username}:\n"]
+    for task in qs:
+        due = task.due_date.strftime('%b %d') if task.due_date else 'no due date'
+        proj = f" ({task.project.name})" if task.project else ''
+        overdue = ' [OVERDUE]' if task.is_overdue else ''
+        lines.append(
+            f"- {task.title}{proj} - {task.get_status_display()}, "
+            f"{task.get_priority_display()}, due {due}{overdue}"
+        )
+    return '\n'.join(lines)
+
+
+def handle_overdue_tasks(user, organization=None) -> str:
+    """Format context string listing all overdue tasks the user can see."""
+    from .models import Task
+    from django.db.models import Q
+    from django.utils import timezone
+
+    today = timezone.now().date()
+    qs = Task.objects.filter(
+        due_date__lt=today,
+    ).exclude(
+        status__in=['completed', 'cancelled'],
+    )
+
+    if organization:
+        qs = qs.filter(
+            Q(project__organization=organization)
+            | Q(organization=organization)
+        )
+
+    qs = qs.select_related('project').prefetch_related('assignees').order_by('due_date')[:30]
+
+    if not qs:
+        return "No overdue tasks."
+
+    lines = ["Overdue tasks:\n"]
+    for task in qs:
+        assignee_names = ', '.join(
+            a.display_name or a.username for a in task.assignees.all()
+        ) or 'unassigned'
+        proj = f" ({task.project.name})" if task.project else ''
+        days_over = (today - task.due_date).days
+        lines.append(
+            f"- {task.title}{proj} - assigned to {assignee_names}, "
+            f"{days_over} day{'s' if days_over != 1 else ''} overdue, "
+            f"{task.get_priority_display()} priority"
+        )
+    return '\n'.join(lines)
+
+
+def handle_team_tasks(person_name: str, organization=None) -> str:
+    """Find a user by name and list their open tasks."""
+    from .models import Task
+    from accounts.models import User
+    from django.db.models import Q
+
+    user_match = User.objects.filter(
+        Q(display_name__iexact=person_name)
+        | Q(first_name__iexact=person_name)
+        | Q(username__iexact=person_name)
+    ).first()
+
+    if not user_match:
+        user_match = User.objects.filter(
+            Q(display_name__istartswith=person_name)
+            | Q(first_name__istartswith=person_name)
+        ).first()
+
+    if not user_match:
+        return f"I could not find a team member named '{person_name}'."
+
+    if organization:
+        from .models import OrganizationMembership
+        if not OrganizationMembership.objects.filter(
+            user=user_match, organization=organization, is_active=True,
+        ).exists():
+            return f"I could not find '{person_name}' in this organization."
+
+    qs = Task.objects.filter(assignees=user_match).exclude(
+        status__in=['completed', 'cancelled'],
+    )
+    if organization:
+        qs = qs.filter(
+            Q(project__organization=organization)
+            | Q(organization=organization)
+        )
+    qs = qs.select_related('project').order_by('due_date', '-priority')[:20]
+
+    display = user_match.display_name or user_match.username
+    if not qs:
+        return f"{display} has no open tasks."
+
+    lines = [f"Open tasks for {display}:\n"]
+    for task in qs:
+        due = task.due_date.strftime('%b %d') if task.due_date else 'no due date'
+        proj = f" ({task.project.name})" if task.project else ''
+        overdue = ' [OVERDUE]' if task.is_overdue else ''
+        lines.append(
+            f"- {task.title}{proj} - {task.get_status_display()}, due {due}{overdue}"
+        )
+    return '\n'.join(lines)
+
+
+def handle_project_status(project_name: str, organization=None) -> str:
+    """Summarize a project's tasks, discussions, and recent activity."""
+    from .models import Project
+
+    qs = Project.objects.all()
+    if organization:
+        qs = qs.filter(organization=organization)
+
+    # Try exact match first, then icontains, then word-by-word fallback
+    project = qs.filter(name__iexact=project_name).first()
+    if not project:
+        project = qs.filter(name__icontains=project_name).first()
+    if not project:
+        # Word-by-word: filter to projects whose name contains all query words
+        words = [w for w in project_name.lower().split() if w]
+        candidates = qs
+        for word in words:
+            candidates = candidates.filter(name__icontains=word)
+        project = candidates.first()
+    if not project:
+        return f"I could not find a project matching '{project_name}'."
+
+    # Build the summary
+    tasks = project.tasks.all()
+    total = tasks.count()
+    completed = tasks.filter(status='completed').count()
+    in_progress = tasks.filter(status='in_progress').count()
+    review = tasks.filter(status='review').count()
+    todo = tasks.filter(status='todo').count()
+
+    # Overdue count
+    from django.utils import timezone
+    today = timezone.now().date()
+    overdue = tasks.filter(
+        due_date__lt=today,
+    ).exclude(status__in=['completed', 'cancelled']).count()
+
+    # Discussions + decisions
+    try:
+        discussion_count = project.discussions.count()
+        open_discussions = project.discussions.filter(is_resolved=False).count()
+    except Exception:
+        discussion_count = 0
+        open_discussions = 0
+
+    from .models import TaskComment
+    try:
+        from .models import ProjectDiscussionMessage
+        discussion_decisions = ProjectDiscussionMessage.objects.filter(
+            discussion__project=project, is_decision=True,
+        ).count()
+    except Exception:
+        discussion_decisions = 0
+    task_decisions = TaskComment.objects.filter(
+        task__project=project, is_decision=True,
+    ).count()
+    total_decisions = task_decisions + discussion_decisions
+
+    lines = [f"Status of project '{project.name}':\n"]
+    lines.append(f"- {total} total task{'s' if total != 1 else ''}: "
+                 f"{completed} completed, {in_progress} in progress, "
+                 f"{review} in review, {todo} to do")
+    if overdue:
+        lines.append(f"- {overdue} overdue task{'s' if overdue != 1 else ''}")
+    lines.append(f"- Status: {project.get_status_display()}")
+    if project.due_date:
+        lines.append(f"- Due: {project.due_date.strftime('%b %d, %Y')}")
+    lines.append(f"- {discussion_count} discussion{'s' if discussion_count != 1 else ''} "
+                 f"({open_discussions} open)")
+    lines.append(f"- {total_decisions} decision{'s' if total_decisions != 1 else ''} recorded")
+
+    return '\n'.join(lines)
+
+
+def handle_decision_search(topic: str, organization=None) -> str:
+    """Search decisions in TaskComments and ProjectDiscussionMessages for a topic."""
+    from .models import TaskComment
+
+    # For multi-word topics, search on the most distinctive word
+    # Try full topic first, then fall back to each significant word
+    search_terms = [topic]
+    words = [w for w in topic.split() if len(w) > 3]  # skip short words
+    if len(words) > 1:
+        search_terms.extend(words)
+
+    # Collect matches from TaskComments
+    task_matches = []
+    for term in search_terms:
+        task_qs = TaskComment.objects.filter(
+            is_decision=True,
+            content__icontains=term,
+        )
+        if organization:
+            task_qs = task_qs.filter(task__project__organization=organization)
+        task_qs = task_qs.select_related(
+            'author', 'task', 'task__project',
+        ).order_by('-decision_marked_at')[:10]
+        for tc in task_qs:
+            if tc.pk not in [m.pk for m in task_matches]:
+                task_matches.append(tc)
+        if task_matches:
+            break
+
+    # Collect matches from ProjectDiscussionMessages
+    msg_matches = []
+    try:
+        from .models import ProjectDiscussionMessage
+        for term in search_terms:
+            msg_qs = ProjectDiscussionMessage.objects.filter(
+                is_decision=True,
+                content__icontains=term,
+            )
+            if organization:
+                msg_qs = msg_qs.filter(discussion__project__organization=organization)
+            msg_qs = msg_qs.select_related(
+                'author', 'discussion', 'discussion__project',
+            ).order_by('-decision_marked_at')[:10]
+            for m in msg_qs:
+                if m.pk not in [x.pk for x in msg_matches]:
+                    msg_matches.append(m)
+            if msg_matches:
+                break
+    except Exception:
+        pass
+
+    results = []
+    for tc in task_matches:
+        author_name = tc.author.display_name or tc.author.username if tc.author else 'unknown'
+        proj_name = tc.task.project.name if tc.task.project else 'standalone task'
+        when = tc.decision_marked_at.strftime('%b %d, %Y') if tc.decision_marked_at else ''
+        results.append(
+            f"- \"{tc.content}\" (by {author_name}, {when}, in task '{tc.task.title}' ({proj_name}))"
+        )
+    for msg in msg_matches:
+        author_name = msg.author.display_name or msg.author.username if msg.author else 'unknown'
+        proj_name = msg.discussion.project.name
+        when = msg.decision_marked_at.strftime('%b %d, %Y') if msg.decision_marked_at else ''
+        results.append(
+            f"- \"{msg.content}\" (by {author_name}, {when}, in discussion '{msg.discussion.title}' ({proj_name}))"
+        )
+
+    if not results:
+        return f"I did not find any decisions about '{topic}'."
+
+    return f"Decisions matching '{topic}':\n\n" + '\n'.join(results)
+
+
+def is_task_create_request(message: str) -> Tuple[bool, str]:
+    """
+    Detect a task creation request and extract the task title.
+
+    Returns (is_create, task_title).
+    """
+    import re
+    message_lower = message.lower().strip()
+
+    patterns = [
+        r'^(?:create|add|make)\s+(?:a\s+)?task(?:\s+to|\s*:)\s+(.+?)$',
+        r'^(?:add\s+)?remind\s+me\s+to\s+(.+?)$',
+        r'^(?:i\s+)?need\s+to\s+remember\s+to\s+(.+?)$',
+        r'^new\s+task(?:\s*:|\s+to)\s+(.+?)$',
+    ]
+    for pattern in patterns:
+        m = re.match(pattern, message_lower)
+        if m:
+            title = m.group(1).strip().rstrip('.!?')
+            if title and len(title) > 2:
+                return True, title
+
+    return False, ''
+
+
+def handle_task_create(task_title: str, user, organization=None) -> str:
+    """Create a standalone task assigned to the user."""
+    from .models import Task
+
+    # Capitalize first letter of the title
+    clean_title = task_title[:1].upper() + task_title[1:] if task_title else 'New task'
+    clean_title = clean_title[:200]
+
+    task = Task.objects.create(
+        title=clean_title,
+        organization=organization,
+        created_by=user,
+        status='todo',
+        priority='medium',
+    )
+    task.assignees.add(user)
+
+    return f"Created task: \"{clean_title}\". It's assigned to you with medium priority."
 
 
 def format_person_blockouts(blockout_data: dict) -> str:
@@ -4252,6 +4668,80 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         conversation_context.save()
 
         return answer
+
+    # Detect task creation intent BEFORE read-only task queries
+    is_create, task_title = is_task_create_request(question)
+    if is_create:
+        logger.info(f"Task create request detected: '{task_title}'")
+        create_result = handle_task_create(task_title, user=user, organization=organization)
+
+        # Save as chat message
+        ChatMessage.objects.create(
+            user=user,
+            organization=organization,
+            session_id=session_id,
+            role='assistant',
+            content=create_result,
+        )
+        conversation_context.increment_message_count(2)
+        conversation_context.save()
+        return create_result
+
+    # Task-related queries (my_tasks, team_tasks, overdue, project_status, decision_search)
+    task_query_match, task_query_type, task_query_params = is_task_query(question)
+    if task_query_match:
+        logger.info(f"Task query detected: type={task_query_type}, params={task_query_params}")
+        task_context = ""
+        try:
+            if task_query_type == 'my_tasks':
+                task_context = handle_my_tasks(user, organization=organization)
+            elif task_query_type == 'overdue_tasks':
+                task_context = handle_overdue_tasks(user, organization=organization)
+            elif task_query_type == 'team_tasks':
+                task_context = handle_team_tasks(task_query_params.get('person_name', ''), organization=organization)
+            elif task_query_type == 'project_status':
+                task_context = handle_project_status(task_query_params.get('project_name', ''), organization=organization)
+            elif task_query_type == 'decision_search':
+                task_context = handle_decision_search(task_query_params.get('topic', ''), organization=organization)
+        except Exception as e:
+            logger.error(f"Error handling task query: {e}")
+            task_context = ""
+
+        if task_context:
+            # Short-circuit: use Claude to rephrase the task context into a natural answer
+            user_name = user.display_name if user.display_name else user.username
+            try:
+                response = call_claude(
+                    client,
+                    organization=organization,
+                    user=user,
+                    session_id=session_id,
+                    query_type='task_query',
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=1500,
+                    system=SYSTEM_PROMPT.format(
+                        context=task_context,
+                        current_date=datetime.now().strftime('%Y-%m-%d'),
+                        user_name=user_name,
+                    ),
+                    messages=[{"role": "user", "content": question}],
+                )
+                answer = response.content[0].text
+            except Exception as e:
+                logger.error(f"Error querying Claude for task query: {e}")
+                answer = task_context  # Fall back to raw context string
+
+            # Save assistant response to chat history
+            ChatMessage.objects.create(
+                user=user,
+                organization=organization,
+                session_id=session_id,
+                role='assistant',
+                content=answer,
+            )
+            conversation_context.increment_message_count(2)
+            conversation_context.save()
+            return answer
 
     # Check if this is an analytics/team metrics query
     analytics_query, analytics_type = is_analytics_query(question)
