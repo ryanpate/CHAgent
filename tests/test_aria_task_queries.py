@@ -209,3 +209,47 @@ class TestHandleOverdueTasks:
 
         result = handle_overdue_tasks(user_alpha_owner, organization=org_alpha)
         assert 'Done late' not in result
+
+
+@pytest.mark.django_db
+class TestHandleTeamTasks:
+    """Tests for handle_team_tasks handler."""
+
+    def test_lists_assignee_tasks(self, user_alpha_owner, user_alpha_member, org_alpha):
+        from core.models import Project, Task
+        from core.agent import handle_team_tasks
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='Setup sound', created_by=user_alpha_owner,
+        )
+        task.assignees.add(user_alpha_member)
+
+        search_name = user_alpha_member.display_name or user_alpha_member.username
+        result = handle_team_tasks(search_name, organization=org_alpha)
+
+        assert 'Setup sound' in result
+
+    def test_user_not_found(self, user_alpha_owner, org_alpha):
+        from core.agent import handle_team_tasks
+        result = handle_team_tasks('NonexistentPerson', organization=org_alpha)
+        assert isinstance(result, str)
+        assert 'not find' in result.lower() or 'no user' in result.lower() or 'no task' in result.lower() or "doesn't" in result.lower()
+
+    def test_case_insensitive_match(self, user_alpha_owner, org_alpha):
+        from core.models import Project, Task
+        from core.agent import handle_team_tasks
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='Build stage', created_by=user_alpha_owner,
+        )
+        task.assignees.add(user_alpha_owner)
+
+        search = (user_alpha_owner.display_name or user_alpha_owner.username).lower()
+        result = handle_team_tasks(search, organization=org_alpha)
+        assert 'Build stage' in result

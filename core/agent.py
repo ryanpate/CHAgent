@@ -1606,6 +1606,59 @@ def handle_overdue_tasks(user, organization=None) -> str:
     return '\n'.join(lines)
 
 
+def handle_team_tasks(person_name: str, organization=None) -> str:
+    """Find a user by name and list their open tasks."""
+    from .models import Task
+    from accounts.models import User
+    from django.db.models import Q
+
+    user_match = User.objects.filter(
+        Q(display_name__iexact=person_name)
+        | Q(first_name__iexact=person_name)
+        | Q(username__iexact=person_name)
+    ).first()
+
+    if not user_match:
+        user_match = User.objects.filter(
+            Q(display_name__istartswith=person_name)
+            | Q(first_name__istartswith=person_name)
+        ).first()
+
+    if not user_match:
+        return f"I could not find a team member named '{person_name}'."
+
+    if organization:
+        from .models import OrganizationMembership
+        if not OrganizationMembership.objects.filter(
+            user=user_match, organization=organization, is_active=True,
+        ).exists():
+            return f"I could not find '{person_name}' in this organization."
+
+    qs = Task.objects.filter(assignees=user_match).exclude(
+        status__in=['completed', 'cancelled'],
+    )
+    if organization:
+        qs = qs.filter(
+            Q(project__organization=organization)
+            | Q(organization=organization)
+        )
+    qs = qs.select_related('project').order_by('due_date', '-priority')[:20]
+
+    display = user_match.display_name or user_match.username
+    if not qs:
+        return f"{display} has no open tasks."
+
+    lines = [f"Open tasks for {display}:\n"]
+    for task in qs:
+        due = task.due_date.strftime('%b %d') if task.due_date else 'no due date'
+        proj = f" ({task.project.name})" if task.project else ''
+        overdue = ' [OVERDUE]' if task.is_overdue else ''
+        lines.append(
+            f"- {task.title}{proj} - {task.get_status_display()}, due {due}{overdue}"
+        )
+    return '\n'.join(lines)
+
+
 def format_person_blockouts(blockout_data: dict) -> str:
     """
     Format a person's blockout dates for the AI context.
