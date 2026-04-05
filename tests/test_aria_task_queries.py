@@ -292,3 +292,83 @@ class TestHandleProjectStatus:
         )
         result = handle_project_status('easter production', organization=org_alpha)
         assert 'Easter' in result
+
+
+@pytest.mark.django_db
+class TestHandleDecisionSearch:
+    """Tests for handle_decision_search handler."""
+
+    def test_finds_task_comment_decisions(self, user_alpha_owner, org_alpha):
+        from django.utils import timezone
+        from core.models import Project, Task, TaskComment
+        from core.agent import handle_decision_search
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(project=project, title='T', created_by=user_alpha_owner)
+        tc = TaskComment.objects.create(
+            task=task, author=user_alpha_owner,
+            content='We decided to go with 5 monitors on stage.',
+        )
+        tc.is_decision = True
+        tc.decision_marked_by = user_alpha_owner
+        tc.decision_marked_at = timezone.now()
+        tc.save()
+
+        result = handle_decision_search('monitors', organization=org_alpha)
+        assert 'monitor' in result.lower()
+
+    def test_finds_discussion_decisions(self, user_alpha_owner, org_alpha):
+        from django.utils import timezone
+        from core.models import Project, ProjectDiscussion, ProjectDiscussionMessage
+        from core.agent import handle_decision_search
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        disc = ProjectDiscussion.objects.create(
+            organization=org_alpha, project=project, title='T', created_by=user_alpha_owner,
+        )
+        dm = ProjectDiscussionMessage.objects.create(
+            discussion=disc, author=user_alpha_owner,
+            content='Move drums stage left for Easter.',
+        )
+        dm.is_decision = True
+        dm.decision_marked_by = user_alpha_owner
+        dm.decision_marked_at = timezone.now()
+        dm.save()
+
+        result = handle_decision_search('stage layout', organization=org_alpha)
+        assert 'drum' in result.lower()
+
+    def test_no_matches(self, user_alpha_owner, org_alpha):
+        from core.agent import handle_decision_search
+        result = handle_decision_search('nothing-here', organization=org_alpha)
+        assert 'no decision' in result.lower() or "did not find" in result.lower() or "didn't find" in result.lower() or 'no match' in result.lower()
+
+    def test_org_scoped(self, user_alpha_owner, org_alpha, org_beta, user_beta_owner):
+        """Decisions from other orgs are not returned."""
+        from django.utils import timezone
+        from core.models import Project, Task, TaskComment
+        from core.agent import handle_decision_search
+
+        beta_project = Project.objects.create(
+            organization=org_beta, name='B', owner=user_beta_owner,
+        )
+        beta_task = Task.objects.create(
+            project=beta_project, title='T', created_by=user_beta_owner,
+        )
+        tc = TaskComment.objects.create(
+            task=beta_task, author=user_beta_owner,
+            content='Beta decided: use widget X.',
+        )
+        tc.is_decision = True
+        tc.decision_marked_by = user_beta_owner
+        tc.decision_marked_at = timezone.now()
+        tc.save()
+
+        result = handle_decision_search('widget', organization=org_alpha)
+        # The "not found" message may echo the search term, but it must NOT
+        # contain the beta org's decision content.
+        assert 'beta decided' not in result.lower()

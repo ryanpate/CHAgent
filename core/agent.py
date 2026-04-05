@@ -1733,6 +1733,79 @@ def handle_project_status(project_name: str, organization=None) -> str:
     return '\n'.join(lines)
 
 
+def handle_decision_search(topic: str, organization=None) -> str:
+    """Search decisions in TaskComments and ProjectDiscussionMessages for a topic."""
+    from .models import TaskComment
+
+    # For multi-word topics, search on the most distinctive word
+    # Try full topic first, then fall back to each significant word
+    search_terms = [topic]
+    words = [w for w in topic.split() if len(w) > 3]  # skip short words
+    if len(words) > 1:
+        search_terms.extend(words)
+
+    # Collect matches from TaskComments
+    task_matches = []
+    for term in search_terms:
+        task_qs = TaskComment.objects.filter(
+            is_decision=True,
+            content__icontains=term,
+        )
+        if organization:
+            task_qs = task_qs.filter(task__project__organization=organization)
+        task_qs = task_qs.select_related(
+            'author', 'task', 'task__project',
+        ).order_by('-decision_marked_at')[:10]
+        for tc in task_qs:
+            if tc.pk not in [m.pk for m in task_matches]:
+                task_matches.append(tc)
+        if task_matches:
+            break
+
+    # Collect matches from ProjectDiscussionMessages
+    msg_matches = []
+    try:
+        from .models import ProjectDiscussionMessage
+        for term in search_terms:
+            msg_qs = ProjectDiscussionMessage.objects.filter(
+                is_decision=True,
+                content__icontains=term,
+            )
+            if organization:
+                msg_qs = msg_qs.filter(discussion__project__organization=organization)
+            msg_qs = msg_qs.select_related(
+                'author', 'discussion', 'discussion__project',
+            ).order_by('-decision_marked_at')[:10]
+            for m in msg_qs:
+                if m.pk not in [x.pk for x in msg_matches]:
+                    msg_matches.append(m)
+            if msg_matches:
+                break
+    except Exception:
+        pass
+
+    results = []
+    for tc in task_matches:
+        author_name = tc.author.display_name or tc.author.username if tc.author else 'unknown'
+        proj_name = tc.task.project.name if tc.task.project else 'standalone task'
+        when = tc.decision_marked_at.strftime('%b %d, %Y') if tc.decision_marked_at else ''
+        results.append(
+            f"- \"{tc.content}\" (by {author_name}, {when}, in task '{tc.task.title}' ({proj_name}))"
+        )
+    for msg in msg_matches:
+        author_name = msg.author.display_name or msg.author.username if msg.author else 'unknown'
+        proj_name = msg.discussion.project.name
+        when = msg.decision_marked_at.strftime('%b %d, %Y') if msg.decision_marked_at else ''
+        results.append(
+            f"- \"{msg.content}\" (by {author_name}, {when}, in discussion '{msg.discussion.title}' ({proj_name}))"
+        )
+
+    if not results:
+        return f"I did not find any decisions about '{topic}'."
+
+    return f"Decisions matching '{topic}':\n\n" + '\n'.join(results)
+
+
 def format_person_blockouts(blockout_data: dict) -> str:
     """
     Format a person's blockout dates for the AI context.
