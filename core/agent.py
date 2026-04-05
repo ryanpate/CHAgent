@@ -1659,6 +1659,80 @@ def handle_team_tasks(person_name: str, organization=None) -> str:
     return '\n'.join(lines)
 
 
+def handle_project_status(project_name: str, organization=None) -> str:
+    """Summarize a project's tasks, discussions, and recent activity."""
+    from .models import Project
+
+    qs = Project.objects.all()
+    if organization:
+        qs = qs.filter(organization=organization)
+
+    # Try exact match first, then icontains, then word-by-word fallback
+    project = qs.filter(name__iexact=project_name).first()
+    if not project:
+        project = qs.filter(name__icontains=project_name).first()
+    if not project:
+        # Word-by-word: filter to projects whose name contains all query words
+        words = [w for w in project_name.lower().split() if w]
+        candidates = qs
+        for word in words:
+            candidates = candidates.filter(name__icontains=word)
+        project = candidates.first()
+    if not project:
+        return f"I could not find a project matching '{project_name}'."
+
+    # Build the summary
+    tasks = project.tasks.all()
+    total = tasks.count()
+    completed = tasks.filter(status='completed').count()
+    in_progress = tasks.filter(status='in_progress').count()
+    review = tasks.filter(status='review').count()
+    todo = tasks.filter(status='todo').count()
+
+    # Overdue count
+    from django.utils import timezone
+    today = timezone.now().date()
+    overdue = tasks.filter(
+        due_date__lt=today,
+    ).exclude(status__in=['completed', 'cancelled']).count()
+
+    # Discussions + decisions
+    try:
+        discussion_count = project.discussions.count()
+        open_discussions = project.discussions.filter(is_resolved=False).count()
+    except Exception:
+        discussion_count = 0
+        open_discussions = 0
+
+    from .models import TaskComment
+    try:
+        from .models import ProjectDiscussionMessage
+        discussion_decisions = ProjectDiscussionMessage.objects.filter(
+            discussion__project=project, is_decision=True,
+        ).count()
+    except Exception:
+        discussion_decisions = 0
+    task_decisions = TaskComment.objects.filter(
+        task__project=project, is_decision=True,
+    ).count()
+    total_decisions = task_decisions + discussion_decisions
+
+    lines = [f"Status of project '{project.name}':\n"]
+    lines.append(f"- {total} total task{'s' if total != 1 else ''}: "
+                 f"{completed} completed, {in_progress} in progress, "
+                 f"{review} in review, {todo} to do")
+    if overdue:
+        lines.append(f"- {overdue} overdue task{'s' if overdue != 1 else ''}")
+    lines.append(f"- Status: {project.get_status_display()}")
+    if project.due_date:
+        lines.append(f"- Due: {project.due_date.strftime('%b %d, %Y')}")
+    lines.append(f"- {discussion_count} discussion{'s' if discussion_count != 1 else ''} "
+                 f"({open_discussions} open)")
+    lines.append(f"- {total_decisions} decision{'s' if total_decisions != 1 else ''} recorded")
+
+    return '\n'.join(lines)
+
+
 def format_person_blockouts(blockout_data: dict) -> str:
     """
     Format a person's blockout dates for the AI context.

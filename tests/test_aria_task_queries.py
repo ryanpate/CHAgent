@@ -253,3 +253,42 @@ class TestHandleTeamTasks:
         search = (user_alpha_owner.display_name or user_alpha_owner.username).lower()
         result = handle_team_tasks(search, organization=org_alpha)
         assert 'Build stage' in result
+
+
+@pytest.mark.django_db
+class TestHandleProjectStatus:
+    """Tests for handle_project_status handler."""
+
+    def test_summarizes_project(self, user_alpha_owner, org_alpha):
+        from core.models import Project, Task
+        from core.agent import handle_project_status
+
+        project = Project.objects.create(
+            organization=org_alpha, name='Easter Production', owner=user_alpha_owner,
+        )
+        Task.objects.create(project=project, title='Stage', created_by=user_alpha_owner, status='completed')
+        Task.objects.create(project=project, title='Sound', created_by=user_alpha_owner, status='in_progress')
+        Task.objects.create(project=project, title='Vocals', created_by=user_alpha_owner, status='todo')
+
+        result = handle_project_status('Easter Production', organization=org_alpha)
+
+        assert 'Easter Production' in result
+        lower = result.lower()
+        assert '3' in result  # 3 total tasks
+        assert 'completed' in lower or 'done' in lower
+
+    def test_project_not_found(self, user_alpha_owner, org_alpha):
+        from core.agent import handle_project_status
+        result = handle_project_status('NonexistentProject', organization=org_alpha)
+        assert 'not find' in result.lower() or "could not find" in result.lower() or 'no project' in result.lower()
+
+    def test_partial_name_match(self, user_alpha_owner, org_alpha):
+        from core.models import Project
+        from core.agent import handle_project_status
+
+        Project.objects.create(
+            organization=org_alpha, name='Easter Sunday Production',
+            owner=user_alpha_owner,
+        )
+        result = handle_project_status('easter production', organization=org_alpha)
+        assert 'Easter' in result
