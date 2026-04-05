@@ -84,3 +84,128 @@ class TestIsTaskQuery:
 
         is_task, qtype, params = is_task_query("show me the lyrics for amazing grace")
         assert is_task is False
+
+
+@pytest.mark.django_db
+class TestHandleMyTasks:
+    """Tests for handle_my_tasks handler."""
+
+    def test_formats_user_tasks(self, user_alpha_owner, org_alpha):
+        from core.models import Project, Task
+        from core.agent import handle_my_tasks
+
+        project = Project.objects.create(
+            organization=org_alpha, name='Sunday', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='Set up stage',
+            created_by=user_alpha_owner, status='in_progress',
+        )
+        task.assignees.add(user_alpha_owner)
+
+        result = handle_my_tasks(user_alpha_owner, organization=org_alpha)
+
+        assert 'Set up stage' in result
+        assert 'in_progress' in result.lower() or 'in progress' in result.lower()
+
+    def test_empty_list_message(self, user_alpha_owner, org_alpha):
+        from core.agent import handle_my_tasks
+        result = handle_my_tasks(user_alpha_owner, organization=org_alpha)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_excludes_completed(self, user_alpha_owner, org_alpha):
+        from core.models import Project, Task
+        from core.agent import handle_my_tasks
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        open_task = Task.objects.create(
+            project=project, title='Open work', created_by=user_alpha_owner, status='todo',
+        )
+        open_task.assignees.add(user_alpha_owner)
+        done = Task.objects.create(
+            project=project, title='Finished work', created_by=user_alpha_owner, status='completed',
+        )
+        done.assignees.add(user_alpha_owner)
+
+        result = handle_my_tasks(user_alpha_owner, organization=org_alpha)
+
+        assert 'Open work' in result
+        assert 'Finished work' not in result
+
+    def test_org_scoped(self, user_alpha_owner, org_alpha, org_beta, user_beta_owner):
+        """Tasks from other orgs are not included."""
+        from core.models import Project, Task
+        from core.agent import handle_my_tasks
+
+        beta_project = Project.objects.create(
+            organization=org_beta, name='Beta', owner=user_beta_owner,
+        )
+        beta_task = Task.objects.create(
+            project=beta_project, title='Beta secret', created_by=user_beta_owner,
+        )
+        beta_task.assignees.add(user_alpha_owner)  # Deliberately cross-assign
+
+        result = handle_my_tasks(user_alpha_owner, organization=org_alpha)
+        assert 'Beta secret' not in result
+
+
+@pytest.mark.django_db
+class TestHandleOverdueTasks:
+    """Tests for handle_overdue_tasks handler."""
+
+    def test_lists_overdue(self, user_alpha_owner, org_alpha):
+        from datetime import timedelta
+        from django.utils import timezone
+        from core.models import Project, Task
+        from core.agent import handle_overdue_tasks
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='Late task', created_by=user_alpha_owner,
+            due_date=timezone.now().date() - timedelta(days=5),
+            status='in_progress',
+        )
+
+        result = handle_overdue_tasks(user_alpha_owner, organization=org_alpha)
+        assert 'Late task' in result
+
+    def test_excludes_future_tasks(self, user_alpha_owner, org_alpha):
+        from datetime import timedelta
+        from django.utils import timezone
+        from core.models import Project, Task
+        from core.agent import handle_overdue_tasks
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='Future task', created_by=user_alpha_owner,
+            due_date=timezone.now().date() + timedelta(days=5),
+            status='todo',
+        )
+
+        result = handle_overdue_tasks(user_alpha_owner, organization=org_alpha)
+        assert 'Future task' not in result
+
+    def test_excludes_completed_overdue(self, user_alpha_owner, org_alpha):
+        from datetime import timedelta
+        from django.utils import timezone
+        from core.models import Project, Task
+        from core.agent import handle_overdue_tasks
+
+        project = Project.objects.create(
+            organization=org_alpha, name='P', owner=user_alpha_owner,
+        )
+        task = Task.objects.create(
+            project=project, title='Done late', created_by=user_alpha_owner,
+            due_date=timezone.now().date() - timedelta(days=5),
+            status='completed',
+        )
+
+        result = handle_overdue_tasks(user_alpha_owner, organization=org_alpha)
+        assert 'Done late' not in result

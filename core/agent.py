@@ -1533,6 +1533,79 @@ def handle_team_roster_query(team_keyword: str, organization=None) -> str:
     return '\n'.join(parts)
 
 
+def handle_my_tasks(user, organization=None) -> str:
+    """Format context string listing the user's open assigned tasks."""
+    from .models import Task
+    from django.db.models import Q
+
+    qs = Task.objects.filter(
+        assignees=user,
+    ).exclude(
+        status__in=['completed', 'cancelled'],
+    )
+
+    if organization:
+        qs = qs.filter(
+            Q(project__organization=organization)
+            | Q(organization=organization)
+        )
+
+    qs = qs.select_related('project').order_by('due_date', '-priority')[:30]
+
+    if not qs:
+        return "You have no open tasks assigned to you."
+
+    lines = [f"Open tasks assigned to {user.display_name or user.username}:\n"]
+    for task in qs:
+        due = task.due_date.strftime('%b %d') if task.due_date else 'no due date'
+        proj = f" ({task.project.name})" if task.project else ''
+        overdue = ' [OVERDUE]' if task.is_overdue else ''
+        lines.append(
+            f"- {task.title}{proj} - {task.get_status_display()}, "
+            f"{task.get_priority_display()}, due {due}{overdue}"
+        )
+    return '\n'.join(lines)
+
+
+def handle_overdue_tasks(user, organization=None) -> str:
+    """Format context string listing all overdue tasks the user can see."""
+    from .models import Task
+    from django.db.models import Q
+    from django.utils import timezone
+
+    today = timezone.now().date()
+    qs = Task.objects.filter(
+        due_date__lt=today,
+    ).exclude(
+        status__in=['completed', 'cancelled'],
+    )
+
+    if organization:
+        qs = qs.filter(
+            Q(project__organization=organization)
+            | Q(organization=organization)
+        )
+
+    qs = qs.select_related('project').prefetch_related('assignees').order_by('due_date')[:30]
+
+    if not qs:
+        return "No overdue tasks."
+
+    lines = ["Overdue tasks:\n"]
+    for task in qs:
+        assignee_names = ', '.join(
+            a.display_name or a.username for a in task.assignees.all()
+        ) or 'unassigned'
+        proj = f" ({task.project.name})" if task.project else ''
+        days_over = (today - task.due_date).days
+        lines.append(
+            f"- {task.title}{proj} - assigned to {assignee_names}, "
+            f"{days_over} day{'s' if days_over != 1 else ''} overdue, "
+            f"{task.get_priority_display()} priority"
+        )
+    return '\n'.join(lines)
+
+
 def format_person_blockouts(blockout_data: dict) -> str:
     """
     Format a person's blockout dates for the AI context.
