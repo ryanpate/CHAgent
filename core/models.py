@@ -3620,6 +3620,12 @@ class NotificationPreference(models.Model):
 
     song_submissions = models.BooleanField(default=True, help_text="Song submission notifications")
 
+    # Creative Studio notifications
+    studio_new_posts = models.BooleanField(default=True, help_text="New creative studio posts")
+    studio_comments = models.BooleanField(default=True, help_text="Comments on my studio posts")
+    studio_builds = models.BooleanField(default=True, help_text="When someone builds on my post")
+    studio_spotlights = models.BooleanField(default=True, help_text="When my post is spotlighted")
+
     # Quiet hours (don't send notifications during these times)
     quiet_hours_enabled = models.BooleanField(default=False)
     quiet_hours_start = models.TimeField(null=True, blank=True, help_text="Start of quiet hours (e.g., 22:00)")

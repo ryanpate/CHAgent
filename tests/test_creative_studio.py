@@ -200,3 +200,64 @@ class TestCreativeReactionModel:
         CreativeReaction.objects.create(post=published_post, user=user_alpha_member, reaction_type='heart')
         with pytest.raises(IntegrityError):
             CreativeReaction.objects.create(post=published_post, user=user_alpha_member, reaction_type='heart')
+
+
+from core.models import NotificationPreference
+from unittest.mock import patch
+
+
+class TestStudioNotificationPreferences:
+    def test_default_studio_preferences(self, db, user_alpha_owner):
+        prefs = NotificationPreference.objects.create(user=user_alpha_owner)
+        assert prefs.studio_new_posts is True
+        assert prefs.studio_comments is True
+        assert prefs.studio_builds is True
+        assert prefs.studio_spotlights is True
+
+
+class TestStudioNotifications:
+    @pytest.fixture
+    def published_post(self, db, org_alpha, user_alpha_owner):
+        return CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='lyrics', title='Test Song', status='published',
+        )
+
+    @patch('core.notifications.send_notification_to_users')
+    def test_notify_new_studio_post(self, mock_send, published_post, org_alpha):
+        from core.notifications import notify_new_studio_post
+        notify_new_studio_post(published_post)
+        mock_send.assert_called_once()
+        call_kwargs = mock_send.call_args
+        assert call_kwargs[1]['notification_type'] == 'studio'
+        assert 'Test Song' in call_kwargs[1]['title']
+
+    @patch('core.notifications.send_notification_to_user')
+    def test_notify_studio_comment(self, mock_send, published_post, user_alpha_member):
+        from core.notifications import notify_studio_comment
+        comment = CreativeComment.objects.create(
+            post=published_post, author=user_alpha_member, content='Great!',
+        )
+        notify_studio_comment(comment)
+        mock_send.assert_called_once()
+        assert mock_send.call_args[1]['notification_type'] == 'studio'
+
+    @patch('core.notifications.send_notification_to_user')
+    def test_notify_studio_build(self, mock_send, published_post, user_alpha_member, org_alpha):
+        from core.notifications import notify_studio_build
+        child = CreativePost.objects.create(
+            author=user_alpha_member, organization=org_alpha,
+            post_type='audio', title='Re: Test Song',
+            status='published', parent_post=published_post,
+        )
+        notify_studio_build(child)
+        mock_send.assert_called_once()
+
+    @patch('core.notifications.send_notification_to_user')
+    def test_notify_studio_spotlight(self, mock_send, published_post, user_alpha_member):
+        from core.notifications import notify_studio_spotlight
+        published_post.is_spotlighted = True
+        published_post.spotlighted_by = user_alpha_member
+        published_post.save()
+        notify_studio_spotlight(published_post)
+        mock_send.assert_called_once()
