@@ -223,3 +223,50 @@ def search_similar_images(query_embedding: list[float], organization, limit: int
 
     scored.sort(key=lambda x: x['similarity'], reverse=True)
     return scored[:limit]
+
+
+def search_similar_posts(query_embedding: list[float], organization=None, exclude_post_id=None, limit: int = 3, threshold: float = 0.3):
+    """
+    Find creative posts most similar to query using cosine similarity.
+
+    Returns: List of dicts with keys: 'post_id', 'title', 'post_type', 'similarity'
+    """
+    import json
+    import math
+
+    from core.models import CreativePost
+
+    posts = CreativePost.objects.filter(
+        status='published',
+    ).exclude(embedding_json__isnull=True).exclude(embedding_json='')
+
+    if organization:
+        posts = posts.filter(organization=organization)
+    if exclude_post_id:
+        posts = posts.exclude(pk=exclude_post_id)
+
+    results = []
+    for post in posts:
+        try:
+            post_embedding = json.loads(post.embedding_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        # Cosine similarity
+        dot_product = sum(a * b for a, b in zip(query_embedding, post_embedding))
+        norm_a = math.sqrt(sum(a * a for a in query_embedding))
+        norm_b = math.sqrt(sum(b * b for b in post_embedding))
+        if norm_a == 0 or norm_b == 0:
+            continue
+        similarity = dot_product / (norm_a * norm_b)
+
+        if similarity >= threshold:
+            results.append({
+                'post_id': post.pk,
+                'title': post.title,
+                'post_type': post.post_type,
+                'similarity': similarity,
+            })
+
+    results.sort(key=lambda x: x['similarity'], reverse=True)
+    return results[:limit]

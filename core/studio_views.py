@@ -5,7 +5,8 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_http_methods
+from django.http import HttpResponseBadRequest, HttpResponseForbidden
+from django.views.decorators.http import require_http_methods, require_POST
 
 from .models import (
     CreativeCollection, CreativeComment, CreativePost, CreativeReaction, CreativeTag,
@@ -177,6 +178,15 @@ def studio_post_create(request):
             except Exception:
                 logger.exception("Failed to send studio notifications")
 
+            # Generate embedding for related posts
+            if post.content:
+                from .embeddings import get_embedding
+                import json
+                embedding = get_embedding(post.content[:8000])
+                if embedding:
+                    post.embedding_json = json.dumps(embedding)
+                    post.save(update_fields=['embedding_json'])
+
         return redirect('studio_post_detail', pk=post.pk)
 
     # GET -- render form
@@ -253,6 +263,19 @@ def studio_post_detail(request, pk):
 
     membership = get_membership(request)
 
+    # Related posts via embeddings
+    related_posts = []
+    if post.embedding_json:
+        import json
+        try:
+            from .embeddings import search_similar_posts
+            embedding = json.loads(post.embedding_json)
+            related_posts = search_similar_posts(
+                embedding, organization=org, exclude_post_id=post.pk, limit=3,
+            )
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     context = {
         'post': post,
         'comments': comments,
@@ -262,5 +285,255 @@ def studio_post_detail(request, pk):
         'can_spotlight': is_leader_or_above(membership),
         'can_edit': post.author == request.user,
         'can_delete': post.author == request.user or (membership and membership.role in ('admin', 'owner')),
+        'related_posts': related_posts,
     }
     return render(request, 'core/studio/post_detail.html', context)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def studio_post_edit(request, pk):
+    """Edit an existing creative post (author only)."""
+    org = get_org(request)
+    post = get_object_or_404(CreativePost, pk=pk, organization=org)
+    if post.author != request.user:
+        return HttpResponseForbidden()
+
+    if request.method == 'POST':
+        post.title = request.POST.get('title', post.title).strip()
+        post.post_type = request.POST.get('post_type', post.post_type)
+        post.content = request.POST.get('content', post.content)
+        post.status = request.POST.get('status', post.status)
+        post.is_collaborative = request.POST.get('is_collaborative') == 'on'
+        collection_id = request.POST.get('collection')
+        post.collection_id = collection_id if collection_id else None
+
+        media = request.FILES.get('media_file')
+        if media:
+            ext = media.name.rsplit('.', 1)[-1].lower() if '.' in media.name else ''
+            if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
+                post.media_type = 'image'
+            elif ext in ('mp3', 'm4a', 'wav'):
+                post.media_type = 'audio'
+            elif ext in ('pdf', 'doc', 'docx', 'txt'):
+                post.media_type = 'document'
+            post.media_file = media
+
+        post.save()
+
+        # Update tags
+        tag_names = request.POST.get('tags', '')
+        post.tags.clear()
+        if tag_names:
+            from django.utils.text import slugify
+            for tag_name in [t.strip() for t in tag_names.split(',') if t.strip()]:
+                tag, _ = CreativeTag.objects.get_or_create(
+                    name=tag_name, organization=org,
+                    defaults={'slug': slugify(tag_name)},
+                )
+                post.tags.add(tag)
+
+        return redirect('studio_post_detail', pk=post.pk)
+
+    context = {
+        'post': post,
+        'collections': CreativeCollection.objects.filter(organization=org, is_archived=False),
+        'post_type_choices': CreativePost.POST_TYPE_CHOICES,
+    }
+    return render(request, 'core/studio/post_edit.html', context)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def studio_post_delete(request, pk):
+    """Delete a creative post (author or admin/owner)."""
+    org = get_org(request)
+    post = get_object_or_404(CreativePost, pk=pk, organization=org)
+    membership = get_membership(request)
+    if post.author != request.user and (not membership or membership.role not in ('admin', 'owner')):
+        return HttpResponseForbidden()
+
+    if request.method == 'POST':
+        post.delete()
+        return redirect('studio_feed')
+
+    return render(request, 'core/studio/post_confirm_delete.html', {'post': post})
+
+
+@login_required
+@require_POST
+def studio_post_comment(request, pk):
+    """Add a comment to a post (HTMX)."""
+    org = get_org(request)
+    post = get_object_or_404(CreativePost, pk=pk, organization=org, status='published')
+    content = request.POST.get('content', '').strip()
+    if not content:
+        return render(request, 'core/studio/partials/comment.html', {'comment': None})
+
+    comment = CreativeComment.objects.create(
+        post=post, author=request.user, content=content,
+    )
+
+    from .notifications import notify_studio_comment
+    notify_studio_comment(comment)
+
+    return render(request, 'core/studio/partials/comment.html', {'comment': comment})
+
+
+@login_required
+@require_POST
+def studio_post_react(request, pk):
+    """Toggle a reaction on a post (HTMX)."""
+    org = get_org(request)
+    post = get_object_or_404(CreativePost, pk=pk, organization=org, status='published')
+    reaction_type = request.POST.get('reaction_type')
+    if reaction_type not in dict(CreativeReaction.REACTION_CHOICES):
+        return HttpResponseBadRequest()
+
+    existing = CreativeReaction.objects.filter(
+        post=post, user=request.user, reaction_type=reaction_type,
+    )
+    if existing.exists():
+        existing.delete()
+    else:
+        CreativeReaction.objects.create(
+            post=post, user=request.user, reaction_type=reaction_type,
+        )
+
+    # Return updated reaction bar
+    reaction_summary = {}
+    for reaction in post.reactions.all():
+        rt = reaction.reaction_type
+        if rt not in reaction_summary:
+            reaction_summary[rt] = {'count': 0, 'user_reacted': False, 'emoji': dict(CreativeReaction.REACTION_CHOICES).get(rt, rt)}
+        reaction_summary[rt]['count'] += 1
+        if reaction.user_id == request.user.id:
+            reaction_summary[rt]['user_reacted'] = True
+
+    return render(request, 'core/studio/partials/reaction_bar.html', {
+        'post': post,
+        'reaction_summary': reaction_summary,
+        'reaction_choices': CreativeReaction.REACTION_CHOICES,
+    })
+
+
+@login_required
+@require_POST
+def studio_post_spotlight(request, pk):
+    """Toggle spotlight on a post (leader/admin/owner only)."""
+    org = get_org(request)
+    membership = get_membership(request)
+    if not is_leader_or_above(membership):
+        return HttpResponseForbidden()
+
+    post = get_object_or_404(CreativePost, pk=pk, organization=org, status='published')
+
+    if post.is_spotlighted:
+        post.is_spotlighted = False
+        post.spotlighted_by = None
+        post.spotlight_note = ''
+    else:
+        post.is_spotlighted = True
+        post.spotlighted_by = request.user
+        post.spotlight_note = request.POST.get('spotlight_note', '')
+        from .notifications import notify_studio_spotlight
+        notify_studio_spotlight(post)
+
+    post.save()
+    return redirect('studio_post_detail', pk=post.pk)
+
+
+@login_required
+def studio_collection_list(request):
+    """Browse all collections."""
+    org = get_org(request)
+    if not org:
+        return redirect('dashboard')
+    collections = CreativeCollection.objects.filter(
+        organization=org, is_archived=False,
+    ).annotate(post_count=Count('posts', filter=Q(posts__status='published')))
+    membership = get_membership(request)
+    context = {
+        'collections': collections,
+        'can_manage': is_leader_or_above(membership),
+    }
+    return render(request, 'core/studio/collection_list.html', context)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def studio_collection_create(request):
+    """Create a new collection (leader/admin/owner only)."""
+    org = get_org(request)
+    membership = get_membership(request)
+    if not is_leader_or_above(membership):
+        return HttpResponseForbidden()
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '')
+        if name:
+            CreativeCollection.objects.create(
+                name=name, description=description,
+                organization=org, created_by=request.user,
+            )
+            return redirect('studio_collection_list')
+
+    return render(request, 'core/studio/collection_create.html')
+
+
+@login_required
+def studio_collection_detail(request, pk):
+    """View posts within a collection."""
+    org = get_org(request)
+    collection = get_object_or_404(CreativeCollection, pk=pk, organization=org)
+    posts = CreativePost.objects.filter(
+        collection=collection, status='published',
+    ).select_related('author').prefetch_related('tags', 'reactions', 'comments').annotate(
+        comment_count=Count('comments'),
+        build_count=Count('builds', filter=Q(builds__status='published')),
+    )
+    membership = get_membership(request)
+    context = {
+        'collection': collection,
+        'posts': posts,
+        'can_manage': is_leader_or_above(membership),
+        'post_type_choices': CreativePost.POST_TYPE_CHOICES,
+    }
+    return render(request, 'core/studio/collection_detail.html', context)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def studio_collection_edit(request, pk):
+    """Edit a collection (leader/admin/owner only)."""
+    org = get_org(request)
+    membership = get_membership(request)
+    if not is_leader_or_above(membership):
+        return HttpResponseForbidden()
+    collection = get_object_or_404(CreativeCollection, pk=pk, organization=org)
+
+    if request.method == 'POST':
+        collection.name = request.POST.get('name', collection.name).strip()
+        collection.description = request.POST.get('description', collection.description)
+        collection.save()
+        return redirect('studio_collection_detail', pk=collection.pk)
+
+    return render(request, 'core/studio/collection_create.html', {'collection': collection})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def studio_collection_delete(request, pk):
+    """Delete a collection (leader/admin/owner only)."""
+    org = get_org(request)
+    membership = get_membership(request)
+    if not is_leader_or_above(membership):
+        return HttpResponseForbidden()
+    collection = get_object_or_404(CreativeCollection, pk=pk, organization=org)
+
+    if request.method == 'POST':
+        collection.delete()
+        return redirect('studio_collection_list')
+
+    return render(request, 'core/studio/collection_confirm_delete.html', {'collection': collection})

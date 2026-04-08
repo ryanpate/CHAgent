@@ -431,3 +431,169 @@ class TestStudioPostDetailView:
         session.save()
         response = client.get(f'/studio/post/{draft.pk}/')
         assert response.status_code == 404
+
+
+class TestStudioPostActions:
+    @pytest.fixture
+    def client_alpha(self, db, user_alpha_owner, org_alpha):
+        client = Client()
+        client.force_login(user_alpha_owner)
+        session = client.session
+        session['organization_id'] = org_alpha.id
+        session.save()
+        return client
+
+    @pytest.fixture
+    def member_client(self, db, user_alpha_member, org_alpha):
+        client = Client()
+        client.force_login(user_alpha_member)
+        session = client.session
+        session['organization_id'] = org_alpha.id
+        session.save()
+        return client
+
+    @pytest.fixture
+    def published_post(self, db, org_alpha, user_alpha_owner):
+        return CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='lyrics', title='Editable Post', status='published',
+            content='Original content',
+        )
+
+    def test_edit_own_post(self, client_alpha, published_post):
+        response = client_alpha.post(f'/studio/post/{published_post.pk}/edit/', {
+            'title': 'Updated Title',
+            'post_type': 'lyrics',
+            'content': 'Updated content',
+            'status': 'published',
+        })
+        assert response.status_code == 302
+        published_post.refresh_from_db()
+        assert published_post.title == 'Updated Title'
+
+    def test_cannot_edit_others_post(self, member_client, published_post):
+        response = member_client.get(f'/studio/post/{published_post.pk}/edit/')
+        assert response.status_code == 403
+
+    def test_delete_own_post(self, client_alpha, published_post):
+        response = client_alpha.post(f'/studio/post/{published_post.pk}/delete/')
+        assert response.status_code == 302
+        assert not CreativePost.objects.filter(pk=published_post.pk).exists()
+
+    def test_add_comment(self, client_alpha, published_post):
+        response = client_alpha.post(f'/studio/post/{published_post.pk}/comment/', {
+            'content': 'A new comment',
+        })
+        assert response.status_code == 200
+        assert published_post.comments.count() == 1
+
+    def test_toggle_reaction(self, client_alpha, published_post):
+        # Add reaction
+        response = client_alpha.post(f'/studio/post/{published_post.pk}/react/', {
+            'reaction_type': 'heart',
+        })
+        assert response.status_code == 200
+        assert published_post.reactions.count() == 1
+        # Remove reaction (toggle)
+        response = client_alpha.post(f'/studio/post/{published_post.pk}/react/', {
+            'reaction_type': 'heart',
+        })
+        assert published_post.reactions.count() == 0
+
+    def test_spotlight_by_owner(self, client_alpha, published_post):
+        response = client_alpha.post(f'/studio/post/{published_post.pk}/spotlight/')
+        assert response.status_code == 302
+        published_post.refresh_from_db()
+        assert published_post.is_spotlighted is True
+
+    def test_spotlight_denied_for_member(self, member_client, published_post):
+        response = member_client.post(f'/studio/post/{published_post.pk}/spotlight/')
+        assert response.status_code == 403
+
+
+class TestStudioCollectionViews:
+    @pytest.fixture
+    def client_alpha(self, db, user_alpha_owner, org_alpha):
+        client = Client()
+        client.force_login(user_alpha_owner)
+        session = client.session
+        session['organization_id'] = org_alpha.id
+        session.save()
+        return client
+
+    @pytest.fixture
+    def member_client(self, db, user_alpha_member, org_alpha):
+        client = Client()
+        client.force_login(user_alpha_member)
+        session = client.session
+        session['organization_id'] = org_alpha.id
+        session.save()
+        return client
+
+    def test_collection_list(self, client_alpha, org_alpha, user_alpha_owner):
+        CreativeCollection.objects.create(name='Easter 2026', organization=org_alpha, created_by=user_alpha_owner)
+        response = client_alpha.get('/studio/collections/')
+        assert response.status_code == 200
+        assert 'Easter 2026' in response.content.decode()
+
+    def test_create_collection(self, client_alpha, org_alpha):
+        response = client_alpha.post('/studio/collections/create/', {
+            'name': 'Songwriting Circle',
+            'description': 'A place for songwriters',
+        })
+        assert response.status_code == 302
+        assert CreativeCollection.objects.filter(name='Songwriting Circle', organization=org_alpha).exists()
+
+    def test_create_collection_denied_for_member(self, member_client):
+        response = member_client.post('/studio/collections/create/', {
+            'name': 'Should Fail',
+        })
+        assert response.status_code == 403
+
+    def test_collection_detail(self, client_alpha, org_alpha, user_alpha_owner):
+        collection = CreativeCollection.objects.create(name='Easter 2026', organization=org_alpha, created_by=user_alpha_owner)
+        CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='idea', title='Easter Idea', status='published',
+            collection=collection,
+        )
+        response = client_alpha.get(f'/studio/collections/{collection.pk}/')
+        assert response.status_code == 200
+        assert 'Easter Idea' in response.content.decode()
+
+    def test_delete_collection(self, client_alpha, org_alpha, user_alpha_owner):
+        collection = CreativeCollection.objects.create(name='To Delete', organization=org_alpha, created_by=user_alpha_owner)
+        response = client_alpha.post(f'/studio/collections/{collection.pk}/delete/')
+        assert response.status_code == 302
+        assert not CreativeCollection.objects.filter(pk=collection.pk).exists()
+
+
+import json
+
+
+class TestStudioRelatedPosts:
+    def test_search_similar_posts(self, db, org_alpha, user_alpha_owner):
+        post1 = CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='lyrics', title='Worship Song', status='published',
+            embedding_json=json.dumps([0.1] * 1536),
+        )
+        post2 = CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='lyrics', title='Another Worship Song', status='published',
+            embedding_json=json.dumps([0.1] * 1536),
+        )
+        # Use alternating positive/negative values for a different direction
+        different_embedding = [0.1 if i % 2 == 0 else -0.1 for i in range(1536)]
+        post3 = CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='idea', title='Stage Design Idea', status='published',
+            embedding_json=json.dumps(different_embedding),
+        )
+
+        from core.embeddings import search_similar_posts
+        results = search_similar_posts([0.1] * 1536, organization=org_alpha, exclude_post_id=post1.pk, limit=2)
+        assert len(results) <= 2
+        # post2 should be more similar to post1 than post3
+        if len(results) >= 1:
+            assert results[0]['post_id'] == post2.pk
