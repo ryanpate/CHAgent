@@ -2,7 +2,8 @@
 Tests for Creative Studio models: CreativeTag, CreativeCollection, CreativePost.
 """
 import pytest
-from core.models import CreativeTag, CreativeCollection, CreativePost
+from django.db import IntegrityError
+from core.models import CreativeTag, CreativeCollection, CreativePost, CreativeComment, CreativeReaction
 
 
 class TestCreativeTagModel:
@@ -135,3 +136,67 @@ class TestCreativePostModel:
         assert post.is_spotlighted is True
         assert post.spotlighted_by == user_alpha_owner
         assert post.spotlight_note == 'Beautiful imagery!'
+
+
+class TestCreativeCommentModel:
+    @pytest.fixture
+    def published_post(self, db, org_alpha, user_alpha_owner):
+        return CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='lyrics', title='Test Song', status='published',
+        )
+
+    def test_create_comment(self, published_post, user_alpha_member):
+        comment = CreativeComment.objects.create(
+            post=published_post, author=user_alpha_member,
+            content='Love this!',
+        )
+        assert comment.content == 'Love this!'
+        assert comment.parent is None
+        assert published_post.comments.count() == 1
+
+    def test_threaded_reply(self, published_post, user_alpha_owner, user_alpha_member):
+        parent_comment = CreativeComment.objects.create(
+            post=published_post, author=user_alpha_owner,
+            content='Great work!',
+        )
+        reply = CreativeComment.objects.create(
+            post=published_post, author=user_alpha_member,
+            content='Thank you!', parent=parent_comment,
+        )
+        assert reply.parent == parent_comment
+
+    def test_comment_with_mentions(self, published_post, user_alpha_owner, user_alpha_member):
+        comment = CreativeComment.objects.create(
+            post=published_post, author=user_alpha_owner,
+            content='@alpha_member check this out',
+        )
+        comment.mentioned_users.add(user_alpha_member)
+        assert comment.mentioned_users.count() == 1
+
+
+class TestCreativeReactionModel:
+    @pytest.fixture
+    def published_post(self, db, org_alpha, user_alpha_owner):
+        return CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='idea', title='Great Idea', status='published',
+        )
+
+    def test_create_reaction(self, published_post, user_alpha_member):
+        reaction = CreativeReaction.objects.create(
+            post=published_post, user=user_alpha_member,
+            reaction_type='heart',
+        )
+        assert reaction.reaction_type == 'heart'
+        assert published_post.reactions.count() == 1
+
+    def test_multiple_reaction_types_per_user(self, published_post, user_alpha_member):
+        CreativeReaction.objects.create(post=published_post, user=user_alpha_member, reaction_type='heart')
+        CreativeReaction.objects.create(post=published_post, user=user_alpha_member, reaction_type='fire')
+        assert published_post.reactions.count() == 2
+
+    def test_unique_reaction_type_per_user(self, published_post, user_alpha_member):
+        CreativeReaction.objects.create(post=published_post, user=user_alpha_member, reaction_type='heart')
+        with pytest.raises(IntegrityError):
+            CreativeReaction.objects.create(post=published_post, user=user_alpha_member, reaction_type='heart')

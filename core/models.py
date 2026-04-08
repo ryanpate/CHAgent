@@ -4610,3 +4610,59 @@ class CreativePost(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class CreativeComment(models.Model):
+    """Comment/feedback on a creative post."""
+    post = models.ForeignKey(
+        'CreativePost', on_delete=models.CASCADE, related_name='comments'
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='creative_comments'
+    )
+    content = models.TextField()
+    parent = models.ForeignKey(
+        'self', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='replies'
+    )
+    mentioned_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, blank=True,
+        related_name='creative_comment_mentions'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Comment by {self.author} on {self.post.title}"
+
+
+class CreativeReaction(models.Model):
+    """Emoji reaction on a creative post."""
+    REACTION_CHOICES = [
+        ('heart', '❤️'),
+        ('fire', '🔥'),
+        ('pray', '🙏'),
+        ('clap', '👏'),
+        ('lightbulb', '💡'),
+        ('star', '⭐'),
+    ]
+
+    post = models.ForeignKey(
+        'CreativePost', on_delete=models.CASCADE, related_name='reactions'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='creative_reactions'
+    )
+    reaction_type = models.CharField(max_length=10, choices=REACTION_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['post', 'user', 'reaction_type']]
+
+    def __str__(self):
+        return f"{self.user} reacted {self.reaction_type} on {self.post.title}"
