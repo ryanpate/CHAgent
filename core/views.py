@@ -4974,6 +4974,10 @@ def push_preferences(request):
         prefs.care_urgent_only = request.POST.get('care_urgent_only') == 'on'
         prefs.followup_reminders = request.POST.get('followup_reminders') == 'on'
         prefs.song_submissions = request.POST.get('song_submissions') == 'on'
+        prefs.studio_new_posts = request.POST.get('studio_new_posts') == 'on'
+        prefs.studio_comments = request.POST.get('studio_comments') == 'on'
+        prefs.studio_builds = request.POST.get('studio_builds') == 'on'
+        prefs.studio_spotlights = request.POST.get('studio_spotlights') == 'on'
         prefs.quiet_hours_enabled = request.POST.get('quiet_hours_enabled') == 'on'
 
         # Parse quiet hours
