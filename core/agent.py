@@ -2670,10 +2670,14 @@ def format_pco_details(details: dict, query_type: str = None) -> str:
     # Birthday
     if details.get('birthdate') and query_type in [None, 'birthday', 'contact']:
         parts.append(f"Birthday: {details.get('birthdate')}")
+    elif not details.get('birthdate') and query_type == 'birthday':
+        parts.append(f"Birthday: No birthday on file in Planning Center for {details.get('name', 'this person')}.")
 
     # Anniversary
     if details.get('anniversary') and query_type in [None, 'anniversary', 'contact']:
         parts.append(f"Anniversary: {details.get('anniversary')}")
+    elif not details.get('anniversary') and query_type == 'anniversary':
+        parts.append(f"Anniversary: No anniversary on file in Planning Center for {details.get('name', 'this person')}.")
 
     # Emails
     if details.get('emails') and query_type in [None, 'email', 'contact']:
@@ -2684,6 +2688,8 @@ def format_pco_details(details: dict, query_type: str = None) -> str:
             email_strs.append(f"{email.get('address')}{location}{primary}")
         if email_strs:
             parts.append(f"Email(s): {', '.join(email_strs)}")
+    elif not details.get('emails') and query_type in ['email', 'contact']:
+        parts.append(f"Email: No email address on file in Planning Center for {details.get('name', 'this person')}.")
 
     # Phone numbers
     if details.get('phone_numbers') and query_type in [None, 'phone', 'contact']:
@@ -2694,6 +2700,8 @@ def format_pco_details(details: dict, query_type: str = None) -> str:
             phone_strs.append(f"{phone.get('number')}{location}{primary}")
         if phone_strs:
             parts.append(f"Phone(s): {', '.join(phone_strs)}")
+    elif not details.get('phone_numbers') and query_type in ['phone', 'contact']:
+        parts.append(f"Phone: No phone number on file in Planning Center for {details.get('name', 'this person')}.")
 
     # Addresses
     if details.get('addresses') and query_type in [None, 'address', 'contact']:
@@ -2712,6 +2720,8 @@ def format_pco_details(details: dict, query_type: str = None) -> str:
             addr_str = ', '.join(p for p in addr_parts if p and p.strip())
             if addr_str:
                 parts.append(f"Address{location}{primary}: {addr_str}")
+    elif not details.get('addresses') and query_type in ['address', 'contact']:
+        parts.append(f"Address: No address on file in Planning Center for {details.get('name', 'this person')}.")
 
     # Membership/Status
     if details.get('membership'):
@@ -4253,6 +4263,11 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
     client = get_anthropic_client()
     if not client:
         return "I'm sorry, but the AI service is not currently available. Please check that the ANTHROPIC_API_KEY is configured."
+
+    # Normalize Unicode curly quotes to ASCII straight quotes.
+    # Mobile keyboards (iOS, Android) often insert curly quotes (\u2018 \u2019 \u201c \u201d)
+    # which break regex-based name extraction in query detection functions.
+    question = question.replace('\u2018', "'").replace('\u2019', "'").replace('\u201c', '"').replace('\u201d', '"')
 
     # Get or create conversation context for this session
     conversation_context = get_or_create_conversation_context(user, session_id)
