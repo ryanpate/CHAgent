@@ -1,0 +1,28 @@
+<div class="flex gap-3 {% if comment.parent %}ml-8{% endif %}" id="comment-{{ comment.pk }}">
+    <div class="w-7 h-7 rounded-full bg-ch-gray flex items-center justify-center text-gray-300 font-bold text-xs flex-shrink-0 mt-0.5">
+        {{ comment.author.display_name|default:comment.author.username|truncatechars:1 }}
+    </div>
+    <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1">
+            <span class="text-sm font-medium text-white">{{ comment.author.display_name|default:comment.author.username }}</span>
+            <span class="text-xs text-gray-500">{{ comment.created_at|timesince }} ago</span>
+        </div>
+        <p class="text-sm text-gray-300 whitespace-pre-wrap">{{ comment.content }}</p>
+
+        {% if comment.mentioned_users.all %}
+        <div class="flex flex-wrap gap-1 mt-1">
+            {% for u in comment.mentioned_users.all %}
+            <span class="text-xs text-ch-gold">@{{ u.display_name|default:u.username }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if comment.replies.all %}
+<div class="space-y-3 mt-3">
+    {% for reply in comment.replies.all %}
+    {% include 'core/studio/partials/comment.html' with comment=reply %}
+    {% endfor %}
+</div>
+{% endif %}

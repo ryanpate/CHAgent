@@ -207,6 +207,10 @@ def send_notification_to_user(
                 if not prefs.song_submissions:
                     return 0
 
+            elif notification_type == 'studio':
+                if not prefs.studio_new_posts:
+                    return 0
+
         except NotificationPreference.DoesNotExist:
             # No preferences set - use defaults (send all)
             pass
@@ -760,3 +764,84 @@ def notify_user_mentioned(message, mentioned_users):
             )
             total_sent += sent
     return total_sent
+
+
+def notify_new_studio_post(post):
+    """Send notifications when a new creative studio post is published."""
+    from core.models import OrganizationMembership
+
+    memberships = OrganizationMembership.objects.filter(
+        organization=post.organization,
+        is_active=True,
+    ).select_related('user')
+
+    users = [m.user for m in memberships if m.user.is_active and m.user.pk != post.author_id]
+
+    author_name = post.author.display_name or post.author.username
+    title = f'🎨 New in Studio: {post.title}'
+    body = f'{author_name} shared a new {post.get_post_type_display().lower()}'
+
+    sent = send_notification_to_users(
+        users=users,
+        notification_type='studio',
+        title=title,
+        body=body,
+        url=f'/studio/post/{post.pk}/',
+        data={'post_id': post.pk},
+    )
+    logger.info(f"Studio new post notifications sent: {sent}")
+    return sent
+
+
+def notify_studio_comment(comment):
+    """Send notification when someone comments on a studio post."""
+    post = comment.post
+    if comment.author_id == post.author_id:
+        return 0
+
+    commenter_name = comment.author.display_name or comment.author.username
+    return send_notification_to_user(
+        user=post.author,
+        notification_type='studio',
+        title=f'💬 Comment on {post.title}',
+        body=f'{commenter_name}: {comment.content[:100]}',
+        url=f'/studio/post/{post.pk}/',
+        data={'post_id': post.pk, 'comment_id': comment.pk},
+    )
+
+
+def notify_studio_build(child_post):
+    """Send notification when someone builds on a studio post."""
+    parent = child_post.parent_post
+    if not parent or child_post.author_id == parent.author_id:
+        return 0
+
+    builder_name = child_post.author.display_name or child_post.author.username
+    return send_notification_to_user(
+        user=parent.author,
+        notification_type='studio',
+        title=f'🔨 Build on {parent.title}',
+        body=f'{builder_name} built on your post: {child_post.title}',
+        url=f'/studio/post/{child_post.pk}/',
+        data={'post_id': child_post.pk, 'parent_id': parent.pk},
+    )
+
+
+def notify_studio_spotlight(post):
+    """Send notification when a post is spotlighted."""
+    if not post.spotlighted_by or post.spotlighted_by_id == post.author_id:
+        return 0
+
+    spotter_name = post.spotlighted_by.display_name or post.spotlighted_by.username
+    body = f'{spotter_name} spotlighted your post'
+    if post.spotlight_note:
+        body += f': "{post.spotlight_note}"'
+
+    return send_notification_to_user(
+        user=post.author,
+        notification_type='studio',
+        title=f'⭐ {post.title} was spotlighted!',
+        body=body,
+        url=f'/studio/post/{post.pk}/',
+        data={'post_id': post.pk},
+    )

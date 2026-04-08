@@ -3620,6 +3620,12 @@ class NotificationPreference(models.Model):
 
     song_submissions = models.BooleanField(default=True, help_text="Song submission notifications")
 
+    # Creative Studio notifications
+    studio_new_posts = models.BooleanField(default=True, help_text="New creative studio posts")
+    studio_comments = models.BooleanField(default=True, help_text="Comments on my studio posts")
+    studio_builds = models.BooleanField(default=True, help_text="When someone builds on my post")
+    studio_spotlights = models.BooleanField(default=True, help_text="When my post is spotlighted")
+
     # Quiet hours (don't send notifications during these times)
     quiet_hours_enabled = models.BooleanField(default=False)
     quiet_hours_start = models.TimeField(null=True, blank=True, help_text="Start of quiet hours (e.g., 22:00)")
@@ -4492,3 +4498,177 @@ class AIUsageLog(models.Model):
     @property
     def total_tokens(self):
         return self.input_tokens + self.output_tokens
+
+
+# =============================================================================
+# Creative Studio Models
+# =============================================================================
+
+
+class CreativeTag(models.Model):
+    """Lightweight tag for categorizing creative posts."""
+    name = models.CharField(max_length=50)
+    organization = models.ForeignKey(
+        'Organization', on_delete=models.CASCADE, related_name='creative_tags'
+    )
+    slug = models.SlugField(max_length=60)
+
+    class Meta:
+        unique_together = [['name', 'organization']]
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+
+class CreativeCollection(models.Model):
+    """Themed grouping for creative posts (e.g., 'Easter 2026', 'Songwriting Circle')."""
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, default='')
+    organization = models.ForeignKey(
+        'Organization', on_delete=models.CASCADE, related_name='creative_collections'
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name='created_collections'
+    )
+    cover_image = models.FileField(upload_to='studio/collections/', blank=True)
+    is_archived = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.name
+
+
+class CreativePost(models.Model):
+    """A creative work shared in the studio — lyrics, artwork, audio, ideas, etc."""
+    POST_TYPE_CHOICES = [
+        ('lyrics', 'Lyrics'),
+        ('poem', 'Poem'),
+        ('artwork', 'Artwork'),
+        ('audio', 'Audio'),
+        ('video_concept', 'Video Concept'),
+        ('stage_design', 'Stage Design'),
+        ('idea', 'Idea'),
+        ('devotional', 'Devotional'),
+        ('other', 'Other'),
+    ]
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('published', 'Published'),
+        ('archived', 'Archived'),
+    ]
+    MEDIA_TYPE_CHOICES = [
+        ('image', 'Image'),
+        ('audio', 'Audio'),
+        ('document', 'Document'),
+        ('none', 'None'),
+    ]
+
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='creative_posts'
+    )
+    organization = models.ForeignKey(
+        'Organization', on_delete=models.CASCADE, related_name='creative_posts'
+    )
+    post_type = models.CharField(max_length=20, choices=POST_TYPE_CHOICES)
+    title = models.CharField(max_length=200)
+    content = models.TextField(blank=True, default='')
+    media_file = models.FileField(upload_to='studio/posts/%Y/%m/', blank=True)
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='none')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    is_collaborative = models.BooleanField(default=False)
+    is_spotlighted = models.BooleanField(default=False)
+    spotlighted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='spotlighted_posts'
+    )
+    spotlight_note = models.CharField(max_length=200, blank=True, default='')
+    parent_post = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='builds'
+    )
+    tags = models.ManyToManyField('CreativeTag', blank=True, related_name='posts')
+    collection = models.ForeignKey(
+        'CreativeCollection', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='posts'
+    )
+    embedding_json = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['organization', 'status', '-created_at']),
+            models.Index(fields=['organization', 'post_type']),
+        ]
+
+    def __str__(self):
+        return self.title
+
+
+class CreativeComment(models.Model):
+    """Comment/feedback on a creative post."""
+    post = models.ForeignKey(
+        'CreativePost', on_delete=models.CASCADE, related_name='comments'
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='creative_comments'
+    )
+    content = models.TextField()
+    parent = models.ForeignKey(
+        'self', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='replies'
+    )
+    mentioned_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, blank=True,
+        related_name='creative_comment_mentions'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Comment by {self.author} on {self.post.title}"
+
+
+class CreativeReaction(models.Model):
+    """Emoji reaction on a creative post."""
+    REACTION_CHOICES = [
+        ('heart', '❤️'),
+        ('fire', '🔥'),
+        ('pray', '🙏'),
+        ('clap', '👏'),
+        ('lightbulb', '💡'),
+        ('star', '⭐'),
+    ]
+
+    post = models.ForeignKey(
+        'CreativePost', on_delete=models.CASCADE, related_name='reactions'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='creative_reactions'
+    )
+    reaction_type = models.CharField(max_length=10, choices=REACTION_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['post', 'user', 'reaction_type']]
+
+    def __str__(self):
+        return f"{self.user} reacted {self.reaction_type} on {self.post.title}"

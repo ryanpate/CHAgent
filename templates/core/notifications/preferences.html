@@ -192,6 +192,53 @@
                 </div>
             </div>
 
+            <!-- Creative Studio -->
+            <div>
+                <h3 class="font-medium mb-3">Creative Studio</h3>
+                <div class="space-y-4 ml-1">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h3 class="font-medium">New Posts</h3>
+                            <p class="text-sm text-gray-400">When someone shares new creative work</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="studio_new_posts" class="sr-only peer" {% if prefs.studio_new_posts %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-ch-gold"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h3 class="font-medium">Comments on My Posts</h3>
+                            <p class="text-sm text-gray-400">When someone comments on your creative work</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="studio_comments" class="sr-only peer" {% if prefs.studio_comments %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-ch-gold"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h3 class="font-medium">Builds on My Posts</h3>
+                            <p class="text-sm text-gray-400">When someone builds on your creative work</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="studio_builds" class="sr-only peer" {% if prefs.studio_builds %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-ch-gold"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h3 class="font-medium">Spotlights</h3>
+                            <p class="text-sm text-gray-400">When your post is spotlighted by a leader</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="studio_spotlights" class="sr-only peer" {% if prefs.studio_spotlights %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-ch-gold"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
             <!-- Quiet Hours -->
             <div>
                 <div class="flex items-start justify-between">

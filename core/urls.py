@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, admin_views
+from . import views, admin_views, studio_views
 
 urlpatterns = [
     # Native app entry point
@@ -200,4 +200,10 @@ urlpatterns = [
     path('platform-admin/beta-requests/<int:pk>/approve/', admin_views.admin_beta_approve, name='admin_beta_approve'),
     path('platform-admin/beta-requests/<int:pk>/reject/', admin_views.admin_beta_reject, name='admin_beta_reject'),
     path('platform-admin/audit-log/', admin_views.admin_audit_log, name='admin_audit_log'),
+    # Creative Studio
+    path('studio/', studio_views.studio_feed, name='studio_feed'),
+    path('studio/my-work/', studio_views.studio_my_work, name='studio_my_work'),
+    path('studio/post/create/', studio_views.studio_post_create, name='studio_post_create'),
+    path('studio/post/<int:pk>/', studio_views.studio_post_detail, name='studio_post_detail'),
+    path('studio/post/<int:pk>/build-on/', studio_views.studio_post_build_on, name='studio_post_build_on'),
 ]
