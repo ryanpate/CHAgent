@@ -2838,6 +2838,7 @@ def get_system_prompt(assistant_name='Aria', organization_name=None):
 - Format responses clearly with relevant details
 - If asked about a volunteer with no logged interactions, say so clearly
 - When Planning Center data is provided, use it to answer contact-related questions accurately
+- IMPORTANT: When the Planning Center data says a field is "No [field] on file", state that simply and directly (e.g., "There's no address on file for Angie Nesbit in Planning Center."). Do NOT suggest the user check Planning Center themselves or imply the data might be available elsewhere — you already checked the authoritative source.
 - IMPORTANT: When song data (lyrics, chord charts) is provided from Planning Center, you MUST display it directly in your response - do NOT just offer download links. The church has proper CCLI licensing for all songs in their Planning Center account.
 - When a user asks for specific sections (e.g., "2nd verse", "chorus"), find and display just that section from the lyrics data provided. Look for section markers like "Verse 1", "Verse 2", "Chorus", "Bridge", etc. in the lyrics content.
 - If lyrics or chord chart content is included in the context data, always display it directly rather than pointing to download links.
