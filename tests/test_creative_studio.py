@@ -261,3 +261,173 @@ class TestStudioNotifications:
         published_post.save()
         notify_studio_spotlight(published_post)
         mock_send.assert_called_once()
+
+
+from django.test import Client
+
+
+class TestStudioFeedView:
+    @pytest.fixture
+    def client_alpha(self, db, user_alpha_owner, org_alpha):
+        client = Client()
+        client.force_login(user_alpha_owner)
+        session = client.session
+        session['organization_id'] = org_alpha.id
+        session.save()
+        return client
+
+    def test_feed_renders(self, client_alpha):
+        response = client_alpha.get('/studio/')
+        assert response.status_code == 200
+        assert 'Creative Studio' in response.content.decode()
+
+    def test_feed_shows_published_only(self, client_alpha, org_alpha, user_alpha_owner):
+        CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='idea', title='Published Idea', status='published',
+        )
+        CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='idea', title='Draft Idea', status='draft',
+        )
+        response = client_alpha.get('/studio/')
+        content = response.content.decode()
+        assert 'Published Idea' in content
+        assert 'Draft Idea' not in content
+
+    def test_feed_filter_by_type(self, client_alpha, org_alpha, user_alpha_owner):
+        CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='lyrics', title='A Song', status='published',
+        )
+        CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='artwork', title='A Painting', status='published',
+        )
+        response = client_alpha.get('/studio/?type=lyrics')
+        content = response.content.decode()
+        assert 'A Song' in content
+        assert 'A Painting' not in content
+
+    def test_feed_tenant_isolation(self, client_alpha, org_alpha, org_beta, user_alpha_owner, user_beta_owner):
+        CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='idea', title='Alpha Post', status='published',
+        )
+        CreativePost.objects.create(
+            author=user_beta_owner, organization=org_beta,
+            post_type='idea', title='Beta Post', status='published',
+        )
+        response = client_alpha.get('/studio/')
+        content = response.content.decode()
+        assert 'Alpha Post' in content
+        assert 'Beta Post' not in content
+
+    def test_feed_shows_own_drafts(self, client_alpha, org_alpha, user_alpha_owner):
+        CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='idea', title='My Draft', status='draft',
+        )
+        response = client_alpha.get('/studio/my-work/')
+        content = response.content.decode()
+        assert 'My Draft' in content
+
+
+class TestStudioPostCreateView:
+    @pytest.fixture
+    def client_alpha(self, db, user_alpha_owner, org_alpha):
+        client = Client()
+        client.force_login(user_alpha_owner)
+        session = client.session
+        session['organization_id'] = org_alpha.id
+        session.save()
+        return client
+
+    def test_create_form_renders(self, client_alpha):
+        response = client_alpha.get('/studio/post/create/')
+        assert response.status_code == 200
+
+    def test_create_post_published(self, client_alpha, org_alpha):
+        response = client_alpha.post('/studio/post/create/', {
+            'title': 'New Song',
+            'post_type': 'lyrics',
+            'content': 'Verse 1 lyrics here...',
+            'status': 'published',
+        })
+        assert response.status_code == 302
+        post = CreativePost.objects.get(title='New Song')
+        assert post.status == 'published'
+        assert post.organization == org_alpha
+
+    def test_create_post_draft(self, client_alpha, org_alpha):
+        response = client_alpha.post('/studio/post/create/', {
+            'title': 'WIP Song',
+            'post_type': 'lyrics',
+            'content': 'Work in progress...',
+            'status': 'draft',
+        })
+        assert response.status_code == 302
+        assert CreativePost.objects.filter(title='WIP Song', status='draft').exists()
+
+    def test_create_build_on(self, client_alpha, org_alpha, user_alpha_owner):
+        parent = CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='lyrics', title='Original', status='published',
+        )
+        response = client_alpha.get(f'/studio/post/create/?parent={parent.pk}')
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'Re: Original' in content
+
+
+class TestStudioPostDetailView:
+    @pytest.fixture
+    def client_alpha(self, db, user_alpha_owner, org_alpha):
+        client = Client()
+        client.force_login(user_alpha_owner)
+        session = client.session
+        session['organization_id'] = org_alpha.id
+        session.save()
+        return client
+
+    @pytest.fixture
+    def published_post(self, db, org_alpha, user_alpha_owner):
+        return CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='lyrics', title='Detail Test', status='published',
+            content='Some lyrics here...',
+        )
+
+    def test_detail_renders(self, client_alpha, published_post):
+        response = client_alpha.get(f'/studio/post/{published_post.pk}/')
+        assert response.status_code == 200
+        assert 'Detail Test' in response.content.decode()
+
+    def test_detail_shows_comments(self, client_alpha, published_post, user_alpha_member):
+        CreativeComment.objects.create(
+            post=published_post, author=user_alpha_member, content='Love this!',
+        )
+        response = client_alpha.get(f'/studio/post/{published_post.pk}/')
+        assert 'Love this!' in response.content.decode()
+
+    def test_detail_shows_build_chain(self, client_alpha, published_post, user_alpha_member, org_alpha):
+        child = CreativePost.objects.create(
+            author=user_alpha_member, organization=org_alpha,
+            post_type='audio', title='Re: Detail Test',
+            status='published', parent_post=published_post,
+        )
+        response = client_alpha.get(f'/studio/post/{published_post.pk}/')
+        assert 'Re: Detail Test' in response.content.decode()
+
+    def test_draft_not_visible_to_others(self, db, org_alpha, user_alpha_owner, user_alpha_member):
+        draft = CreativePost.objects.create(
+            author=user_alpha_owner, organization=org_alpha,
+            post_type='idea', title='Secret Draft', status='draft',
+        )
+        client = Client()
+        client.force_login(user_alpha_member)
+        session = client.session
+        session['organization_id'] = org_alpha.id
+        session.save()
+        response = client.get(f'/studio/post/{draft.pk}/')
+        assert response.status_code == 404

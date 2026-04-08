@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if parent_post %}Build On: {{ parent_post.title }}{% else %}New Post{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-2 text-sm text-gray-400 mb-6">
+        <a href="{% url 'studio_feed' %}" class="hover:text-white transition">Creative Studio</a>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="text-white">{% if parent_post %}Build On{% else %}New Post{% endif %}</span>
+    </div>
+
+    {% if parent_post %}
+    <!-- Parent post reference -->
+    <div class="bg-ch-dark rounded-lg border border-gray-800 p-4 mb-6">
+        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Building on</p>
+        <a href="{% url 'studio_post_detail' parent_post.pk %}" class="text-ch-gold hover:underline font-medium">{{ parent_post.title }}</a>
+        <p class="text-sm text-gray-400 mt-1">by {{ parent_post.author.display_name|default:parent_post.author.username }}</p>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="bg-red-900/30 border border-red-700 rounded-lg p-4 mb-6">
+        <p class="text-red-400 text-sm">{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="space-y-6">
+        {% csrf_token %}
+
+        {% if parent_post %}
+        <input type="hidden" name="parent_post" value="{{ parent_post.pk }}">
+        {% endif %}
+
+        <!-- Title -->
+        <div>
+            <label for="title" class="block text-sm font-medium text-gray-300 mb-2">Title</label>
+            <input type="text" id="title" name="title" value="{{ initial_title }}" required
+                   placeholder="Give your work a title..."
+                   class="w-full bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-ch-gold transition">
+        </div>
+
+        <!-- Type -->
+        <div>
+            <label for="post_type" class="block text-sm font-medium text-gray-300 mb-2">Type</label>
+            <select id="post_type" name="post_type"
+                    class="w-full bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-ch-gold transition">
+                {% for value, label in post_type_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Content -->
+        <div>
+            <label for="content" class="block text-sm font-medium text-gray-300 mb-2">Content</label>
+            <textarea id="content" name="content" rows="12"
+                      placeholder="Share your lyrics, ideas, notes..."
+                      class="w-full bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-ch-gold transition resize-y font-mono text-sm"></textarea>
+        </div>
+
+        <!-- Media Upload -->
+        <div>
+            <label for="media_file" class="block text-sm font-medium text-gray-300 mb-2">Attach File <span class="text-gray-500">(optional)</span></label>
+            <input type="file" id="media_file" name="media_file"
+                   accept=".png,.jpg,.jpeg,.gif,.webp,.mp3,.m4a,.wav,.pdf,.doc,.docx,.txt"
+                   class="w-full bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 text-gray-400 focus:outline-none focus:border-ch-gold transition file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-ch-gray file:text-gray-300 file:text-sm file:cursor-pointer">
+            <p class="text-xs text-gray-500 mt-1">Images, audio, or documents</p>
+        </div>
+
+        <!-- Tags -->
+        <div>
+            <label for="tags" class="block text-sm font-medium text-gray-300 mb-2">Tags <span class="text-gray-500">(comma-separated)</span></label>
+            <input type="text" id="tags" name="tags"
+                   placeholder="worship, easter, new song..."
+                   class="w-full bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-ch-gold transition">
+        </div>
+
+        <!-- Collection -->
+        <div>
+            <label for="collection" class="block text-sm font-medium text-gray-300 mb-2">Collection <span class="text-gray-500">(optional)</span></label>
+            <select id="collection" name="collection"
+                    class="w-full bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-ch-gold transition">
+                <option value="">No collection</option>
+                {% for col in collections %}
+                <option value="{{ col.pk }}" {% if initial_collection == col.pk %}selected{% endif %}>{{ col.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Collaborative toggle -->
+        <div class="flex items-center gap-3">
+            <input type="checkbox" id="is_collaborative" name="is_collaborative"
+                   class="w-4 h-4 bg-ch-dark border-gray-700 rounded text-ch-gold focus:ring-ch-gold">
+            <label for="is_collaborative" class="text-sm text-gray-300">
+                Open for collaboration
+                <span class="text-gray-500 block text-xs">Others can build on this work</span>
+            </label>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-3 pt-4 border-t border-gray-800">
+            <button type="submit" name="status" value="published"
+                    class="px-6 py-2.5 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                Publish
+            </button>
+            <button type="submit" name="status" value="draft"
+                    class="px-6 py-2.5 bg-ch-gray text-gray-300 rounded-lg font-medium hover:bg-gray-600 transition">
+                Save as Draft
+            </button>
+            <a href="{% url 'studio_feed' %}" class="px-6 py-2.5 text-gray-400 hover:text-white transition">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}
