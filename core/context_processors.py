@@ -3,7 +3,11 @@ Context processors for multi-tenant organization context.
 
 These make organization data available in all templates automatically.
 """
+from datetime import timedelta
+
 from django.conf import settings
+from django.db import models
+from django.utils import timezone
 
 
 def organization_context(request):
@@ -45,6 +49,11 @@ def organization_context(request):
         'show_trial_warning': False,
         'is_past_due': False,
         'subscription_status': None,
+        # Badge counts
+        'pending_followup_count': 0,
+        'pending_task_count': 0,
+        'unread_message_count': 0,
+        'interactions_this_week': 0,
     }
 
     # Only process for authenticated users with organization context
@@ -72,6 +81,50 @@ def organization_context(request):
             ).count()
         except Exception:
             context['pending_song_count'] = 0
+
+        # Badge counts for dashboard and sidebar
+        user = request.user
+
+        try:
+            from core.models import FollowUp
+            context['pending_followup_count'] = FollowUp.objects.filter(
+                organization=organization,
+                assigned_to=user,
+                status__in=['pending', 'in_progress'],
+            ).count()
+        except Exception:
+            pass
+
+        try:
+            from core.models import Task
+            context['pending_task_count'] = Task.objects.filter(
+                assignees=user,
+                status__in=['todo', 'in_progress'],
+            ).filter(
+                models.Q(project__organization=organization) |
+                models.Q(organization=organization, project__isnull=True)
+            ).count()
+        except Exception:
+            pass
+
+        try:
+            from core.models import DirectMessage
+            context['unread_message_count'] = DirectMessage.objects.filter(
+                recipient=user,
+                is_read=False,
+            ).count()
+        except Exception:
+            pass
+
+        try:
+            from core.models import Interaction
+            one_week_ago = timezone.now() - timedelta(days=7)
+            context['interactions_this_week'] = Interaction.objects.filter(
+                organization=organization,
+                created_at__gte=one_week_ago,
+            ).count()
+        except Exception:
+            pass
 
     if membership:
         context['membership'] = membership
