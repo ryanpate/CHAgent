@@ -435,7 +435,7 @@
             {% with active_name=request.resolver_match.url_name %}
             <div x-data="{ open: false }">
                 <button @click="open = !open" class="w-full flex items-center justify-between text-xs text-gray-400 uppercase tracking-wider font-semibold px-3 py-2.5 hover:text-white transition">
-                    <span>Core</span>
+                    <span class="flex items-center gap-2">Core{% if pending_followup_count %}<span class="w-1.5 h-1.5 bg-ch-gold rounded-full"></span>{% endif %}</span>
                     <svg class="w-3 h-3 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
                 <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="space-y-1">
@@ -479,7 +479,7 @@
             </div>
             <div x-data="{ open: false }">
                 <button @click="open = !open" class="w-full flex items-center justify-between text-xs text-gray-400 uppercase tracking-wider font-semibold px-3 py-2.5 hover:text-white transition">
-                    <span>Team</span>
+                    <span class="flex items-center gap-2">Team{% if unread_message_count or pending_task_count or pending_song_count %}<span class="w-1.5 h-1.5 bg-ch-gold rounded-full"></span>{% endif %}</span>
                     <svg class="w-3 h-3 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
                 <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="space-y-1">
@@ -632,7 +632,7 @@
             {% with active_name=request.resolver_match.url_name %}
             <div x-data="{ open: false }">
                 <button @click="open = !open" class="w-full flex items-center justify-between text-xs text-gray-400 uppercase tracking-wider font-semibold px-3 py-2.5 hover:text-white transition">
-                    <span>Core</span>
+                    <span class="flex items-center gap-2">Core{% if pending_followup_count %}<span class="w-1.5 h-1.5 bg-ch-gold rounded-full"></span>{% endif %}</span>
                     <svg class="w-3 h-3 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
                 <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="space-y-1">
@@ -676,7 +676,7 @@
             </div>
             <div x-data="{ open: false }">
                 <button @click="open = !open" class="w-full flex items-center justify-between text-xs text-gray-400 uppercase tracking-wider font-semibold px-3 py-2.5 hover:text-white transition">
-                    <span>Team</span>
+                    <span class="flex items-center gap-2">Team{% if unread_message_count or pending_task_count or pending_song_count %}<span class="w-1.5 h-1.5 bg-ch-gold rounded-full"></span>{% endif %}</span>
                     <svg class="w-3 h-3 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
                 <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="space-y-1">
