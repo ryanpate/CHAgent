@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit: {{ post.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-2 text-sm text-gray-400 mb-6">
+        <a href="{% url 'studio_feed' %}" class="hover:text-white transition">Creative Studio</a>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <a href="{% url 'studio_post_detail' post.pk %}" class="hover:text-white transition">{{ post.title|truncatechars:30 }}</a>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="text-white">Edit</span>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Title -->
+        <div>
+            <label for="title" class="block text-sm font-medium text-gray-300 mb-2">Title</label>
+            <input type="text" id="title" name="title" value="{{ post.title }}" required
+                   placeholder="Give your work a title..."
+                   class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-ch-gold focus:outline-none">
+        </div>
+
+        <!-- Type -->
+        <div>
+            <label for="post_type" class="block text-sm font-medium text-gray-300 mb-2">Type</label>
+            <select id="post_type" name="post_type"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-ch-gold focus:outline-none">
+                {% for value, label in post_type_choices %}
+                <option value="{{ value }}" {% if post.post_type == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Content -->
+        <div>
+            <label for="content" class="block text-sm font-medium text-gray-300 mb-2">Content</label>
+            <textarea id="content" name="content" rows="12"
+                      placeholder="Share your lyrics, ideas, notes..."
+                      class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-ch-gold focus:outline-none resize-y font-mono text-sm">{{ post.content }}</textarea>
+        </div>
+
+        <!-- Media Upload -->
+        <div>
+            <label for="media_file" class="block text-sm font-medium text-gray-300 mb-2">Attach File <span class="text-gray-500">(optional)</span></label>
+            {% if post.media_file %}
+            <p class="text-sm text-gray-400 mb-2">Current file: <span class="text-gray-300">{{ post.media_file.name }}</span></p>
+            {% endif %}
+            <input type="file" id="media_file" name="media_file"
+                   accept=".png,.jpg,.jpeg,.gif,.webp,.mp3,.m4a,.wav,.pdf,.doc,.docx,.txt"
+                   class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-400 focus:border-ch-gold focus:outline-none file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-ch-gray file:text-gray-300 file:text-sm file:cursor-pointer">
+            <p class="text-xs text-gray-500 mt-1">Upload a new file to replace the existing one</p>
+        </div>
+
+        <!-- Tags -->
+        <div>
+            <label for="tags" class="block text-sm font-medium text-gray-300 mb-2">Tags <span class="text-gray-500">(comma-separated)</span></label>
+            <input type="text" id="tags" name="tags"
+                   value="{% for tag in post.tags.all %}{{ tag.name }}{% if not forloop.last %}, {% endif %}{% endfor %}"
+                   placeholder="worship, easter, new song..."
+                   class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-ch-gold focus:outline-none">
+        </div>
+
+        <!-- Collection -->
+        <div>
+            <label for="collection" class="block text-sm font-medium text-gray-300 mb-2">Collection <span class="text-gray-500">(optional)</span></label>
+            <select id="collection" name="collection"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-ch-gold focus:outline-none">
+                <option value="">No collection</option>
+                {% for col in collections %}
+                <option value="{{ col.pk }}" {% if post.collection_id == col.pk %}selected{% endif %}>{{ col.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Collaborative toggle -->
+        <div class="flex items-center gap-3">
+            <input type="checkbox" id="is_collaborative" name="is_collaborative"
+                   {% if post.is_collaborative %}checked{% endif %}
+                   class="w-4 h-4 bg-gray-800 border-gray-700 rounded text-ch-gold focus:ring-ch-gold">
+            <label for="is_collaborative" class="text-sm text-gray-300">
+                Open for collaboration
+                <span class="text-gray-500 block text-xs">Others can build on this work</span>
+            </label>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-3 pt-4 border-t border-gray-800">
+            <button type="submit" name="status" value="published"
+                    class="bg-ch-gold text-ch-darker px-6 py-2 rounded-lg font-semibold hover:bg-yellow-500 transition">
+                {% if post.status == 'published' %}Update{% else %}Publish{% endif %}
+            </button>
+            <button type="submit" name="status" value="draft"
+                    class="px-6 py-2 bg-ch-gray text-gray-300 rounded-lg font-medium hover:bg-gray-600 transition">
+                Save as Draft
+            </button>
+            <a href="{% url 'studio_post_detail' post.pk %}" class="px-6 py-2 text-gray-400 hover:text-white transition">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}Collections{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+            <div class="flex items-center gap-2 text-sm text-gray-400 mb-2">
+                <a href="{% url 'studio_feed' %}" class="hover:text-white transition">Creative Studio</a>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                <span class="text-white">Collections</span>
+            </div>
+            <h2 class="font-display text-2xl text-white">Collections</h2>
+        </div>
+        {% if can_manage %}
+        <a href="{% url 'studio_collection_create' %}" class="bg-ch-gold text-ch-darker px-6 py-2 rounded-lg font-semibold hover:bg-yellow-500 transition text-sm">
+            + New Collection
+        </a>
+        {% endif %}
+    </div>
+
+    {% if collections %}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {% for collection in collections %}
+        <a href="{% url 'studio_collection_detail' collection.pk %}" class="bg-ch-dark rounded-lg border border-gray-800 p-5 hover:bg-ch-gray transition block">
+            <div class="flex items-start justify-between mb-2">
+                <div class="w-10 h-10 rounded-lg bg-ch-gold/10 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                </div>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-1">{{ collection.name }}</h3>
+            {% if collection.description %}
+            <p class="text-sm text-gray-400 line-clamp-2 mb-3">{{ collection.description }}</p>
+            {% endif %}
+            <div class="text-xs text-gray-500">
+                {{ collection.post_count }} post{{ collection.post_count|pluralize }}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-ch-dark rounded-lg border border-gray-800 p-12 text-center">
+        <svg class="w-12 h-12 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+        </svg>
+        <h3 class="text-lg font-semibold text-white mb-2">No collections yet</h3>
+        <p class="text-gray-400 mb-4">Collections help organize creative works by theme or project.</p>
+        {% if can_manage %}
+        <a href="{% url 'studio_collection_create' %}" class="inline-block bg-ch-gold text-ch-darker px-6 py-2 rounded-lg font-semibold hover:bg-yellow-500 transition">
+            Create a Collection
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
