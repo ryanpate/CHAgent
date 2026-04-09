@@ -5436,6 +5436,14 @@ def beta_signup(request):
         beta_req.status = 'signed_up'
         beta_req.save()
 
+        # Seed user guide into Knowledge Base
+        try:
+            from .guide_seeder import seed_guide_document
+            seed_guide_document(org)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to seed guide for {org.name}: {e}")
+
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
         request.session['onboarding_org_id'] = org.id
 
@@ -6791,3 +6799,23 @@ def document_category_delete(request, pk):
         messages.success(request, f'Category "{name}" deleted. Documents moved to uncategorized.')
         return redirect('document_category_list')
     return render(request, 'core/documents/category_confirm_delete.html', {'category': category})
+
+
+@login_required
+def user_guide(request):
+    """Render the comprehensive user guide page."""
+    from .guide_content import GUIDE_SECTIONS, GUIDE_GROUPS
+
+    membership = getattr(request, 'membership', None)
+    is_admin = membership and membership.role in ('owner', 'admin') if membership else False
+
+    sections = GUIDE_SECTIONS if is_admin else [s for s in GUIDE_SECTIONS if not s['is_admin']]
+    groups = GUIDE_GROUPS if is_admin else [g for g in GUIDE_GROUPS if g['id'] != 'admin']
+
+    context = {
+        'sections': sections,
+        'groups': groups,
+        'is_admin': is_admin,
+        'page_title': 'User Guide',
+    }
+    return render(request, 'core/guide.html', context)
