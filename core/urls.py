@@ -206,4 +206,16 @@ urlpatterns = [
     path('studio/post/create/', studio_views.studio_post_create, name='studio_post_create'),
     path('studio/post/<int:pk>/', studio_views.studio_post_detail, name='studio_post_detail'),
     path('studio/post/<int:pk>/build-on/', studio_views.studio_post_build_on, name='studio_post_build_on'),
+    path('studio/post/<int:pk>/edit/', studio_views.studio_post_edit, name='studio_post_edit'),
+    path('studio/post/<int:pk>/delete/', studio_views.studio_post_delete, name='studio_post_delete'),
+    path('studio/post/<int:pk>/comment/', studio_views.studio_post_comment, name='studio_post_comment'),
+    path('studio/post/<int:pk>/react/', studio_views.studio_post_react, name='studio_post_react'),
+    path('studio/post/<int:pk>/spotlight/', studio_views.studio_post_spotlight, name='studio_post_spotlight'),
+    path('studio/collections/', studio_views.studio_collection_list, name='studio_collection_list'),
+    path('studio/collections/create/', studio_views.studio_collection_create, name='studio_collection_create'),
+    path('studio/collections/<int:pk>/', studio_views.studio_collection_detail, name='studio_collection_detail'),
+    path('studio/collections/<int:pk>/edit/', studio_views.studio_collection_edit, name='studio_collection_edit'),
+    path('studio/collections/<int:pk>/delete/', studio_views.studio_collection_delete, name='studio_collection_delete'),
+    # User Guide
+    path('guide/', views.user_guide, name='user_guide'),
 ]
