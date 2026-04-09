@@ -216,38 +216,46 @@ def resource_pco_guide(request):
 
 @login_required
 def dashboard(request):
-    """Dashboard view with overview statistics and AI chat interface."""
+    """Command center dashboard with priority cards and activity feed."""
     org = get_org(request)
 
-    # Get or create session ID from cookie for chat
-    session_id = request.COOKIES.get('chat_session_id')
-    if not session_id:
-        session_id = str(uuid.uuid4())
-
-    # Get chat messages for this session (scoped to user and organization)
-    chat_messages = ChatMessage.objects.filter(
-        user=request.user,
-        session_id=session_id
-    )
-    if org:
-        chat_messages = chat_messages.filter(organization=org)
-    chat_messages = chat_messages.order_by('created_at')
-
-    # Build base querysets scoped to organization
     volunteer_qs = Volunteer.objects.all()
     interaction_qs = Interaction.objects.all()
     if org:
         volunteer_qs = volunteer_qs.filter(organization=org)
         interaction_qs = interaction_qs.filter(organization=org)
 
-    # Check if onboarding tour should be shown
     show_onboarding = False
     try:
         if not request.user.has_completed_onboarding:
             show_onboarding = True
     except (AttributeError, Exception):
-        # Field doesn't exist or other error - don't show tour
         pass
+
+    # Follow-up summary for dashboard card
+    followup_summary = 'All caught up'
+    if org:
+        from django.utils import timezone
+        today = timezone.now().date()
+        due_today = FollowUp.objects.filter(
+            organization=org,
+            assigned_to=request.user,
+            status__in=['pending', 'in_progress'],
+            follow_up_date=today,
+        ).count()
+        overdue = FollowUp.objects.filter(
+            organization=org,
+            assigned_to=request.user,
+            status__in=['pending', 'in_progress'],
+            follow_up_date__lt=today,
+        ).count()
+        parts = []
+        if due_today:
+            parts.append(f'{due_today} due today')
+        if overdue:
+            parts.append(f'{overdue} overdue')
+        if parts:
+            followup_summary = ', '.join(parts)
 
     context = {
         'total_volunteers': volunteer_qs.count(),
@@ -256,18 +264,11 @@ def dashboard(request):
         'top_volunteers': volunteer_qs.annotate(
             interaction_count=Count('interactions')
         ).order_by('-interaction_count')[:5],
-        'chat_messages': chat_messages,
-        'session_id': session_id,
         'show_onboarding': show_onboarding,
+        'followup_summary': followup_summary,
     }
 
-    response = render(request, 'core/dashboard.html', context)
-
-    # Set session ID cookie if new
-    if not request.COOKIES.get('chat_session_id'):
-        response.set_cookie('chat_session_id', session_id, max_age=86400 * 7)  # 7 days
-
-    return response
+    return render(request, 'core/dashboard.html', context)
 
 
 @login_required

@@ -119,6 +119,68 @@ class TestBadgeCounts:
 
 
 @pytest.mark.django_db
+class TestDashboardView:
+    """Test the command center dashboard view at /dashboard/."""
+
+    def test_dashboard_has_no_chat_messages(self, client_alpha):
+        """Dashboard context should NOT contain chat_messages anymore."""
+        response = client_alpha.get('/dashboard/')
+        assert response.status_code == 200
+        assert 'chat_messages' not in response.context
+
+    def test_dashboard_has_badge_counts(self, client_alpha):
+        """Dashboard context should include all 4 badge count keys from context processor."""
+        response = client_alpha.get('/dashboard/')
+        assert response.status_code == 200
+        assert 'pending_followup_count' in response.context
+        assert 'pending_task_count' in response.context
+        assert 'unread_message_count' in response.context
+        assert 'pending_song_count' in response.context
+
+    def test_dashboard_has_existing_context(self, client_alpha):
+        """Dashboard context should still include core stats and lists."""
+        response = client_alpha.get('/dashboard/')
+        assert response.status_code == 200
+        assert 'total_volunteers' in response.context
+        assert 'total_interactions' in response.context
+        assert 'recent_interactions' in response.context
+        assert 'top_volunteers' in response.context
+
+    def test_dashboard_renders_ask_aria_section(self, client_alpha):
+        """Dashboard should render the Ask Aria bar with form pointing to /chat/."""
+        response = client_alpha.get('/dashboard/')
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'Ask Aria' in content
+        assert 'action="/chat/"' in content
+
+    def test_dashboard_has_followup_summary(self, client_alpha):
+        """Dashboard context should include followup_summary string."""
+        response = client_alpha.get('/dashboard/')
+        assert response.status_code == 200
+        assert 'followup_summary' in response.context
+        # With no followups, should be 'All caught up'
+        assert response.context['followup_summary'] == 'All caught up'
+
+    def test_dashboard_followup_summary_with_due_today(
+        self, client_alpha, user_alpha_owner, org_alpha, volunteer_alpha
+    ):
+        """followup_summary should report items due today."""
+        from django.utils import timezone
+        FollowUp.objects.create(
+            organization=org_alpha,
+            created_by=user_alpha_owner,
+            assigned_to=user_alpha_owner,
+            volunteer=volunteer_alpha,
+            title='Due today',
+            status='pending',
+            follow_up_date=timezone.now().date(),
+        )
+        response = client_alpha.get('/dashboard/')
+        assert '1 due today' in response.context['followup_summary']
+
+
+@pytest.mark.django_db
 class TestChatView:
     """Test the full-page chat view at /chat/."""
 
