@@ -203,3 +203,46 @@ class TestChatView:
         assert response.context['session_id']
         # Session ID should be a non-empty string
         assert len(response.context['session_id']) > 0
+
+
+@pytest.mark.django_db
+class TestSidebar:
+    """Test sidebar navigation structure and badges."""
+
+    def test_sidebar_has_chat_link(self, client_alpha):
+        """Sidebar should contain a Chat with Aria link pointing to /chat/."""
+        response = client_alpha.get('/dashboard/')
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert '/chat/' in content
+        assert 'Chat with Aria' in content
+
+    def test_sidebar_has_section_labels(self, client_alpha):
+        """Sidebar should have grouped section labels."""
+        response = client_alpha.get('/dashboard/')
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'Core' in content
+        assert 'Team' in content
+        assert 'Insights' in content
+
+    def test_sidebar_has_followup_badge(
+        self, client_alpha, user_alpha_owner, org_alpha, volunteer_alpha
+    ):
+        """Sidebar should show a badge count for pending follow-ups."""
+        FollowUp.objects.create(
+            organization=org_alpha,
+            created_by=user_alpha_owner,
+            assigned_to=user_alpha_owner,
+            volunteer=volunteer_alpha,
+            title='Badge test followup',
+            status='pending',
+            follow_up_date=date.today() + timedelta(days=3),
+        )
+        response = client_alpha.get('/dashboard/')
+        assert response.status_code == 200
+        content = response.content.decode()
+        # The badge should show count "1" in a rounded-full element
+        assert 'pending_followup_count' in response.context or response.context.get('pending_followup_count', 0) >= 1
+        # Check that the badge HTML is rendered with the count
+        assert '>1</span>' in content
