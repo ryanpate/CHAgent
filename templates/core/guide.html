@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}User Guide{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-6">
+  <div class="flex gap-8">
+    <!-- Table of Contents Sidebar -->
+    <nav class="hidden lg:block w-64 flex-shrink-0">
+      <div class="sticky top-6">
+        <h2 class="text-lg font-bold text-white mb-4">User Guide</h2>
+        {% for group in groups %}
+        <div class="mb-4">
+          <h3 class="text-ch-gold text-xs uppercase font-semibold mb-2">{{ group.title }}</h3>
+          <div class="space-y-1">
+            {% for section in sections %}
+            {% if section.group == group.id %}
+            <a href="#{{ section.id }}" class="block text-sm text-gray-400 hover:text-white transition py-0.5">
+              {% if section.is_admin %}<span class="text-ch-gold text-xs">[Admin]</span> {% endif %}{{ section.title }}
+            </a>
+            {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </nav>
+
+    <!-- Mobile TOC -->
+    <div class="lg:hidden mb-6 w-full" x-data="{ tocOpen: false }">
+      <button @click="tocOpen = !tocOpen" class="w-full bg-ch-dark rounded-lg px-4 py-3 flex items-center justify-between text-white">
+        <span class="font-semibold">Table of Contents</span>
+        <svg class="w-5 h-5 transform transition" :class="{ 'rotate-180': tocOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+      </button>
+      <div x-show="tocOpen" x-transition class="bg-ch-dark rounded-b-lg px-4 pb-4">
+        {% for group in groups %}
+        <div class="mb-3">
+          <h3 class="text-ch-gold text-xs uppercase font-semibold mb-1">{{ group.title }}</h3>
+          {% for section in sections %}
+          {% if section.group == group.id %}
+          <a href="#{{ section.id }}" @click="tocOpen = false" class="block text-sm text-gray-400 hover:text-white py-0.5">{{ section.title }}</a>
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 min-w-0 max-w-3xl">
+      <h1 class="text-3xl font-bold text-white mb-2 lg:hidden">User Guide</h1>
+      {% for section in sections %}
+      <section id="{{ section.id }}" class="mb-10 scroll-mt-6 {% if section.is_admin %}border-l-4 border-ch-gold pl-6{% endif %}">
+        <div class="flex items-center gap-2 mb-3">
+          <h2 class="text-xl font-bold text-white">{{ section.title }}</h2>
+          {% if section.is_admin %}
+          <span class="text-xs bg-ch-gold/20 text-ch-gold px-2 py-0.5 rounded font-semibold">Admin</span>
+          {% endif %}
+        </div>
+        <div class="prose prose-invert prose-sm max-w-none text-gray-300 [&_h4]:text-white [&_h4]:font-semibold [&_h4]:mt-4 [&_h4]:mb-2 [&_ul]:space-y-1 [&_ol]:space-y-1 [&_li]:text-gray-300 [&_strong]:text-white [&_p]:mb-3 [&_em]:text-gray-400">
+          {{ section.content|safe }}
+        </div>
+      </section>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
