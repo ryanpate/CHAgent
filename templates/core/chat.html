@@ -439,5 +439,24 @@ if (chatForm) {
 } else {
     console.log('Form NOT found');
 }
+
+// Auto-submit if ?q= parameter is present (from dashboard redirect)
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    const initialMessage = params.get('q');
+    if (initialMessage) {
+        const input = document.querySelector('input[name="message"]');
+        if (input) {
+            input.value = initialMessage;
+            // Clean URL without reloading
+            window.history.replaceState({}, '', '/chat/');
+            // Trigger HTMX submit after a short delay to ensure form is ready
+            setTimeout(() => {
+                const form = document.getElementById('chat-form');
+                if (form) htmx.trigger(form, 'submit');
+            }, 100);
+        }
+    }
+})();
 </script>
 {% endblock %}

@@ -272,8 +272,39 @@ def dashboard(request):
 
 @login_required
 def chat(request):
-    """Redirect to dashboard where chat is now integrated."""
-    return redirect('dashboard')
+    """Full-page chat interface with Aria."""
+    org = get_org(request)
+
+    # Get or create session ID from cookie for chat
+    session_id = request.COOKIES.get('chat_session_id')
+    if not session_id:
+        session_id = str(uuid.uuid4())
+
+    # Get chat messages for this session (scoped to user and organization)
+    chat_messages = ChatMessage.objects.filter(
+        user=request.user,
+        session_id=session_id
+    )
+    if org:
+        chat_messages = chat_messages.filter(organization=org)
+    chat_messages = chat_messages.order_by('created_at')
+
+    # Support ?q= param for pre-filled message from dashboard
+    initial_message = request.GET.get('q', '')
+
+    context = {
+        'chat_messages': chat_messages,
+        'session_id': session_id,
+        'initial_message': initial_message,
+    }
+
+    response = render(request, 'core/chat.html', context)
+
+    # Set session ID cookie if new
+    if not request.COOKIES.get('chat_session_id'):
+        response.set_cookie('chat_session_id', session_id, max_age=86400 * 7)
+
+    return response
 
 
 @login_required

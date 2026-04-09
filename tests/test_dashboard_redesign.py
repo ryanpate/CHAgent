@@ -7,7 +7,7 @@ from django.test import Client
 from django.utils import timezone
 from core.models import (
     FollowUp, Task, DirectMessage, Interaction, Project,
-    Volunteer, Organization, OrganizationMembership,
+    Volunteer, Organization, OrganizationMembership, ChatMessage,
 )
 
 
@@ -116,3 +116,28 @@ class TestBadgeCounts:
         # Alpha user should see 0 pending followups
         response = client_alpha.get('/dashboard/')
         assert response.context['pending_followup_count'] == 0
+
+
+@pytest.mark.django_db
+class TestChatView:
+    """Test the full-page chat view at /chat/."""
+
+    def test_chat_renders_template(self, client_alpha):
+        """GET /chat/ should return 200 and include chat_messages in context."""
+        response = client_alpha.get('/chat/')
+        assert response.status_code == 200
+        assert 'chat_messages' in response.context
+
+    def test_chat_with_q_param_passes_initial_message(self, client_alpha):
+        """GET /chat/?q=hello+world should pass initial_message to context."""
+        response = client_alpha.get('/chat/?q=hello+world')
+        assert response.status_code == 200
+        assert response.context['initial_message'] == 'hello world'
+
+    def test_chat_sets_session_cookie(self, client_alpha):
+        """GET /chat/ should include a session_id in the response context."""
+        response = client_alpha.get('/chat/')
+        assert response.status_code == 200
+        assert response.context['session_id']
+        # Session ID should be a non-empty string
+        assert len(response.context['session_id']) > 0
