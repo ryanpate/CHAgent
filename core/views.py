@@ -958,6 +958,47 @@ def interaction_detail(request, pk):
 
 @login_required
 @require_http_methods(["GET", "POST"])
+def interaction_edit(request, pk):
+    """Edit an existing interaction's content."""
+    org = get_org(request)
+
+    queryset = Interaction.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    interaction = get_object_or_404(queryset, pk=pk)
+
+    if request.method == 'POST':
+        content = request.POST.get('content', '').strip()
+        if content:
+            interaction.content = content
+            interaction.save(update_fields=['content'])
+            return redirect('interaction_detail', pk=interaction.pk)
+
+    return render(request, 'core/interaction_edit.html', {'interaction': interaction})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def interaction_delete(request, pk):
+    """Delete an interaction after confirmation."""
+    org = get_org(request)
+
+    queryset = Interaction.objects.all()
+    if org:
+        queryset = queryset.filter(organization=org)
+
+    interaction = get_object_or_404(queryset, pk=pk)
+
+    if request.method == 'POST':
+        interaction.delete()
+        return redirect('interaction_list')
+
+    return render(request, 'core/interaction_confirm_delete.html', {'interaction': interaction})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
 def interaction_create(request):
     """Create a new interaction manually."""
     org = get_org(request)

@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Interaction{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <a href="{% url 'interaction_detail' interaction.pk %}" class="text-ch-gold hover:underline mb-4 inline-block">&larr; Back to Interaction</a>
+
+    <div class="bg-ch-dark rounded-lg p-8">
+        <h2 class="font-display text-2xl mb-6">Edit Interaction</h2>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-6">
+                <label for="content" class="block text-sm text-gray-400 mb-2">
+                    Interaction notes
+                </label>
+                <textarea name="content"
+                          id="content"
+                          rows="8"
+                          class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold transition resize-none"
+                          required>{{ interaction.content }}</textarea>
+            </div>
+
+            <div class="flex gap-4">
+                <button type="submit"
+                        class="px-6 py-3 bg-ch-gold text-black rounded-lg font-medium hover:bg-yellow-500 transition">
+                    Save Changes
+                </button>
+                <a href="{% url 'interaction_detail' interaction.pk %}"
+                   class="px-6 py-3 bg-ch-gray rounded-lg hover:bg-gray-700 transition">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

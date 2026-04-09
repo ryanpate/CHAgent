@@ -32,6 +32,8 @@ urlpatterns = [
     path('interactions/', views.interaction_list, name='interaction_list'),
     path('interactions/new/', views.interaction_create, name='interaction_create'),
     path('interactions/<int:pk>/', views.interaction_detail, name='interaction_detail'),
+    path('interactions/<int:pk>/edit/', views.interaction_edit, name='interaction_edit'),
+    path('interactions/<int:pk>/delete/', views.interaction_delete, name='interaction_delete'),
     path('volunteers/', views.volunteer_list, name='volunteer_list'),
     path('volunteers/<int:pk>/', views.volunteer_detail, name='volunteer_detail'),
     # Volunteer matching endpoints (HTMX)
