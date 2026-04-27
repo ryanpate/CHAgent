@@ -55,7 +55,7 @@ soundfile>=0.12.0
 # OCR for image-based PDFs (scanned chord charts)
 pytesseract>=0.3.10
 pdf2image>=1.16.0
-Pillow>=10.0.0
+Pillow>=12.2.0
 
 # Login rate limiting
 django-axes>=7.0.0
