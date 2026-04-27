@@ -65,7 +65,7 @@ pyotp>=2.9.0
 qrcode[pil]>=7.4.0
 
 # Date utilities (for recurring tasks)
-python-dateutil>=2.8.0
+python-dateutil>=2.9.0.post0
 
 # Error Monitoring
 sentry-sdk[django]>=1.40.0
