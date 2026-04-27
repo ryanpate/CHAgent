@@ -2,7 +2,7 @@
 Django>=5.0,<6.0
 
 # Database
-psycopg[binary]>=3.1
+psycopg[binary]>=3.3.3
 dj-database-url>=2.1.0
 
 # Vector Search (for PostgreSQL with pgvector)
