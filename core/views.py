@@ -5390,57 +5390,74 @@ def subscription_success(request):
 
 def onboarding_signup(request):
     """
-    Beta request form - replaces the original signup page.
-    Collects name, email, church name, and church size.
-    Creates a BetaRequest for admin review.
+    Open self-serve signup. Creates a real User + Organization (trial)
+    and starts the onboarding wizard at plan selection.
     """
-    from .models import BetaRequest
+    from datetime import timedelta
+    from django.contrib.auth import login
+    from accounts.models import User
+    from .models import Organization, OrganizationMembership
 
     if request.user.is_authenticated:
         return redirect('dashboard')
 
     if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
         email = request.POST.get('email', '').strip().lower()
+        password = request.POST.get('password', '')
         church_name = request.POST.get('church_name', '').strip()
-        church_size = request.POST.get('church_size', '').strip()
 
         errors = []
-
-        if not name:
-            errors.append('Your name is required.')
+        if not first_name:
+            errors.append('Your first name is required.')
         if not email:
             errors.append('Email address is required.')
+        if not password or len(password) < 8:
+            errors.append('Password must be at least 8 characters.')
         if not church_name:
             errors.append('Church name is required.')
-        if not church_size:
-            errors.append('Church size is required.')
-        if email and BetaRequest.objects.filter(email=email).exists():
-            errors.append("A request with this email already exists. We'll be in touch soon!")
+        if email and User.objects.filter(email=email).exists():
+            errors.append('An account with this email already exists.')
 
         if errors:
             return render(request, 'core/onboarding/signup.html', {
                 'errors': errors,
-                'name': name,
-                'email': email,
-                'church_name': church_name,
-                'church_size': church_size,
-                'is_beta': True,
+                'first_name': first_name, 'last_name': last_name,
+                'email': email, 'church_name': church_name,
             })
 
-        BetaRequest.objects.create(
-            name=name,
-            email=email,
-            church_name=church_name,
-            church_size=church_size,
+        user = User.objects.create_user(
+            username=email, email=email, password=password,
+            first_name=first_name, last_name=last_name,
         )
 
-        return render(request, 'core/onboarding/beta_confirmation.html', {
-            'church_name': church_name,
-            'email': email,
-        })
+        trial_days = getattr(settings, 'TRIAL_PERIOD_DAYS', 14)
+        org = Organization.objects.create(
+            name=church_name, email=email,
+            subscription_status='trial',
+            trial_ends_at=timezone.now() + timedelta(days=trial_days),
+        )
+        OrganizationMembership.objects.create(
+            user=user, organization=org, role='owner',
+            can_manage_users=True, can_manage_settings=True,
+            can_view_analytics=True, can_manage_billing=True,
+        )
+        user.default_organization = org
+        user.save()
 
-    return render(request, 'core/onboarding/signup.html', {'is_beta': True})
+        try:
+            from .guide_seeder import seed_guide_document
+            seed_guide_document(org)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to seed guide for {org.name}: {e}")
+
+        login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+        request.session['onboarding_org_id'] = org.id
+        return redirect('onboarding_select_plan')
+
+    return render(request, 'core/onboarding/signup.html', {})
 
 
 def beta_signup(request):

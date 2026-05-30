@@ -11,3 +11,30 @@ def test_beta_org_is_active_and_not_blocked():
     )
     assert org.is_subscription_active is True
     assert org.needs_subscription is False
+
+
+@pytest.mark.django_db
+def test_open_signup_creates_trial_org_and_redirects_to_plan(client, subscription_plan):
+    resp = client.post(reverse('onboarding_signup'), {
+        'first_name': 'Pat', 'last_name': 'Lee',
+        'email': 'pat@newchurch.org', 'password': 'supersecret1',
+        'church_name': 'New Life Church',
+    })
+    assert resp.status_code == 302
+    assert resp.url == reverse('onboarding_select_plan')
+    user = User.objects.get(email='pat@newchurch.org')
+    org = Organization.objects.get(name='New Life Church')
+    assert org.subscription_status == 'trial'
+    assert org.trial_ends_at is not None
+    assert OrganizationMembership.objects.filter(user=user, organization=org, role='owner').exists()
+
+
+@pytest.mark.django_db
+def test_open_signup_rejects_duplicate_email(client, subscription_plan):
+    User.objects.create_user(username='dupe@x.org', email='dupe@x.org', password='x')
+    resp = client.post(reverse('onboarding_signup'), {
+        'first_name': 'D', 'last_name': 'U', 'email': 'dupe@x.org',
+        'password': 'supersecret1', 'church_name': 'Dup Church',
+    })
+    assert resp.status_code == 200
+    assert b'already' in resp.content.lower()
