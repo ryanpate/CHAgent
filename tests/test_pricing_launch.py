@@ -14,3 +14,19 @@ def test_launch_plan_prices_are_canonical():
         plan = SubscriptionPlan.objects.get(slug=slug)
         assert plan.price_monthly_cents == monthly, f"{slug} monthly"
         assert plan.price_yearly_cents == yearly, f"{slug} yearly"
+
+
+@pytest.mark.django_db
+def test_pricing_page_shows_canonical_prices(client):
+    resp = client.get('/pricing/')
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert '9.99' in body
+    assert '39.99' in body
+    assert '79.99' in body
+    # Visible monthly price must show the canonical .99 figures, not rounded
+    assert '$9.99' in body
+    assert '$39.99' in body
+    assert '$79.99' in body
+    # No stale prices from the old seed
+    assert '$149' not in body and '149.00' not in body
