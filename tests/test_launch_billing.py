@@ -38,3 +38,13 @@ def test_open_signup_rejects_duplicate_email(client, subscription_plan):
     })
     assert resp.status_code == 200
     assert b'already' in resp.content.lower()
+
+
+@pytest.mark.django_db
+def test_signup_page_is_open_not_beta(client):
+    resp = client.get(reverse('onboarding_signup'))
+    body = resp.content.decode()
+    assert resp.status_code == 200
+    assert 'name="password"' in body
+    assert 'Request Beta Access' not in body
+    assert 'BETA' not in body
