@@ -21,7 +21,7 @@
 ### Task 1: Correct seeded subscription-plan prices
 
 **Files:**
-- Create: `core/migrations/0035_update_plan_prices_public_launch.py` (confirm the next migration number with `ls core/migrations | sort | tail -3` — use the actual next integer)
+- Create: `core/migrations/0050_update_plan_prices_public_launch.py` (latest is `0049_notificationpreference_studio_builds_and_more`; depend on it)
 - Test: `tests/test_pricing_launch.py` (create)
 
 - [ ] **Step 1: Write the failing test**
@@ -79,8 +79,7 @@ def apply_prices(prices):
 
 class Migration(migrations.Migration):
     dependencies = [
-        # Replace with the ACTUAL latest core migration name from `ls core/migrations`
-        ('core', '0034_REPLACE_WITH_LATEST'),
+        ('core', '0049_notificationpreference_studio_builds_and_more'),
     ]
     operations = [
         migrations.RunPython(apply_prices(NEW_PRICES), apply_prices(OLD_PRICES)),
