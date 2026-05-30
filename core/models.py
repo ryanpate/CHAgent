@@ -281,6 +281,9 @@ class Organization(models.Model):
     @property
     def needs_subscription(self):
         """Check if org needs to subscribe to continue using the service."""
+        # Beta orgs are grandfathered with permanent free access.
+        if self.subscription_status == 'beta':
+            return False
         # Trial expired
         if self.is_trial_expired:
             return True
@@ -292,6 +295,8 @@ class Organization(models.Model):
     @property
     def is_subscription_active(self):
         """Check if organization has an active subscription."""
+        if self.subscription_status == 'beta':
+            return True  # Grandfathered beta orgs always active
         if self.subscription_status == 'trial':
             return self.is_trial  # Only active if trial hasn't expired
         return self.subscription_status == 'active'
