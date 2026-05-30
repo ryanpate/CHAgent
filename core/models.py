@@ -100,6 +100,11 @@ class SubscriptionPlan(models.Model):
         return monthly_for_year - self.price_yearly
 
     @property
+    def yearly_monthly_equivalent(self):
+        """Monthly-equivalent dollar amount when paying yearly (yearly price / 12)."""
+        return self.price_yearly / 12
+
+    @property
     def features(self):
         """Return feature flags as a dictionary for template access."""
         return {
