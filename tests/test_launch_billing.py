@@ -48,3 +48,22 @@ def test_signup_page_is_open_not_beta(client):
     assert 'name="password"' in body
     assert 'Request Beta Access' not in body
     assert 'BETA' not in body
+
+
+@pytest.mark.django_db
+def test_checkout_without_stripe_config_does_not_grant_free_access(client, settings, subscription_plan):
+    settings.STRIPE_SECRET_KEY = ''
+    user = User.objects.create_user(username='c@x.org', email='c@x.org', password='supersecret1')
+    org = Organization.objects.create(name='Checkout Church', email='c@x.org',
+                                      subscription_status='trial', subscription_plan=subscription_plan)
+    OrganizationMembership.objects.create(user=user, organization=org, role='owner', can_manage_billing=True)
+    user.default_organization = org; user.save()
+    client.force_login(user)
+    session = client.session
+    session['onboarding_org_id'] = org.id
+    session['selected_plan_id'] = subscription_plan.id
+    session['billing_cycle'] = 'monthly'
+    session.save()
+    resp = client.get(reverse('onboarding_checkout'))
+    assert resp.status_code == 200
+    assert b'unavailable' in resp.content.lower() or b'error' in resp.content.lower()

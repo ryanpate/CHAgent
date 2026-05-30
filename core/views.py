@@ -5630,8 +5630,12 @@ def onboarding_checkout(request):
     price_id = getattr(settings, price_key, None)
 
     if not price_id or not stripe.api_key:
-        # If no Stripe price configured, skip to next step (trial only)
-        return redirect('onboarding_connect_pco')
+        # Card is required for launch — never grant free access on misconfiguration.
+        return render(request, 'core/onboarding/checkout_error.html', {
+            'error': 'Billing is temporarily unavailable. Please try again shortly '
+                     'or contact support@aria.church.',
+            'organization': org,
+        })
 
     # Create or get Stripe customer
     if not org.stripe_customer_id:
