@@ -18,3 +18,10 @@ def test_every_sitemap_url_returns_200(client):
 def test_category_sitemap_registered(client):
     from config.urls import sitemaps
     assert 'blog-categories' in sitemaps
+
+@pytest.mark.django_db
+def test_pco_guide_has_faq_and_compelling_title(client):
+    body = client.get('/resources/planning-center-setup-guide/').content.decode()
+    assert 'FAQPage' in body
+    assert 'Frequently asked questions' in body or 'Frequently Asked Questions' in body
+    assert '2026' in body
