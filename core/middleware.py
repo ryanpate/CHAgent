@@ -348,6 +348,33 @@ def require_role(*roles):
     return decorator
 
 
+def require_plan_feature(feature_name):
+    """
+    Decorator to require the organization's plan to include a feature.
+    Grandfathered beta orgs (Ministry-equivalent plan) pass.
+
+    Usage:
+        @login_required
+        @require_plan_feature('analytics')
+        def analytics_dashboard(request):
+            ...
+    """
+    from functools import wraps
+    from django.contrib import messages
+    from django.shortcuts import redirect
+
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            org = getattr(request, 'organization', None)
+            if org is None or not org.has_feature(feature_name):
+                messages.info(request, "That feature isn't included in your current plan. Upgrade to unlock it.")
+                return redirect('org_settings_billing')
+            return view_func(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
 def require_superadmin(view_func):
     """
     Decorator to require platform superadmin access.
