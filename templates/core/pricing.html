@@ -203,7 +203,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                         </svg>
                         <span class="text-gray-300">
-                            {% if plan.max_users %}{{ plan.max_users }} team members{% else %}Unlimited team members{% endif %}
+                            {% if plan.max_users and plan.max_users > 0 %}{{ plan.max_users }} team members{% else %}Unlimited team members{% endif %}
                         </span>
                     </li>
                     <li class="flex items-start gap-2">
@@ -211,7 +211,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                         </svg>
                         <span class="text-gray-300">
-                            {% if plan.max_volunteers %}{{ plan.max_volunteers }} volunteers{% else %}Unlimited volunteers{% endif %}
+                            {% if plan.max_volunteers and plan.max_volunteers > 0 %}{{ plan.max_volunteers }} volunteers{% else %}Unlimited volunteers{% endif %}
                         </span>
                     </li>
                     <li class="flex items-start gap-2">
@@ -219,7 +219,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                         </svg>
                         <span class="text-gray-300">
-                            {% if plan.max_ai_queries %}{{ plan.max_ai_queries }} AI queries/month{% else %}Unlimited AI queries{% endif %}
+                            {% if plan.max_ai_queries_monthly and plan.max_ai_queries_monthly > 0 %}{{ plan.max_ai_queries_monthly }} AI queries/month{% else %}Unlimited AI queries{% endif %}
                         </span>
                     </li>
                     <li class="flex items-start gap-2">
@@ -422,17 +422,18 @@
         </div>
 
         <div class="md:hidden space-y-6" data-mobile-comparison>
+            {# Mobile comparison: numeric limits + tiered boolean features. All-yes rows (Aria, PCO, iOS, push, comms) and Enterprise-only rows are omitted intentionally. #}
             {% for plan in plans %}
             {% if plan.name != 'Enterprise' %}
             <div class="bg-ch-dark rounded-xl border border-ch-gray p-5">
                 <h3 class="text-xl font-bold text-white mb-3">{{ plan.name }}</h3>
                 <ul class="space-y-2 text-sm">
                     <li class="flex justify-between"><span class="text-gray-400">Team members</span>
-                        <span class="text-white">{% if plan.max_users %}{{ plan.max_users }}{% else %}Unlimited{% endif %}</span></li>
+                        <span class="text-white">{% if plan.max_users and plan.max_users > 0 %}{{ plan.max_users }}{% else %}Unlimited{% endif %}</span></li>
                     <li class="flex justify-between"><span class="text-gray-400">Volunteers</span>
-                        <span class="text-white">{% if plan.max_volunteers %}{{ plan.max_volunteers }}{% else %}Unlimited{% endif %}</span></li>
+                        <span class="text-white">{% if plan.max_volunteers and plan.max_volunteers > 0 %}{{ plan.max_volunteers }}{% else %}Unlimited{% endif %}</span></li>
                     <li class="flex justify-between"><span class="text-gray-400">AI queries / mo</span>
-                        <span class="text-white">{% if plan.max_ai_queries %}{{ plan.max_ai_queries }}{% else %}Unlimited{% endif %}</span></li>
+                        <span class="text-white">{% if plan.max_ai_queries_monthly and plan.max_ai_queries_monthly > 0 %}{{ plan.max_ai_queries_monthly }}{% else %}Unlimited{% endif %}</span></li>
                     <li class="flex justify-between"><span class="text-gray-400">Analytics</span>
                         <span class="text-white">{% if plan.features.analytics %}&#10003;{% else %}&mdash;{% endif %}</span></li>
                     <li class="flex justify-between"><span class="text-gray-400">AI care insights</span>
