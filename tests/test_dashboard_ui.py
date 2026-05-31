@@ -27,3 +27,18 @@ def test_dashboard_context_has_pco_and_week_count(client):
     assert resp.status_code == 200
     assert resp.context['pco_connected'] is False
     assert resp.context['interactions_this_week'] == 0
+
+
+@pytest.mark.django_db
+def test_dashboard_empty_state_and_pco_banner(client):
+    org, u = _login_active_org(client, 'empty', pco=False)
+    body = client.get(reverse('dashboard')).content.decode()
+    assert 'Log your first interaction' in body
+    assert 'Connect Planning Center' in body
+
+
+@pytest.mark.django_db
+def test_dashboard_no_pco_banner_when_connected(client):
+    org, u = _login_active_org(client, 'haspco', pco=True)
+    body = client.get(reverse('dashboard')).content.decode()
+    assert 'Connect Planning Center' not in body
