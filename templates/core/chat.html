@@ -26,7 +26,7 @@
     </div>
 
     <!-- Chat Messages -->
-    <div id="chat-messages" class="bg-ch-dark rounded-lg p-6 h-[500px] overflow-y-auto mb-4 space-y-4">
+    <div id="chat-messages" class="bg-ch-dark rounded-lg p-6 h-[400px] sm:h-[500px] overflow-y-auto mb-4 space-y-4">
         {% for message in chat_messages %}
         <div class="{% if message.role == 'user' %}ml-12{% else %}mr-12{% endif %}">
             <div class="{% if message.role == 'user' %}bg-ch-gold text-black{% else %}bg-ch-gray markdown-content{% endif %} rounded-lg p-4">
@@ -145,7 +145,7 @@
         {% csrf_token %}
         <input type="text"
                name="message"
-               placeholder="Log an interaction or ask a question..."
+               placeholder="Ask Aria a question…"
                class="flex-1 bg-ch-dark border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-ch-gold transition"
                autocomplete="off"
                required>
@@ -169,24 +169,36 @@
             </svg>
             Log Interaction
         </button>
+        {% if pco_connected %}
         <button class="quick-action" onclick="setMessage('Who is serving this Sunday?')">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
             </svg>
             This Sunday's Team
         </button>
+        {% else %}
+        <span data-pco-chip-disabled title="Connect Planning Center to use this" class="quick-action opacity-40 cursor-not-allowed">This Sunday's Team</span>
+        {% endif %}
+        {% if pco_connected %}
         <button class="quick-action" onclick="setMessage('What songs did we play last Sunday?')">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
             </svg>
             Last Setlist
         </button>
+        {% else %}
+        <span data-pco-chip-disabled title="Connect Planning Center to use this" class="quick-action opacity-40 cursor-not-allowed">Last Setlist</span>
+        {% endif %}
+        {% if pco_connected %}
         <button class="quick-action" onclick="setMessage('Who is blocked out this Sunday?')">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
             </svg>
             Check Blockouts
         </button>
+        {% else %}
+        <span data-pco-chip-disabled title="Connect Planning Center to use this" class="quick-action opacity-40 cursor-not-allowed">Check Blockouts</span>
+        {% endif %}
         <button class="quick-action" onclick="setMessage('What do we know about ')">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>

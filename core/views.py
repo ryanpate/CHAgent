@@ -236,7 +236,6 @@ def dashboard(request):
     # Follow-up summary for dashboard card
     followup_summary = 'All caught up'
     if org:
-        from django.utils import timezone
         today = timezone.now().date()
         due_today = FollowUp.objects.filter(
             organization=org,
@@ -258,6 +257,10 @@ def dashboard(request):
         if parts:
             followup_summary = ', '.join(parts)
 
+    week_ago = timezone.now() - timedelta(days=7)
+    interactions_this_week = interaction_qs.filter(created_at__gte=week_ago).count() if org else 0
+    pco_connected = bool(org and org.has_pco_credentials())
+
     context = {
         'total_volunteers': volunteer_qs.count(),
         'total_interactions': interaction_qs.count(),
@@ -267,6 +270,8 @@ def dashboard(request):
         ).order_by('-interaction_count')[:5],
         'show_onboarding': show_onboarding,
         'followup_summary': followup_summary,
+        'interactions_this_week': interactions_this_week,
+        'pco_connected': pco_connected,
     }
 
     return render(request, 'core/dashboard.html', context)
@@ -298,6 +303,7 @@ def chat(request):
         'chat_messages': chat_messages,
         'session_id': session_id,
         'initial_message': initial_message,
+        'pco_connected': bool(org and org.has_pco_credentials()),
     }
 
     response = render(request, 'core/chat.html', context)

@@ -5,6 +5,16 @@
 {% block content %}
 <div class="max-w-6xl mx-auto space-y-8">
 
+    {% if not pco_connected %}
+    <div class="bg-ch-gold/10 border border-ch-gold/30 rounded-lg p-4 mb-6">
+        <p class="text-sm text-gray-300">
+            <strong class="text-ch-gold">Getting started:</strong>
+            Connect Planning Center to import your team, schedules, and songs so Aria can answer questions about them.
+        </p>
+        <a href="{% url 'onboarding_connect_pco' %}" class="inline-block mt-2 text-ch-gold hover:underline text-sm font-medium">Connect Planning Center &rarr;</a>
+    </div>
+    {% endif %}
+
     <!-- Section 1: Ask Aria -->
     <div class="bg-ch-dark rounded-xl p-5">
         <div class="flex items-center justify-between mb-3">
@@ -52,6 +62,7 @@
                 </svg>
                 Log Interaction
             </a>
+            {% if pco_connected %}
             <a href="{% url 'chat' %}?q=Who+is+serving+this+Sunday%3F"
                class="bg-ch-gray border border-gray-700 rounded-full px-3 py-1.5 text-xs text-gray-300 hover:border-ch-gold hover:text-white transition flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,6 +70,10 @@
                 </svg>
                 This Sunday's Team
             </a>
+            {% else %}
+            <span data-pco-chip-disabled title="Connect Planning Center to use this" class="bg-ch-gray/50 border border-gray-800 rounded-full px-3 py-1.5 text-xs text-gray-600 cursor-not-allowed">This Sunday's Team</span>
+            {% endif %}
+            {% if pco_connected %}
             <a href="{% url 'chat' %}?q=What+songs+did+we+play+last+Sunday%3F"
                class="bg-ch-gray border border-gray-700 rounded-full px-3 py-1.5 text-xs text-gray-300 hover:border-ch-gold hover:text-white transition flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -66,6 +81,10 @@
                 </svg>
                 Last Setlist
             </a>
+            {% else %}
+            <span data-pco-chip-disabled title="Connect Planning Center to use this" class="bg-ch-gray/50 border border-gray-800 rounded-full px-3 py-1.5 text-xs text-gray-600 cursor-not-allowed">Last Setlist</span>
+            {% endif %}
+            {% if pco_connected %}
             <a href="{% url 'chat' %}?q=Who+is+blocked+out+this+Sunday%3F"
                class="bg-ch-gray border border-gray-700 rounded-full px-3 py-1.5 text-xs text-gray-300 hover:border-ch-gold hover:text-white transition flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -73,6 +92,9 @@
                 </svg>
                 Check Blockouts
             </a>
+            {% else %}
+            <span data-pco-chip-disabled title="Connect Planning Center to use this" class="bg-ch-gray/50 border border-gray-800 rounded-full px-3 py-1.5 text-xs text-gray-600 cursor-not-allowed">Check Blockouts</span>
+            {% endif %}
             <a href="{% url 'chat' %}?q=What+do+we+know+about+"
                class="bg-ch-gray border border-gray-700 rounded-full px-3 py-1.5 text-xs text-gray-300 hover:border-ch-gold hover:text-white transition flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -197,7 +219,10 @@
                     {% endfor %}
                 </div>
                 {% else %}
-                <p class="text-gray-500 text-center py-8 text-sm">No interactions logged yet.</p>
+                <div class="text-center py-10">
+                    <p class="text-gray-400 mb-3 text-sm">No interactions logged yet.</p>
+                    <a href="{% url 'chat' %}?q=Log+interaction%3A+" class="text-ch-gold hover:underline font-medium text-sm">Log your first interaction &rarr;</a>
+                </div>
                 {% endif %}
             </div>
 
