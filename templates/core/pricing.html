@@ -307,7 +307,7 @@
     <div class="bg-ch-dark rounded-xl border border-ch-gray p-8 mb-16">
         <h2 class="text-2xl font-bold text-white mb-8 text-center">Feature Comparison</h2>
 
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto hidden md:block">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-ch-gray">
@@ -419,6 +419,32 @@
                     </tr>
                 </tbody>
             </table>
+        </div>
+
+        <div class="md:hidden space-y-6" data-mobile-comparison>
+            {% for plan in plans %}
+            {% if plan.name != 'Enterprise' %}
+            <div class="bg-ch-dark rounded-xl border border-ch-gray p-5">
+                <h3 class="text-xl font-bold text-white mb-3">{{ plan.name }}</h3>
+                <ul class="space-y-2 text-sm">
+                    <li class="flex justify-between"><span class="text-gray-400">Team members</span>
+                        <span class="text-white">{% if plan.max_users %}{{ plan.max_users }}{% else %}Unlimited{% endif %}</span></li>
+                    <li class="flex justify-between"><span class="text-gray-400">Volunteers</span>
+                        <span class="text-white">{% if plan.max_volunteers %}{{ plan.max_volunteers }}{% else %}Unlimited{% endif %}</span></li>
+                    <li class="flex justify-between"><span class="text-gray-400">AI queries / mo</span>
+                        <span class="text-white">{% if plan.max_ai_queries %}{{ plan.max_ai_queries }}{% else %}Unlimited{% endif %}</span></li>
+                    <li class="flex justify-between"><span class="text-gray-400">Analytics</span>
+                        <span class="text-white">{% if plan.features.analytics %}&#10003;{% else %}&mdash;{% endif %}</span></li>
+                    <li class="flex justify-between"><span class="text-gray-400">AI care insights</span>
+                        <span class="text-white">{% if plan.features.care_insights %}&#10003;{% else %}&mdash;{% endif %}</span></li>
+                    <li class="flex justify-between"><span class="text-gray-400">API access</span>
+                        <span class="text-white">{% if plan.features.api_access %}&#10003;{% else %}&mdash;{% endif %}</span></li>
+                    <li class="flex justify-between"><span class="text-gray-400">Custom branding</span>
+                        <span class="text-white">{% if plan.features.custom_branding %}&#10003;{% else %}&mdash;{% endif %}</span></li>
+                </ul>
+            </div>
+            {% endif %}
+            {% endfor %}
         </div>
     </div>
 
