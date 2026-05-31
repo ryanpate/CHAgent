@@ -17,6 +17,7 @@ class TestAuditLogModel(TestCase):
             name='Test Church',
             slug='test-church',
             email='admin@testchurch.org',
+            subscription_status='active',
         )
 
     def test_create_audit_log(self):
@@ -63,6 +64,7 @@ class TestAuditLogIntegration(TestCase):
             name='Test Church',
             slug='test-church',
             email='admin@testchurch.org',
+            subscription_status='active',
         )
         OrganizationMembership.objects.create(
             user=self.admin,
