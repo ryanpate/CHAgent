@@ -413,3 +413,16 @@ AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesStandaloneBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
+
+# =============================================================================
+# Endpoint Rate Limiting (django-ratelimit)
+# =============================================================================
+# Local-memory cache backend for ratelimit counters (per-process).
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
+}
+
+# Master switch for django-ratelimit (disabled in tests for determinism).
+RATELIMIT_ENABLE = True

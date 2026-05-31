@@ -14,6 +14,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
+from django_ratelimit.decorators import ratelimit
 from django.db import models
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -5400,6 +5401,7 @@ def subscription_success(request):
 # Organization Onboarding Views
 # ============================================================================
 
+@ratelimit(key='ip', rate='5/h', method='POST', block=False)
 def onboarding_signup(request):
     """
     Open self-serve signup. Creates a real User + Organization (trial)
@@ -5412,6 +5414,15 @@ def onboarding_signup(request):
     from django.db import transaction, IntegrityError
     from accounts.models import User
     from .models import Organization, OrganizationMembership
+
+    if request.method == 'POST' and getattr(request, 'limited', False):
+        return render(request, 'core/onboarding/signup.html', {
+            'errors': ['Too many signups from your network. Please try again later.'],
+            'first_name': request.POST.get('first_name', ''),
+            'last_name': request.POST.get('last_name', ''),
+            'email': request.POST.get('email', ''),
+            'church_name': request.POST.get('church_name', ''),
+        })
 
     if request.user.is_authenticated:
         return redirect('dashboard')
