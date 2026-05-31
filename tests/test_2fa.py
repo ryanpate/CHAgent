@@ -70,7 +70,7 @@ class TestTOTPSetupViews(TestCase):
             email='user@test.com',
             password='testpass123',
         )
-        self.org = Organization.objects.create(name='Test Church', slug='test-church')
+        self.org = Organization.objects.create(name='Test Church', slug='test-church', subscription_status='active')
         OrganizationMembership.objects.create(
             user=self.user, organization=self.org, role='owner', is_active=True,
         )
@@ -126,7 +126,7 @@ class TestTOTPLoginFlow(TestCase):
             email='user@test.com',
             password='testpass123',
         )
-        self.org = Organization.objects.create(name='Test Church', slug='test-church')
+        self.org = Organization.objects.create(name='Test Church', slug='test-church', subscription_status='active')
         OrganizationMembership.objects.create(
             user=self.user, organization=self.org, role='owner', is_active=True,
         )

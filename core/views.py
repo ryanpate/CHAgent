@@ -14,12 +14,13 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
+from django_ratelimit.decorators import ratelimit
 from django.db import models
 from django.db.models import Count, Q
 from django.utils import timezone
 
 from .models import Interaction, Volunteer, ChatMessage, ConversationContext, FollowUp, ResponseFeedback, AuditLog
-from .middleware import require_organization, require_role
+from .middleware import require_organization, require_role, require_plan_feature
 from .agent import (
     query_agent,
     process_interaction,
@@ -1418,6 +1419,7 @@ def followup_delete(request, pk):
 # ============================================================================
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_dashboard(request):
     """
     Main analytics dashboard with overview metrics and quick links to reports.
@@ -1464,6 +1466,7 @@ def analytics_dashboard(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_volunteer_engagement(request):
     """
     Detailed volunteer engagement report.
@@ -1495,6 +1498,7 @@ def analytics_volunteer_engagement(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_team_care(request):
     """
     Team care report - volunteers needing attention.
@@ -1526,6 +1530,7 @@ def analytics_team_care(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_interaction_trends(request):
     """
     Interaction trends over time.
@@ -1559,6 +1564,7 @@ def analytics_interaction_trends(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_prayer_requests(request):
     """
     Prayer request summary and themes.
@@ -1590,6 +1596,7 @@ def analytics_prayer_requests(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_ai_performance(request):
     """
     AI (Aria) performance metrics.
@@ -1621,6 +1628,7 @@ def analytics_ai_performance(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_export(request, report_type):
     """
     Export a report as JSON.
@@ -1657,6 +1665,7 @@ def analytics_export(request, report_type):
 
 
 @login_required
+@require_plan_feature('analytics')
 @require_POST
 def analytics_refresh_cache(request):
     """
@@ -1681,6 +1690,7 @@ def analytics_refresh_cache(request):
 # ============================================================================
 
 @login_required
+@require_plan_feature('care_insights')
 def care_dashboard(request):
     """
     Proactive care dashboard showing volunteers who need attention.
@@ -1752,6 +1762,7 @@ def care_dashboard(request):
 
 
 @login_required
+@require_plan_feature('care_insights')
 @require_POST
 def care_dismiss_insight(request, pk):
     """
@@ -1789,6 +1800,7 @@ def care_dismiss_insight(request, pk):
 
 
 @login_required
+@require_plan_feature('care_insights')
 @require_POST
 def care_create_followup(request, pk):
     """
@@ -1832,6 +1844,7 @@ def care_create_followup(request, pk):
 
 
 @login_required
+@require_plan_feature('care_insights')
 @require_POST
 def care_refresh_insights(request):
     """
@@ -5388,59 +5401,105 @@ def subscription_success(request):
 # Organization Onboarding Views
 # ============================================================================
 
+@ratelimit(key='ip', rate='5/h', method='POST', block=False)
 def onboarding_signup(request):
     """
-    Beta request form - replaces the original signup page.
-    Collects name, email, church name, and church size.
-    Creates a BetaRequest for admin review.
+    Open self-serve signup. Creates a real User + Organization (trial)
+    and starts the onboarding wizard at plan selection.
     """
-    from .models import BetaRequest
+    from datetime import timedelta
+    from django.contrib.auth import login
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError as DjangoValidationError
+    from django.db import transaction, IntegrityError
+    from accounts.models import User
+    from .models import Organization, OrganizationMembership
+
+    if request.method == 'POST' and getattr(request, 'limited', False):
+        return render(request, 'core/onboarding/signup.html', {
+            'errors': ['Too many signups from your network. Please try again later.'],
+            'first_name': request.POST.get('first_name', ''),
+            'last_name': request.POST.get('last_name', ''),
+            'email': request.POST.get('email', ''),
+            'church_name': request.POST.get('church_name', ''),
+        })
 
     if request.user.is_authenticated:
         return redirect('dashboard')
 
     if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
         email = request.POST.get('email', '').strip().lower()
+        password = request.POST.get('password', '')
         church_name = request.POST.get('church_name', '').strip()
-        church_size = request.POST.get('church_size', '').strip()
 
         errors = []
-
-        if not name:
-            errors.append('Your name is required.')
+        if not first_name:
+            errors.append('Your first name is required.')
         if not email:
             errors.append('Email address is required.')
+        if not password:
+            errors.append('Password is required.')
+        else:
+            try:
+                validate_password(password)
+            except DjangoValidationError as pw_err:
+                errors.extend(pw_err.messages)
         if not church_name:
             errors.append('Church name is required.')
-        if not church_size:
-            errors.append('Church size is required.')
-        if email and BetaRequest.objects.filter(email=email).exists():
-            errors.append("A request with this email already exists. We'll be in touch soon!")
+        if email and User.objects.filter(email=email).exists():
+            errors.append('An account with this email already exists.')
 
         if errors:
             return render(request, 'core/onboarding/signup.html', {
                 'errors': errors,
-                'name': name,
-                'email': email,
-                'church_name': church_name,
-                'church_size': church_size,
-                'is_beta': True,
+                'first_name': first_name, 'last_name': last_name,
+                'email': email, 'church_name': church_name,
             })
 
-        BetaRequest.objects.create(
-            name=name,
-            email=email,
-            church_name=church_name,
-            church_size=church_size,
-        )
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    username=email, email=email, password=password,
+                    first_name=first_name, last_name=last_name,
+                )
 
-        return render(request, 'core/onboarding/beta_confirmation.html', {
-            'church_name': church_name,
-            'email': email,
-        })
+                trial_days = getattr(settings, 'TRIAL_PERIOD_DAYS', 14)
+                org = Organization.objects.create(
+                    name=church_name, email=email,
+                    subscription_status='trial',
+                    trial_ends_at=timezone.now() + timedelta(days=trial_days),
+                )
+                OrganizationMembership.objects.create(
+                    user=user, organization=org, role='owner',
+                    can_manage_users=True, can_manage_settings=True,
+                    can_view_analytics=True, can_manage_billing=True,
+                )
+                user.default_organization = org
+                user.save()
+        except IntegrityError:
+            return render(request, 'core/onboarding/signup.html', {
+                'errors': ['Something went wrong creating your account. Please try again.'],
+                'first_name': first_name, 'last_name': last_name,
+                'email': email, 'church_name': church_name,
+            })
 
-    return render(request, 'core/onboarding/signup.html', {'is_beta': True})
+        try:
+            from .guide_seeder import seed_guide_document
+            seed_guide_document(org)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to seed guide for {org.name}: {e}")
+
+        login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+        request.session['onboarding_org_id'] = org.id
+        plan_slug = request.POST.get('plan') or request.GET.get('plan')
+        if plan_slug:
+            request.session['preselected_plan_slug'] = plan_slug
+        return redirect('onboarding_select_plan')
+
+    return render(request, 'core/onboarding/signup.html', {})
 
 
 def beta_signup(request):
@@ -5546,8 +5605,8 @@ def onboarding_select_plan(request):
     if not org:
         return redirect('onboarding_signup')
 
-    # Get all active plans
-    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly_cents')
+    # Get all active plans (Enterprise excluded — no Stripe price, contact-sales only)
+    plans = SubscriptionPlan.objects.filter(is_active=True).exclude(tier='enterprise').order_by('price_monthly_cents')
 
     if request.method == 'POST':
         plan_id = request.POST.get('plan_id')
@@ -5571,6 +5630,7 @@ def onboarding_select_plan(request):
         'plans': plans,
         'organization': org,
         'current_plan': org.subscription_plan,
+        'preselected_plan_slug': request.session.get('preselected_plan_slug'),
     }
     return render(request, 'core/onboarding/select_plan.html', context)
 
@@ -5613,8 +5673,12 @@ def onboarding_checkout(request):
     price_id = getattr(settings, price_key, None)
 
     if not price_id or not stripe.api_key:
-        # If no Stripe price configured, skip to next step (trial only)
-        return redirect('onboarding_connect_pco')
+        # Card is required for launch — never grant free access on misconfiguration.
+        return render(request, 'core/onboarding/checkout_error.html', {
+            'error': 'Billing is temporarily unavailable. Please try again shortly '
+                     'or contact support@aria.church.',
+            'organization': org,
+        })
 
     # Create or get Stripe customer
     if not org.stripe_customer_id:
@@ -5691,16 +5755,31 @@ def onboarding_checkout_success(request):
 
     if session_id and org and stripe.api_key:
         try:
-            session = stripe.checkout.Session.retrieve(session_id)
-            subscription_id = session.subscription
-
-            if subscription_id:
-                org.stripe_subscription_id = subscription_id
-                org.subscription_status = 'active'
+            session = stripe.checkout.Session.retrieve(session_id, expand=['subscription'])
+            sub = session.subscription
+            if sub:
+                org.stripe_subscription_id = sub.id if hasattr(sub, 'id') else sub
+                stripe_status = getattr(sub, 'status', 'trialing')
+                org.subscription_status = 'trial' if stripe_status == 'trialing' else 'active'
+                # Align local trial end with Stripe's trial end when available
+                trial_end_ts = getattr(sub, 'trial_end', None) if hasattr(sub, 'id') else None
+                if trial_end_ts:
+                    from datetime import datetime, timezone as dt_timezone
+                    org.trial_ends_at = datetime.fromtimestamp(trial_end_ts, tz=dt_timezone.utc)
                 org.subscription_started_at = timezone.now()
                 org.save()
-        except stripe.error.StripeError:
-            pass
+        except stripe.error.StripeError as e:
+            import logging
+            logging.getLogger(__name__).error(
+                f"checkout_success: failed to finalize subscription for org "
+                f"{getattr(org, 'slug', '?')}: {e}"
+            )
+            from django.contrib import messages
+            messages.warning(
+                request,
+                "Your payment is processing. If you can't access your account in a "
+                "few minutes, contact support@aria.church."
+            )
 
     return redirect('onboarding_connect_pco')
 
@@ -6116,7 +6195,8 @@ def org_settings(request):
         org.phone = request.POST.get('phone', '')
         org.website = request.POST.get('website', '')
         org.timezone = request.POST.get('timezone', org.timezone)
-        org.ai_assistant_name = request.POST.get('ai_assistant_name', 'Aria')
+        if org.has_feature('custom_branding'):
+            org.ai_assistant_name = request.POST.get('ai_assistant_name', org.ai_assistant_name)
 
         org.save()
 
@@ -6139,6 +6219,7 @@ def org_settings(request):
         'organization': org,
         'membership': membership,
         'timezones': timezones,
+        'can_customize_branding': org.has_feature('custom_branding'),
     })
 
 

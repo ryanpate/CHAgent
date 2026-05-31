@@ -42,7 +42,7 @@
     <div class="grid md:grid-cols-4 gap-6">
         {% for plan in plans %}
         <div class="bg-ch-dark rounded-lg border {% if plan == current_plan %}border-ch-gold{% else %}border-ch-gray{% endif %} p-6 relative
-                    {% if plan.name == 'Team' %}ring-2 ring-ch-gold{% endif %}">
+                    {% if plan.slug == preselected_plan_slug or plan.name == 'Team' %}ring-2 ring-ch-gold{% endif %}">
 
             {% if plan.name == 'Team' %}
             <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
@@ -53,7 +53,7 @@
             <h3 class="text-xl font-bold text-white mb-2">{{ plan.name }}</h3>
 
             <div class="mb-4">
-                <span class="text-3xl font-bold text-white monthly-price">${{ plan.monthly_price|floatformat:0 }}</span>
+                <span class="text-3xl font-bold text-white monthly-price">${{ plan.monthly_price|floatformat:2 }}</span>
                 <span class="text-3xl font-bold text-white yearly-price hidden">${{ plan.yearly_price|floatformat:0 }}</span>
                 <span class="text-gray-400 monthly-label">/month</span>
                 <span class="text-gray-400 yearly-label hidden">/year</span>

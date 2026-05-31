@@ -2093,6 +2093,8 @@ Adds 5 more native iOS API integrations to strengthen the App Store case (12 tot
 - **Proactive Care AI**: VolunteerInsight model exists but AI generation logic incomplete
 - **Learning System**: ResponseFeedback and LearnedCorrection models implemented but underutilized in query processing
 - **Large View File**: `core/views.py` is 4530 lines with 102 functions - consider splitting into multiple files
+- **API-access gating has no surface:** The `has_api_access` plan feature cannot be gated yet because the external integrations API is not implemented/exposed. `Organization.api_key`/`api_enabled` fields exist on the model, but there is no settings UI to enable it and no external API endpoints consuming the key. (The `core/api_views.py` JWT/push API is the mobile-app surface available to all users, not the premium external API.) Add `@require_plan_feature('api_access')` when that surface is built.
+- **Soft usage caps not enforced (deferred from public launch):** volunteer count and monthly AI query limits are tracked but not blocked. Enforce with upgrade prompts in a fast-follow. User-count IS enforced on invite. (Same fast-follow can add API-access gating once that surface exists — see note above.)
 
 ### Medium Priority
 - **View Decomposition**: Some views exceed 100 lines and could be split into smaller functions
@@ -2100,6 +2102,7 @@ Adds 5 more native iOS API integrations to strengthen the App Store case (12 tot
 - **Frontend State**: Limited client-side state management, relies heavily on page reloads
 - **Custom Branding**: Organization has branding fields but not fully integrated into all templates
 - **Agent File Size**: `core/agent.py` is 4183 lines - consider modularizing query handlers
+- **Rate-limit cache is per-worker (LocMemCache):** signup throttle is 5/hour/IP per Gunicorn worker. Move `CACHES['default']` to Redis for global enforcement before scaling workers / sustained public traffic.
 
 ### Low Priority
 - **Code Coverage**: Test coverage good but could be expanded to edge cases

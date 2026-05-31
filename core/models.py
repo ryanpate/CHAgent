@@ -100,6 +100,11 @@ class SubscriptionPlan(models.Model):
         return monthly_for_year - self.price_yearly
 
     @property
+    def yearly_monthly_equivalent(self):
+        """Monthly-equivalent dollar amount when paying yearly (yearly price / 12)."""
+        return self.price_yearly / 12
+
+    @property
     def features(self):
         """Return feature flags as a dictionary for template access."""
         return {
@@ -276,6 +281,9 @@ class Organization(models.Model):
     @property
     def needs_subscription(self):
         """Check if org needs to subscribe to continue using the service."""
+        # Beta orgs are grandfathered with permanent free access.
+        if self.subscription_status == 'beta':
+            return False
         # Trial expired
         if self.is_trial_expired:
             return True
@@ -287,6 +295,8 @@ class Organization(models.Model):
     @property
     def is_subscription_active(self):
         """Check if organization has an active subscription."""
+        if self.subscription_status == 'beta':
+            return True  # Grandfathered beta orgs always active
         if self.subscription_status == 'trial':
             return self.is_trial  # Only active if trial hasn't expired
         return self.subscription_status == 'active'
@@ -298,6 +308,9 @@ class Organization(models.Model):
 
     def has_feature(self, feature_name):
         """Check if organization's plan includes a specific feature."""
+        # Grandfathered beta orgs have permanent full access regardless of plan.
+        if self.subscription_status == 'beta':
+            return True
         if not self.subscription_plan:
             return False
         return getattr(self.subscription_plan, f'has_{feature_name}', False)

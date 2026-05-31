@@ -19,6 +19,10 @@ def disable_ssl_redirect(settings):
     settings.SECURE_PROXY_SSL_HEADER = None
     settings.SESSION_COOKIE_SECURE = False
     settings.CSRF_COOKIE_SECURE = False
+    # Disable endpoint rate limiting by default so unrelated tests sharing the
+    # 127.0.0.1 IP don't trip the limiter. The dedicated throttle test re-enables
+    # it via @override_settings.
+    settings.RATELIMIT_ENABLE = False
 
 
 @pytest.fixture

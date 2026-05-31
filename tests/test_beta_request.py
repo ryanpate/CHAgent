@@ -41,79 +41,54 @@ class TestBetaRequestModel:
 
 
 @pytest.mark.django_db
-class TestBetaRequestView:
-    def test_signup_page_shows_beta_form(self):
-        client = Client()
-        response = client.get('/signup/')
-        assert response.status_code == 200
-        assert b'Request Beta Access' in response.content
+class TestOpenSignupView:
+    """The /signup/ view is now open self-serve signup (no longer a beta request)."""
 
-    def test_submit_beta_request(self):
+    def test_signup_does_not_create_beta_request(self):
         from core.models import BetaRequest
         client = Client()
         response = client.post('/signup/', {
-            'name': 'Sarah Pastor',
-            'email': 'sarah@gracechurch.org',
+            'first_name': 'Sarah', 'last_name': 'Pastor',
+            'email': 'sarah@gracechurch.org', 'password': 'supersecret1',
             'church_name': 'Grace Community Church',
-            'church_size': 'medium',
         })
-        assert response.status_code == 200
-        assert b'review your request' in response.content.lower()
-        assert BetaRequest.objects.filter(email='sarah@gracechurch.org').exists()
-
-    def test_submit_duplicate_email(self):
-        from core.models import BetaRequest
-        BetaRequest.objects.create(
-            name='Existing', email='exists@church.org',
-            church_name='Some Church', church_size='small',
-        )
-        client = Client()
-        response = client.post('/signup/', {
-            'name': 'New Person',
-            'email': 'exists@church.org',
-            'church_name': 'Another Church',
-            'church_size': 'large',
-        })
-        assert response.status_code == 200
-        assert b'already' in response.content.lower()
+        assert response.status_code == 302
+        assert not BetaRequest.objects.filter(email='sarah@gracechurch.org').exists()
 
     def test_submit_missing_fields(self):
-        from core.models import BetaRequest
         client = Client()
         response = client.post('/signup/', {
-            'name': '',
-            'email': 'test@church.org',
+            'first_name': '', 'last_name': '',
+            'email': 'test@church.org', 'password': '',
             'church_name': '',
-            'church_size': 'small',
         })
         assert response.status_code == 200
         assert b'required' in response.content.lower()
-        assert not BetaRequest.objects.filter(email='test@church.org').exists()
 
 
 @pytest.mark.django_db
-class TestBetaLandingPage:
-    def test_landing_page_shows_beta_badge(self):
+class TestLandingPage:
+    def test_landing_page_has_no_beta_badge(self):
         client = Client()
         response = client.get('/')
         assert response.status_code == 200
-        assert b'BETA' in response.content
+        assert b'BETA' not in response.content
 
-    def test_landing_page_has_request_access_cta(self):
+    def test_landing_page_has_free_trial_cta(self):
         client = Client()
         response = client.get('/')
-        assert b'Request Beta Access' in response.content
-        assert b'Start Free Trial' not in response.content
+        assert b'Start Free Trial' in response.content
+        assert b'Request Beta Access' not in response.content
 
-    def test_beta_banner_on_public_pages(self):
+    def test_no_beta_banner_on_public_pages(self):
         client = Client()
         response = client.get('/')
-        assert b'closed beta' in response.content.lower()
+        assert b'closed beta' not in response.content.lower()
 
 
 @pytest.mark.django_db
-class TestBetaPricingPage:
-    def test_pricing_page_shows_beta_note(self):
+class TestPricingPage:
+    def test_pricing_page_has_no_beta_note(self):
         from core.models import SubscriptionPlan
         SubscriptionPlan.objects.get_or_create(
             slug='test-plan',
@@ -127,7 +102,8 @@ class TestBetaPricingPage:
         client = Client()
         response = client.get('/pricing/')
         assert response.status_code == 200
-        assert b'free during beta' in response.content.lower()
+        assert b'free during beta' not in response.content.lower()
+        assert b'Start Free Trial' in response.content
 
 
 class TestSecuritySettings:
