@@ -9,13 +9,14 @@ from django.conf import settings
 import os
 
 from core.sitemaps import StaticViewSitemap
-from blog.sitemaps import BlogSitemap
+from blog.sitemaps import BlogSitemap, BlogCategorySitemap
 from songs.views import song_submit, song_submit_thanks
 
 # Sitemap configuration
 sitemaps = {
     'static': StaticViewSitemap,
     'blog': BlogSitemap,
+    'blog-categories': BlogCategorySitemap,
 }
 
 
