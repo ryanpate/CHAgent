@@ -80,3 +80,14 @@ def test_open_signup_rejects_weak_password(client, subscription_plan):
     })
     assert resp.status_code == 200
     assert not User.objects.filter(email='weak@x.org').exists()
+
+
+@pytest.mark.django_db
+def test_public_pages_have_no_beta_branding(client):
+    for path in ['/', '/pricing/']:
+        body = client.get(path).content.decode()
+        assert 'Request Beta Access' not in body, path
+        assert 'closed beta' not in body.lower(), path
+        assert 'Free During Beta' not in body, path
+        assert ('Start Free Trial' in body or 'Start your free trial' in body
+                or 'Start your 14-day free trial' in body), path

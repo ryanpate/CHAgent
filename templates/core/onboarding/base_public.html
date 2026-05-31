@@ -69,29 +69,24 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-ch-black text-gray-100 min-h-screen" style="padding-top: env(safe-area-inset-top, 0px);">
-    {% block beta_banner %}
-    <!-- Beta Banner -->
-    <div id="beta-banner" class="bg-ch-gold/10 border-b border-ch-gold/30 py-2 px-4 text-center text-sm">
-        <span class="text-ch-gold">Aria is in closed beta.</span>
-        <span class="text-gray-300">We're onboarding churches one at a time to ensure a great experience.</span>
-        <a href="{% url 'onboarding_signup' %}" class="text-ch-gold font-medium hover:underline ml-1">Request Access</a>
-        <button onclick="document.getElementById('beta-banner').style.display='none';localStorage.setItem('beta-banner-dismissed','1')" class="ml-2 text-gray-500 hover:text-gray-300">&times;</button>
-    </div>
-    <script>if(localStorage.getItem('beta-banner-dismissed')==='1')document.getElementById('beta-banner').style.display='none';</script>
-    {% endblock %}
+    {% block beta_banner %}{% endblock %}
     <div class="min-h-screen flex flex-col">
         <!-- Header -->
         <header class="bg-ch-dark border-b border-ch-gray py-4 px-6">
             <div class="max-w-6xl mx-auto flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <a href="/" class="text-2xl font-bold text-ch-gold">Aria</a>
-                    {% block header_badge %}<span class="bg-ch-gold/20 text-ch-gold text-xs font-semibold px-2 py-0.5 rounded-full">BETA</span>{% endblock %}
+                    {% block header_badge %}{% endblock %}
                 </div>
                 <div class="flex items-center gap-4">
                     <span class="text-gray-400 text-sm hidden sm:inline">Worship Arts Team Portal</span>
                     <a href="{% url 'login' %}"
-                       class="bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-2.5 px-5 rounded-lg text-sm transition-colors">
+                       class="text-gray-300 hover:text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-colors">
                         Sign In
+                    </a>
+                    <a href="{% url 'onboarding_signup' %}"
+                       class="bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-2.5 px-5 rounded-lg text-sm transition-colors">
+                        Start Free Trial
                     </a>
                 </div>
             </div>

@@ -67,28 +67,28 @@ class TestOpenSignupView:
 
 
 @pytest.mark.django_db
-class TestBetaLandingPage:
-    def test_landing_page_shows_beta_badge(self):
+class TestLandingPage:
+    def test_landing_page_has_no_beta_badge(self):
         client = Client()
         response = client.get('/')
         assert response.status_code == 200
-        assert b'BETA' in response.content
+        assert b'BETA' not in response.content
 
-    def test_landing_page_has_request_access_cta(self):
+    def test_landing_page_has_free_trial_cta(self):
         client = Client()
         response = client.get('/')
-        assert b'Request Beta Access' in response.content
-        assert b'Start Free Trial' not in response.content
+        assert b'Start Free Trial' in response.content
+        assert b'Request Beta Access' not in response.content
 
-    def test_beta_banner_on_public_pages(self):
+    def test_no_beta_banner_on_public_pages(self):
         client = Client()
         response = client.get('/')
-        assert b'closed beta' in response.content.lower()
+        assert b'closed beta' not in response.content.lower()
 
 
 @pytest.mark.django_db
-class TestBetaPricingPage:
-    def test_pricing_page_shows_beta_note(self):
+class TestPricingPage:
+    def test_pricing_page_has_no_beta_note(self):
         from core.models import SubscriptionPlan
         SubscriptionPlan.objects.get_or_create(
             slug='test-plan',
@@ -102,7 +102,8 @@ class TestBetaPricingPage:
         client = Client()
         response = client.get('/pricing/')
         assert response.status_code == 200
-        assert b'free during beta' in response.content.lower()
+        assert b'free during beta' not in response.content.lower()
+        assert b'Start Free Trial' in response.content
 
 
 class TestSecuritySettings:
