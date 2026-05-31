@@ -308,6 +308,9 @@ class Organization(models.Model):
 
     def has_feature(self, feature_name):
         """Check if organization's plan includes a specific feature."""
+        # Grandfathered beta orgs have permanent full access regardless of plan.
+        if self.subscription_status == 'beta':
+            return True
         if not self.subscription_plan:
             return False
         return getattr(self.subscription_plan, f'has_{feature_name}', False)
