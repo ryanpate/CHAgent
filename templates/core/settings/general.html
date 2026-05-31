@@ -94,6 +94,7 @@
                 <label for="ai_assistant_name" class="block text-sm font-medium text-gray-300 mb-1">
                     Assistant Name
                 </label>
+                {% if can_customize_branding %}
                 <input type="text" id="ai_assistant_name" name="ai_assistant_name"
                        value="{{ organization.ai_assistant_name }}"
                        placeholder="Aria"
@@ -101,6 +102,13 @@
                 <p class="text-sm text-gray-500 mt-1">
                     Customize the name of your AI assistant. Default is "Aria".
                 </p>
+                {% else %}
+                <p class="text-white py-2">{{ organization.ai_assistant_name }}</p>
+                <p class="text-sm text-gray-500 mt-1">
+                    Custom assistant name is available on the Ministry plan.
+                    <a href="{% url 'org_settings_billing' %}" class="text-ch-gold hover:underline">Upgrade</a>
+                </p>
+                {% endif %}
             </div>
         </div>
 

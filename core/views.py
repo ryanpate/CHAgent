@@ -5483,6 +5483,9 @@ def onboarding_signup(request):
 
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
         request.session['onboarding_org_id'] = org.id
+        plan_slug = request.POST.get('plan') or request.GET.get('plan')
+        if plan_slug:
+            request.session['preselected_plan_slug'] = plan_slug
         return redirect('onboarding_select_plan')
 
     return render(request, 'core/onboarding/signup.html', {})
@@ -5591,8 +5594,8 @@ def onboarding_select_plan(request):
     if not org:
         return redirect('onboarding_signup')
 
-    # Get all active plans
-    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly_cents')
+    # Get all active plans (Enterprise excluded — no Stripe price, contact-sales only)
+    plans = SubscriptionPlan.objects.filter(is_active=True).exclude(tier='enterprise').order_by('price_monthly_cents')
 
     if request.method == 'POST':
         plan_id = request.POST.get('plan_id')
@@ -5616,6 +5619,7 @@ def onboarding_select_plan(request):
         'plans': plans,
         'organization': org,
         'current_plan': org.subscription_plan,
+        'preselected_plan_slug': request.session.get('preselected_plan_slug'),
     }
     return render(request, 'core/onboarding/select_plan.html', context)
 
@@ -5740,12 +5744,17 @@ def onboarding_checkout_success(request):
 
     if session_id and org and stripe.api_key:
         try:
-            session = stripe.checkout.Session.retrieve(session_id)
-            subscription_id = session.subscription
-
-            if subscription_id:
-                org.stripe_subscription_id = subscription_id
-                org.subscription_status = 'active'
+            session = stripe.checkout.Session.retrieve(session_id, expand=['subscription'])
+            sub = session.subscription
+            if sub:
+                org.stripe_subscription_id = sub.id if hasattr(sub, 'id') else sub
+                stripe_status = getattr(sub, 'status', 'trialing')
+                org.subscription_status = 'trial' if stripe_status == 'trialing' else 'active'
+                # Align local trial end with Stripe's trial end when available
+                trial_end_ts = getattr(sub, 'trial_end', None) if hasattr(sub, 'id') else None
+                if trial_end_ts:
+                    from datetime import datetime, timezone as dt_timezone
+                    org.trial_ends_at = datetime.fromtimestamp(trial_end_ts, tz=dt_timezone.utc)
                 org.subscription_started_at = timezone.now()
                 org.save()
         except stripe.error.StripeError:
@@ -6189,6 +6198,7 @@ def org_settings(request):
         'organization': org,
         'membership': membership,
         'timezones': timezones,
+        'can_customize_branding': org.has_feature('custom_branding'),
     })
 
 

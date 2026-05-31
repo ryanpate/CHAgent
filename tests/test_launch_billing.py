@@ -91,3 +91,18 @@ def test_public_pages_have_no_beta_branding(client):
         assert 'Free During Beta' not in body, path
         assert ('Start Free Trial' in body or 'Start your free trial' in body
                 or 'Start your 14-day free trial' in body), path
+
+
+@pytest.mark.django_db
+def test_select_plan_excludes_enterprise(client, subscription_plan):
+    from core.models import SubscriptionPlan, Organization, OrganizationMembership
+    SubscriptionPlan.objects.create(slug='ent', name='Enterprise', tier='enterprise', is_active=True)
+    user = User.objects.create_user(username='e@x.org', email='e@x.org', password='supersecret1')
+    org = Organization.objects.create(name='E Church', email='e@x.org', subscription_status='trial')
+    OrganizationMembership.objects.create(user=user, organization=org, role='owner')
+    user.default_organization = org; user.save()
+    client.force_login(user)
+    sess = client.session; sess['onboarding_org_id'] = org.id; sess.save()
+    resp = client.get(reverse('onboarding_select_plan'))
+    assert resp.status_code == 200
+    assert b'Enterprise' not in resp.content

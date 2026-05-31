@@ -30,6 +30,7 @@
 
         <form method="post" class="space-y-4">
             {% csrf_token %}
+            <input type="hidden" name="plan" value="{{ request.GET.plan }}">
 
             <div>
                 <label class="block text-sm font-medium text-gray-300 mb-1">First Name</label>
