@@ -236,7 +236,6 @@ def dashboard(request):
     # Follow-up summary for dashboard card
     followup_summary = 'All caught up'
     if org:
-        from django.utils import timezone
         today = timezone.now().date()
         due_today = FollowUp.objects.filter(
             organization=org,

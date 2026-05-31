@@ -41,7 +41,7 @@ def test_dashboard_empty_state_and_pco_banner(client):
 def test_dashboard_no_pco_banner_when_connected(client):
     org, u = _login_active_org(client, 'haspco', pco=True)
     body = client.get(reverse('dashboard')).content.decode()
-    assert 'Connect Planning Center' not in body
+    assert 'import your team, schedules, and songs' not in body
 
 
 @pytest.mark.django_db
@@ -56,3 +56,30 @@ def test_pco_chips_enabled_with_pco(client):
     org, u = _login_active_org(client, 'chips2', pco=True)
     body = client.get(reverse('dashboard')).content.decode()
     assert 'data-pco-chip-disabled' not in body
+
+
+@pytest.mark.django_db
+def test_chat_pco_chips_disabled_without_pco(client):
+    org, u = _login_active_org(client, 'chatchips', pco=False)
+    body = client.get(reverse('chat')).content.decode()
+    assert 'data-pco-chip-disabled' in body
+
+
+@pytest.mark.django_db
+def test_chat_pco_chips_enabled_with_pco(client):
+    org, u = _login_active_org(client, 'chatchips2', pco=True)
+    body = client.get(reverse('chat')).content.decode()
+    assert 'data-pco-chip-disabled' not in body
+
+
+@pytest.mark.django_db
+def test_interactions_this_week_counts_recent_only(client):
+    from datetime import timedelta
+    from django.utils import timezone
+    from core.models import Interaction
+    org, u = _login_active_org(client, 'wk')
+    recent = Interaction.objects.create(organization=org, user=u, content='recent note')
+    old = Interaction.objects.create(organization=org, user=u, content='old note')
+    Interaction.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=30))
+    resp = client.get(reverse('dashboard'))
+    assert resp.context['interactions_this_week'] == 1
