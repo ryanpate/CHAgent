@@ -25,3 +25,11 @@ def test_pco_guide_has_faq_and_compelling_title(client):
     assert 'FAQPage' in body
     assert 'Frequently asked questions' in body or 'Frequently Asked Questions' in body
     assert '2026' in body
+
+@pytest.mark.django_db
+def test_homepage_targets_brand(client):
+    import re
+    body = client.get('/').content.decode()
+    title = re.search(r'<title>(.*?)</title>', body, re.S).group(1)
+    assert title.strip().startswith('Aria')
+    assert 'alternateName' in body
