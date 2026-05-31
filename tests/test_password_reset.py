@@ -46,3 +46,13 @@ def test_password_reset_confirm_weak_password_shows_error(client):
     resp2 = client.post(post_url, {'new_password1': '123', 'new_password2': '123'})
     assert resp2.status_code == 200  # re-render with errors, not redirect
     assert b'text-red-400' in resp2.content  # themed error shown in-form
+
+
+@pytest.mark.django_db
+def test_password_reset_paths_are_public_in_middleware():
+    from core.middleware import TenantMiddleware, TwoFactorMiddleware
+    for prefix in ['/accounts/password-reset/', '/accounts/reset/']:
+        assert any(prefix.startswith(u) or u == prefix for u in TenantMiddleware.PUBLIC_URLS), f"{prefix} not public in TenantMiddleware"
+    exempt = getattr(TwoFactorMiddleware, 'EXEMPT_URLS', [])
+    for prefix in ['/accounts/password-reset/', '/accounts/reset/']:
+        assert any(prefix.startswith(u) or u == prefix for u in exempt), f"{prefix} not exempt in TwoFactorMiddleware"

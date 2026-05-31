@@ -30,6 +30,8 @@ class TenantMiddleware(MiddlewareMixin):
         '/accounts/login/',
         '/login/2fa/',
         '/accounts/logout/',
+        '/accounts/password-reset/',
+        '/accounts/reset/',
         '/accounts/register/',
         '/health/',
         '/admin/',
@@ -455,6 +457,8 @@ class TwoFactorMiddleware(MiddlewareMixin):
         '/login/2fa/',
         '/accounts/login/',
         '/accounts/logout/',
+        '/accounts/password-reset/',
+        '/accounts/reset/',
         '/admin/',
         '/settings/security/',
     ]

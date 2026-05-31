@@ -258,7 +258,7 @@ def dashboard(request):
             followup_summary = ', '.join(parts)
 
     week_ago = timezone.now() - timedelta(days=7)
-    interactions_this_week = interaction_qs.filter(created_at__gte=week_ago).count()
+    interactions_this_week = interaction_qs.filter(created_at__gte=week_ago).count() if org else 0
     pco_connected = bool(org and org.has_pco_credentials())
 
     context = {
