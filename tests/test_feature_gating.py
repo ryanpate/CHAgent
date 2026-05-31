@@ -41,3 +41,33 @@ def test_require_plan_feature_allows_when_present(request_factory):
 
     resp = view(_req(request_factory, org))
     assert resp.status_code == 200
+
+
+from django.urls import reverse
+from core.models import OrganizationMembership
+from accounts.models import User
+
+
+def _member(org):
+    u = User.objects.create_user(username=f'm{org.id}@x.org', email=f'm{org.id}@x.org', password='supersecret1')
+    OrganizationMembership.objects.create(user=u, organization=org, role='owner', can_view_analytics=True)
+    u.default_organization = org; u.save()
+    return u
+
+
+@pytest.mark.django_db
+def test_starter_org_blocked_from_analytics(client):
+    plan = SubscriptionPlan.objects.create(slug='s2', name='S', tier='starter', has_analytics=False)
+    org = Organization.objects.create(name='S2', email='s2@x.org', slug='s2-church', subscription_plan=plan, subscription_status='active')
+    client.force_login(_member(org))
+    resp = client.get(reverse('analytics_dashboard'))
+    assert resp.status_code == 302
+
+
+@pytest.mark.django_db
+def test_ministry_org_allowed_into_analytics(client):
+    plan = SubscriptionPlan.objects.create(slug='m2', name='M', tier='ministry', has_analytics=True)
+    org = Organization.objects.create(name='M2', email='m2@x.org', slug='m2-church', subscription_plan=plan, subscription_status='active')
+    client.force_login(_member(org))
+    resp = client.get(reverse('analytics_dashboard'))
+    assert resp.status_code == 200

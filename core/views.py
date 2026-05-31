@@ -19,7 +19,7 @@ from django.db.models import Count, Q
 from django.utils import timezone
 
 from .models import Interaction, Volunteer, ChatMessage, ConversationContext, FollowUp, ResponseFeedback, AuditLog
-from .middleware import require_organization, require_role
+from .middleware import require_organization, require_role, require_plan_feature
 from .agent import (
     query_agent,
     process_interaction,
@@ -1418,6 +1418,7 @@ def followup_delete(request, pk):
 # ============================================================================
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_dashboard(request):
     """
     Main analytics dashboard with overview metrics and quick links to reports.
@@ -1464,6 +1465,7 @@ def analytics_dashboard(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_volunteer_engagement(request):
     """
     Detailed volunteer engagement report.
@@ -1495,6 +1497,7 @@ def analytics_volunteer_engagement(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_team_care(request):
     """
     Team care report - volunteers needing attention.
@@ -1526,6 +1529,7 @@ def analytics_team_care(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_interaction_trends(request):
     """
     Interaction trends over time.
@@ -1559,6 +1563,7 @@ def analytics_interaction_trends(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_prayer_requests(request):
     """
     Prayer request summary and themes.
@@ -1590,6 +1595,7 @@ def analytics_prayer_requests(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_ai_performance(request):
     """
     AI (Aria) performance metrics.
@@ -1621,6 +1627,7 @@ def analytics_ai_performance(request):
 
 
 @login_required
+@require_plan_feature('analytics')
 def analytics_export(request, report_type):
     """
     Export a report as JSON.
@@ -1657,6 +1664,7 @@ def analytics_export(request, report_type):
 
 
 @login_required
+@require_plan_feature('analytics')
 @require_POST
 def analytics_refresh_cache(request):
     """
@@ -1681,6 +1689,7 @@ def analytics_refresh_cache(request):
 # ============================================================================
 
 @login_required
+@require_plan_feature('care_insights')
 def care_dashboard(request):
     """
     Proactive care dashboard showing volunteers who need attention.
@@ -1752,6 +1761,7 @@ def care_dashboard(request):
 
 
 @login_required
+@require_plan_feature('care_insights')
 @require_POST
 def care_dismiss_insight(request, pk):
     """
@@ -1789,6 +1799,7 @@ def care_dismiss_insight(request, pk):
 
 
 @login_required
+@require_plan_feature('care_insights')
 @require_POST
 def care_create_followup(request, pk):
     """
@@ -1832,6 +1843,7 @@ def care_create_followup(request, pk):
 
 
 @login_required
+@require_plan_feature('care_insights')
 @require_POST
 def care_refresh_insights(request):
     """
