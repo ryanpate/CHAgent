@@ -5395,6 +5395,9 @@ def onboarding_signup(request):
     """
     from datetime import timedelta
     from django.contrib.auth import login
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError as DjangoValidationError
+    from django.db import transaction, IntegrityError
     from accounts.models import User
     from .models import Organization, OrganizationMembership
 
@@ -5413,8 +5416,13 @@ def onboarding_signup(request):
             errors.append('Your first name is required.')
         if not email:
             errors.append('Email address is required.')
-        if not password or len(password) < 8:
-            errors.append('Password must be at least 8 characters.')
+        if not password:
+            errors.append('Password is required.')
+        else:
+            try:
+                validate_password(password)
+            except DjangoValidationError as pw_err:
+                errors.extend(pw_err.messages)
         if not church_name:
             errors.append('Church name is required.')
         if email and User.objects.filter(email=email).exists():
@@ -5427,24 +5435,32 @@ def onboarding_signup(request):
                 'email': email, 'church_name': church_name,
             })
 
-        user = User.objects.create_user(
-            username=email, email=email, password=password,
-            first_name=first_name, last_name=last_name,
-        )
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    username=email, email=email, password=password,
+                    first_name=first_name, last_name=last_name,
+                )
 
-        trial_days = getattr(settings, 'TRIAL_PERIOD_DAYS', 14)
-        org = Organization.objects.create(
-            name=church_name, email=email,
-            subscription_status='trial',
-            trial_ends_at=timezone.now() + timedelta(days=trial_days),
-        )
-        OrganizationMembership.objects.create(
-            user=user, organization=org, role='owner',
-            can_manage_users=True, can_manage_settings=True,
-            can_view_analytics=True, can_manage_billing=True,
-        )
-        user.default_organization = org
-        user.save()
+                trial_days = getattr(settings, 'TRIAL_PERIOD_DAYS', 14)
+                org = Organization.objects.create(
+                    name=church_name, email=email,
+                    subscription_status='trial',
+                    trial_ends_at=timezone.now() + timedelta(days=trial_days),
+                )
+                OrganizationMembership.objects.create(
+                    user=user, organization=org, role='owner',
+                    can_manage_users=True, can_manage_settings=True,
+                    can_view_analytics=True, can_manage_billing=True,
+                )
+                user.default_organization = org
+                user.save()
+        except IntegrityError:
+            return render(request, 'core/onboarding/signup.html', {
+                'errors': ['Something went wrong creating your account. Please try again.'],
+                'first_name': first_name, 'last_name': last_name,
+                'email': email, 'church_name': church_name,
+            })
 
         try:
             from .guide_seeder import seed_guide_document

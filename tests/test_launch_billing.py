@@ -27,6 +27,7 @@ def test_open_signup_creates_trial_org_and_redirects_to_plan(client, subscriptio
     assert org.subscription_status == 'trial'
     assert org.trial_ends_at is not None
     assert OrganizationMembership.objects.filter(user=user, organization=org, role='owner').exists()
+    assert client.session.get('_auth_user_id') is not None  # user is logged in
 
 
 @pytest.mark.django_db
@@ -67,3 +68,15 @@ def test_checkout_without_stripe_config_does_not_grant_free_access(client, setti
     resp = client.get(reverse('onboarding_checkout'))
     assert resp.status_code == 200
     assert b'unavailable' in resp.content.lower() or b'error' in resp.content.lower()
+    assert b'continue with free trial' not in resp.content.lower()
+    assert reverse('onboarding_connect_pco') not in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_open_signup_rejects_weak_password(client, subscription_plan):
+    resp = client.post(reverse('onboarding_signup'), {
+        'first_name': 'Pat', 'last_name': 'Lee', 'email': 'weak@x.org',
+        'password': '12345678', 'church_name': 'Weak Church',
+    })
+    assert resp.status_code == 200
+    assert not User.objects.filter(email='weak@x.org').exists()
