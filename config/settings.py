@@ -418,6 +418,9 @@ AUTHENTICATION_BACKENDS = [
 # Endpoint Rate Limiting (django-ratelimit)
 # =============================================================================
 # Local-memory cache backend for ratelimit counters (per-process).
+# NOTE: LocMemCache is per-process. With multiple Gunicorn workers the signup
+# rate limit (5/hour/IP) is enforced per worker, so the effective ceiling is
+# 5 * worker_count. For global enforcement at scale, point this at Redis.
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -425,4 +428,4 @@ CACHES = {
 }
 
 # Master switch for django-ratelimit (disabled in tests for determinism).
-RATELIMIT_ENABLE = True
+RATELIMIT_ENABLE = True  # on in dev too; run `cache.clear()` if you hit the limit locally

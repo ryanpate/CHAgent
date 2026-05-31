@@ -2102,6 +2102,7 @@ Adds 5 more native iOS API integrations to strengthen the App Store case (12 tot
 - **Frontend State**: Limited client-side state management, relies heavily on page reloads
 - **Custom Branding**: Organization has branding fields but not fully integrated into all templates
 - **Agent File Size**: `core/agent.py` is 4183 lines - consider modularizing query handlers
+- **Rate-limit cache is per-worker (LocMemCache):** signup throttle is 5/hour/IP per Gunicorn worker. Move `CACHES['default']` to Redis for global enforcement before scaling workers / sustained public traffic.
 
 ### Low Priority
 - **Code Coverage**: Test coverage good but could be expanded to edge cases

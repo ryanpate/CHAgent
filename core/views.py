@@ -5768,8 +5768,18 @@ def onboarding_checkout_success(request):
                     org.trial_ends_at = datetime.fromtimestamp(trial_end_ts, tz=dt_timezone.utc)
                 org.subscription_started_at = timezone.now()
                 org.save()
-        except stripe.error.StripeError:
-            pass
+        except stripe.error.StripeError as e:
+            import logging
+            logging.getLogger(__name__).error(
+                f"checkout_success: failed to finalize subscription for org "
+                f"{getattr(org, 'slug', '?')}: {e}"
+            )
+            from django.contrib import messages
+            messages.warning(
+                request,
+                "Your payment is processing. If you can't access your account in a "
+                "few minutes, contact support@aria.church."
+            )
 
     return redirect('onboarding_connect_pco')
 
