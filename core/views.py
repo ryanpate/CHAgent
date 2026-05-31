@@ -6165,7 +6165,8 @@ def org_settings(request):
         org.phone = request.POST.get('phone', '')
         org.website = request.POST.get('website', '')
         org.timezone = request.POST.get('timezone', org.timezone)
-        org.ai_assistant_name = request.POST.get('ai_assistant_name', 'Aria')
+        if org.has_feature('custom_branding'):
+            org.ai_assistant_name = request.POST.get('ai_assistant_name', org.ai_assistant_name)
 
         org.save()
 

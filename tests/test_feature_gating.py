@@ -71,3 +71,16 @@ def test_ministry_org_allowed_into_analytics(client):
     client.force_login(_member(org))
     resp = client.get(reverse('analytics_dashboard'))
     assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_starter_org_cannot_change_branding(client):
+    plan = SubscriptionPlan.objects.create(slug='s4', name='S', tier='starter', has_custom_branding=False)
+    org = Organization.objects.create(name='S4', email='s4@x.org', slug='s4-church', subscription_plan=plan, subscription_status='active')
+    u = User.objects.create_user(username='s4o@x.org', email='s4o@x.org', password='supersecret1')
+    OrganizationMembership.objects.create(user=u, organization=org, role='owner', can_manage_settings=True)
+    u.default_organization = org; u.save()
+    client.force_login(u)
+    client.post(reverse('org_settings'), {'name': 'S4', 'email': 's4@x.org', 'ai_assistant_name': 'Hacked'})
+    org.refresh_from_db()
+    assert org.ai_assistant_name != 'Hacked'

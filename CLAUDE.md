@@ -2093,6 +2093,7 @@ Adds 5 more native iOS API integrations to strengthen the App Store case (12 tot
 - **Proactive Care AI**: VolunteerInsight model exists but AI generation logic incomplete
 - **Learning System**: ResponseFeedback and LearnedCorrection models implemented but underutilized in query processing
 - **Large View File**: `core/views.py` is 4530 lines with 102 functions - consider splitting into multiple files
+- **API-access gating has no surface:** The `has_api_access` plan feature cannot be gated yet because the external integrations API is not implemented/exposed. `Organization.api_key`/`api_enabled` fields exist on the model, but there is no settings UI to enable it and no external API endpoints consuming the key. (The `core/api_views.py` JWT/push API is the mobile-app surface available to all users, not the premium external API.) Add `@require_plan_feature('api_access')` when that surface is built.
 
 ### Medium Priority
 - **View Decomposition**: Some views exceed 100 lines and could be split into smaller functions
