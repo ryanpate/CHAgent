@@ -304,6 +304,7 @@ def chat(request):
         'chat_messages': chat_messages,
         'session_id': session_id,
         'initial_message': initial_message,
+        'pco_connected': bool(org and org.has_pco_credentials()),
     }
 
     response = render(request, 'core/chat.html', context)

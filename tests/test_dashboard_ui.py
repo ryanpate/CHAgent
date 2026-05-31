@@ -42,3 +42,17 @@ def test_dashboard_no_pco_banner_when_connected(client):
     org, u = _login_active_org(client, 'haspco', pco=True)
     body = client.get(reverse('dashboard')).content.decode()
     assert 'Connect Planning Center' not in body
+
+
+@pytest.mark.django_db
+def test_pco_dependent_chips_disabled_without_pco(client):
+    org, u = _login_active_org(client, 'chips', pco=False)
+    body = client.get(reverse('dashboard')).content.decode()
+    assert 'data-pco-chip-disabled' in body
+
+
+@pytest.mark.django_db
+def test_pco_chips_enabled_with_pco(client):
+    org, u = _login_active_org(client, 'chips2', pco=True)
+    body = client.get(reverse('dashboard')).content.decode()
+    assert 'data-pco-chip-disabled' not in body

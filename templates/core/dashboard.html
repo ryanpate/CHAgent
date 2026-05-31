@@ -62,6 +62,7 @@
                 </svg>
                 Log Interaction
             </a>
+            {% if pco_connected %}
             <a href="{% url 'chat' %}?q=Who+is+serving+this+Sunday%3F"
                class="bg-ch-gray border border-gray-700 rounded-full px-3 py-1.5 text-xs text-gray-300 hover:border-ch-gold hover:text-white transition flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,6 +70,10 @@
                 </svg>
                 This Sunday's Team
             </a>
+            {% else %}
+            <span data-pco-chip-disabled title="Connect Planning Center to use this" class="bg-ch-gray/50 border border-gray-800 rounded-full px-3 py-1.5 text-xs text-gray-600 cursor-not-allowed">This Sunday's Team</span>
+            {% endif %}
+            {% if pco_connected %}
             <a href="{% url 'chat' %}?q=What+songs+did+we+play+last+Sunday%3F"
                class="bg-ch-gray border border-gray-700 rounded-full px-3 py-1.5 text-xs text-gray-300 hover:border-ch-gold hover:text-white transition flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -76,6 +81,10 @@
                 </svg>
                 Last Setlist
             </a>
+            {% else %}
+            <span data-pco-chip-disabled title="Connect Planning Center to use this" class="bg-ch-gray/50 border border-gray-800 rounded-full px-3 py-1.5 text-xs text-gray-600 cursor-not-allowed">Last Setlist</span>
+            {% endif %}
+            {% if pco_connected %}
             <a href="{% url 'chat' %}?q=Who+is+blocked+out+this+Sunday%3F"
                class="bg-ch-gray border border-gray-700 rounded-full px-3 py-1.5 text-xs text-gray-300 hover:border-ch-gold hover:text-white transition flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -83,6 +92,9 @@
                 </svg>
                 Check Blockouts
             </a>
+            {% else %}
+            <span data-pco-chip-disabled title="Connect Planning Center to use this" class="bg-ch-gray/50 border border-gray-800 rounded-full px-3 py-1.5 text-xs text-gray-600 cursor-not-allowed">Check Blockouts</span>
+            {% endif %}
             <a href="{% url 'chat' %}?q=What+do+we+know+about+"
                class="bg-ch-gray border border-gray-700 rounded-full px-3 py-1.5 text-xs text-gray-300 hover:border-ch-gold hover:text-white transition flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
