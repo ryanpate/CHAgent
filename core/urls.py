@@ -16,6 +16,7 @@ urlpatterns = [
     path('resources/planning-center-setup-guide/', views.resource_pco_guide, name='resource_pco_guide'),
     # Authenticated app
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('search/', views.search, name='search'),
     path('chat/', views.chat, name='chat'),
     path('chat/send/', views.chat_send, name='chat_send'),
     path('chat/new/', views.chat_new_session, name='chat_new_session'),

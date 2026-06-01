@@ -157,3 +157,32 @@ def test_project_owner_not_in_members_can_search(world):
     Task.objects.create(organization=org, project=proj, title='Easter owned', created_by=alice)
     res = unified_search(org, alice, 'easter')
     assert any(r['title'] == 'Easter owned' for r in res['tasks'])
+
+
+def _login(client, world, who='alice'):
+    client.force_login(world[who])
+    return world[who]
+
+@pytest.mark.django_db
+def test_search_view_groups_and_filters(client, world):
+    org, alice = world['org'], world['alice']
+    proj = Project.objects.create(organization=org, name='Easter project', owner=alice)
+    proj.members.add(alice)
+    Task.objects.create(organization=org, project=proj, title='Easter set', created_by=alice)
+    _login(client, world)
+    resp = client.get(reverse('search'), {'q': 'easter'})
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert 'Easter project' in body and 'Easter set' in body
+    resp2 = client.get(reverse('search'), {'q': 'easter', 'type': 'tasks'})
+    b2 = resp2.content.decode()
+    assert 'Easter set' in b2
+    assert 'Easter project' not in b2
+
+@pytest.mark.django_db
+def test_search_view_min_length_and_empty(client, world):
+    _login(client, world)
+    short = client.get(reverse('search'), {'q': 'e'}).content.decode()
+    assert 'at least 2 characters' in short.lower() or 'type at least' in short.lower()
+    empty = client.get(reverse('search'), {'q': 'zzzznomatch'}).content.decode()
+    assert 'no results' in empty.lower() or 'nothing' in empty.lower()
