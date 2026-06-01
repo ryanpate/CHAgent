@@ -1,0 +1,17 @@
+{% if ai_quota_exceeded %}
+<div class="bg-red-500/10 border border-red-500/40 rounded-lg p-4 mb-6">
+  <p class="text-sm text-red-300">You've used {{ ai_queries_used }} / {{ ai_queries_limit }} AI queries this month. New questions are paused until the start of next month, or
+    <a href="{% url 'org_settings_billing' %}" class="text-ch-gold hover:underline">upgrade your plan</a>.</p>
+</div>
+{% elif ai_quota_approaching %}
+<div class="bg-ch-gold/10 border border-ch-gold/30 rounded-lg p-4 mb-6">
+  <p class="text-sm text-gray-300">{{ ai_queries_used }} / {{ ai_queries_limit }} AI queries this month.
+    <a href="{% url 'org_settings_billing' %}" class="text-ch-gold hover:underline">Need more?</a></p>
+</div>
+{% endif %}
+{% if volunteer_over_limit %}
+<div class="bg-ch-gold/10 border border-ch-gold/30 rounded-lg p-4 mb-6">
+  <p class="text-sm text-gray-300">You're tracking {{ volunteer_count }} volunteers; your plan includes {{ volunteer_limit }}.
+    <a href="{% url 'org_settings_billing' %}" class="text-ch-gold hover:underline">Upgrade to stay within plan</a>.</p>
+</div>
+{% endif %}

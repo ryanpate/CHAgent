@@ -103,3 +103,35 @@ def test_query_agent_guard_skipped_when_not_exceeded():
     unlimited = _org(monthly=-1, used=99999)
     assert under.ai_quota_exceeded is False
     assert unlimited.ai_quota_exceeded is False
+
+
+from django.urls import reverse
+from core.models import OrganizationMembership
+
+def _login(client, org):
+    u = User.objects.create_user(username=f'm{org.id}@x.org', email=f'm{org.id}@x.org', password='supersecret1')
+    OrganizationMembership.objects.create(user=u, organization=org, role='owner')
+    u.default_organization = org; u.save()
+    client.force_login(u)
+    return u
+
+@pytest.mark.django_db
+def test_dashboard_shows_ai_and_volunteer_banners(client):
+    from core.models import Volunteer
+    org = _org(monthly=500, used=500, vol=2)
+    org.stripe_subscription_id = 'sub_x'; org.save()
+    for i in range(3):
+        Volunteer.objects.create(organization=org, name=f'V{i}')
+    _login(client, org)
+    body = client.get(reverse('dashboard')).content.decode()
+    assert 'AI queries this month' in body
+    assert 'plan includes' in body
+
+@pytest.mark.django_db
+def test_dashboard_no_banners_when_within_limits(client):
+    org = _org(monthly=500, used=10, vol=50)
+    org.stripe_subscription_id = 'sub_x'; org.save()
+    _login(client, org)
+    body = client.get(reverse('dashboard')).content.decode()
+    assert 'AI queries this month' not in body
+    assert 'plan includes' not in body

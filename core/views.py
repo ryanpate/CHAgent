@@ -272,6 +272,13 @@ def dashboard(request):
         'followup_summary': followup_summary,
         'interactions_this_week': interactions_this_week,
         'pco_connected': pco_connected,
+        'ai_quota_exceeded': org.ai_quota_exceeded if org else False,
+        'ai_quota_approaching': org.ai_quota_approaching if org else False,
+        'ai_queries_used': org.ai_queries_this_month if org else 0,
+        'ai_queries_limit': org.ai_queries_limit if org else None,
+        'volunteer_over_limit': org.volunteer_limit_exceeded if org else False,
+        'volunteer_count': org.get_volunteer_count() if org else 0,
+        'volunteer_limit': org.volunteer_limit if org else None,
     }
 
     return render(request, 'core/dashboard.html', context)
@@ -304,6 +311,10 @@ def chat(request):
         'session_id': session_id,
         'initial_message': initial_message,
         'pco_connected': bool(org and org.has_pco_credentials()),
+        'ai_quota_exceeded': org.ai_quota_exceeded if org else False,
+        'ai_quota_approaching': org.ai_quota_approaching if org else False,
+        'ai_queries_used': org.ai_queries_this_month if org else 0,
+        'ai_queries_limit': org.ai_queries_limit if org else None,
     }
 
     response = render(request, 'core/chat.html', context)
