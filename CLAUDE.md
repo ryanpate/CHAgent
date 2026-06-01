@@ -2,19 +2,32 @@
 
 ## Project Status
 
-**🎯 Overall Completion: ~95%** | **📊 Production-Ready Core Features** | **🔒 Closed Beta**
+**🎯 Overall Completion: ~95%** | **📊 Production-Ready** | **🌐 Public Launch (paid, live on aria.church)**
 
-Last Updated: March 5, 2026
+Last Updated: June 1, 2026
 
 ### Quick Stats
 - **40+ Database Models** across all domains (including blog, beta requests, security, knowledge base)
 - **130+ View Functions** with full CRUD operations
 - **105+ Templates** for complete user journeys
-- **11 Test Files** with 452 passing test cases (0 failures)
-- **34+ Migrations** tracking schema evolution
-- **Recent Focus**: Native mobile app approved and live on App Store, Phase 3 native APIs (offline fallback, share sheet, universal links, local notifications, quick actions), Knowledge Base image support, document upload, test suite stability, two-factor authentication, audit logging
+- **~847 passing tests** (0 failures)
+- **50+ Migrations** tracking schema evolution
+- **Recent Focus**: Public launch (open self-serve signup + card-required trials), tier enforcement (premium feature gating + AI-query usage caps), unified communication search, SEO, native mobile app live on App Store
 
-### Current Sprint (February 2026)
+### Public Launch (May–June 2026)
+The product is **out of closed beta and live publicly with paid subscriptions**. Recently shipped:
+- ✅ **Public self-serve signup** — `/signup/` creates a real org on a **14-day card-required Stripe trial** (the old beta-request flow is retired from the public path; `BetaRequest`/beta-signup code remains but is unlinked). Existing **beta orgs are grandfathered free forever** (`subscription_status='beta'` treated as active and bypasses all gates).
+- ✅ **Pricing single source of truth** — Starter $9.99 / Team $39.99 / Ministry $79.99 monthly ($100/$400/$800 yearly), consistent across DB seed, pricing page, and JSON-LD.
+- ✅ **Premium feature gating** — `require_plan_feature` decorator (in `core/middleware.py`) gates analytics, care insights, custom branding by plan.
+- ✅ **Usage-cap enforcement** — monthly AI queries hard-blocked at the plan limit (guard at the top of `query_agent`; upgrade message persisted to chat; ≥80% warning + exceeded banners). Volunteers are **advisory-only** (banner, never blocks PCO sync). Unlimited (`-1`) plans are never gated. See `Organization.ai_quota_exceeded` / `volunteer_limit_exceeded` and `reset_ai_usage_if_new_month`.
+- ✅ **Strict card enforcement** — `TenantMiddleware` redirects a `trial` org with no `stripe_subscription_id` to complete checkout; signup is rate-limited (django-ratelimit, 5/h/IP, LocMemCache = per-worker).
+- ✅ **Conversion/first-run UI** — mobile-responsive pricing comparison, dashboard empty-state + "Connect Planning Center" first-run banner, PCO-dependent quick actions disabled until connected, password-reset flow (`/accounts/password-reset/`).
+- ✅ **SEO** — registered blog category sitemap + sitemap-200 guard test, rescued the PCO setup guide (FAQ schema), brand-targeted homepage, generated `static/og-image.png` + `twitter-card.png` (via `scripts/generate_og_images.py`), seeded 2 blog posts.
+- ✅ **Unified communication search** — `core/search.py::unified_search()` searches task comments, project discussions, channel messages, DMs, announcements, and task/project titles from a nav search box → `/search/?q=`; access control mirrors each list view; `icontains` (NOT Postgres FTS — the test DB is SQLite).
+
+> **GOTCHA:** `/onboarding/*` is a `TenantMiddleware` PUBLIC_URL, so `request.organization` is NOT set in onboarding views — they resolve the org from `session['onboarding_org_id']`, then `session['organization_id']`, then `request.user.get_primary_organization()`. Forgetting the fallbacks caused a "Connect Planning Center link does nothing" bug (fixed). Also: `chat_send` renders `ChatMessage` rows from the DB and ignores `query_agent`'s return value — any early-return path in `query_agent` MUST persist its messages or the response never appears.
+
+### Historical Sprint (February 2026)
 - ✅ **Closed Beta System** - Full beta request and approval workflow
   - BetaRequest model with admin approval flow
   - Beta request form replacing open signup at `/signup/`
@@ -1286,9 +1299,11 @@ The PWA service worker (`static/js/sw.js`) handles:
 
 ---
 
-## Beta Testing System
+## Beta Testing System (historical — superseded by public launch)
 
-The platform is currently in closed beta. Users request access through a form, and platform admins approve requests.
+> **STATUS:** The platform is now in **public launch** with open self-serve signup (see "Public Launch" at the top). The closed-beta request/approval flow below is **retired from the public path** — `/signup/` now creates a real trial org directly. The `BetaRequest` model, `beta_signup` view, and platform-admin approval views remain in the code (unlinked) and existing beta orgs are grandfathered free. The rest of this section documents that historical flow.
+
+Originally, the platform was in closed beta: users requested access through a form, and platform admins approved requests.
 
 ### BetaRequest Model
 

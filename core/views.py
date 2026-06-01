@@ -5632,6 +5632,23 @@ def beta_signup(request):
 
 
 @login_required
+def _resolve_onboarding_org(request):
+    """Resolve the organization for an onboarding-flow view.
+
+    /onboarding/* paths are TenantMiddleware PUBLIC_URLs, so request.organization is NOT set
+    here. Resolve from the active signup wizard (onboarding_org_id), then the tenant-selected
+    org (organization_id), then the user's primary org — so the flow also works for existing
+    users reaching these pages outside the wizard (e.g. the Settings "Connect Planning Center"
+    link), not just brand-new signups. Returns the Organization or None.
+    """
+    from .models import Organization
+    org_id = request.session.get('onboarding_org_id') or request.session.get('organization_id')
+    org = Organization.objects.filter(id=org_id).first() if org_id else None
+    if not org and request.user.is_authenticated:
+        org = request.user.get_primary_organization()
+    return org
+
+
 def onboarding_select_plan(request):
     """
     Plan selection page during onboarding.
@@ -5640,12 +5657,7 @@ def onboarding_select_plan(request):
     """
     from .models import SubscriptionPlan, Organization
 
-    # Get organization from session or user's default
-    org_id = request.session.get('onboarding_org_id')
-    if org_id:
-        org = Organization.objects.filter(id=org_id).first()
-    else:
-        org = request.user.default_organization
+    org = _resolve_onboarding_org(request)
 
     if not org:
         return redirect('onboarding_signup')
@@ -5691,11 +5703,7 @@ def onboarding_checkout(request):
     stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
 
     # Get organization
-    org_id = request.session.get('onboarding_org_id')
-    if org_id:
-        org = Organization.objects.filter(id=org_id).first()
-    else:
-        org = request.user.default_organization
+    org = _resolve_onboarding_org(request)
 
     if not org:
         return redirect('onboarding_signup')
@@ -5792,11 +5800,7 @@ def onboarding_checkout_success(request):
     session_id = request.GET.get('session_id')
 
     # Get organization
-    org_id = request.session.get('onboarding_org_id')
-    if org_id:
-        org = Organization.objects.filter(id=org_id).first()
-    else:
-        org = request.user.default_organization
+    org = _resolve_onboarding_org(request)
 
     if session_id and org and stripe.api_key:
         try:
@@ -5846,16 +5850,10 @@ def onboarding_connect_pco(request):
     """
     from .models import Organization
 
-    # Resolve the organization. New signups carry it in the onboarding session;
-    # existing users reach this page from the dashboard/settings link, where the
-    # org comes from the tenant-selected org (session) or their primary membership.
-    # (This page lives under /onboarding/, a TenantMiddleware PUBLIC_URL, so
-    # request.organization is not populated here.)
+    # New signups continue the wizard; existing users reach this from the dashboard/settings
+    # "Connect Planning Center" link. _resolve_onboarding_org handles both (see its docstring).
     in_wizard = bool(request.session.get('onboarding_org_id'))
-    org_id = request.session.get('onboarding_org_id') or request.session.get('organization_id')
-    org = Organization.objects.filter(id=org_id).first() if org_id else None
-    if not org:
-        org = request.user.get_primary_organization()
+    org = _resolve_onboarding_org(request)
 
     if not org:
         return redirect('onboarding_signup')
@@ -5900,11 +5898,7 @@ def onboarding_invite_team(request):
     import secrets
 
     # Get organization
-    org_id = request.session.get('onboarding_org_id')
-    if org_id:
-        org = Organization.objects.filter(id=org_id).first()
-    else:
-        org = request.user.default_organization
+    org = _resolve_onboarding_org(request)
 
     if not org:
         return redirect('onboarding_signup')
@@ -5978,7 +5972,7 @@ def onboarding_complete(request):
 
     Shows a summary and guides user to their dashboard.
     """
-    org = request.user.default_organization
+    org = _resolve_onboarding_org(request)
 
     context = {
         'organization': org,
