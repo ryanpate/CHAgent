@@ -5807,21 +5807,28 @@ def onboarding_connect_pco(request):
     """
     from .models import Organization
 
-    # Get organization
-    org_id = request.session.get('onboarding_org_id')
-    if org_id:
-        org = Organization.objects.filter(id=org_id).first()
-    else:
-        org = request.user.default_organization
+    # Resolve the organization. New signups carry it in the onboarding session;
+    # existing users reach this page from the dashboard/settings link, where the
+    # org comes from the tenant-selected org (session) or their primary membership.
+    # (This page lives under /onboarding/, a TenantMiddleware PUBLIC_URL, so
+    # request.organization is not populated here.)
+    in_wizard = bool(request.session.get('onboarding_org_id'))
+    org_id = request.session.get('onboarding_org_id') or request.session.get('organization_id')
+    org = Organization.objects.filter(id=org_id).first() if org_id else None
+    if not org:
+        org = request.user.get_primary_organization()
 
     if not org:
         return redirect('onboarding_signup')
+
+    # Continue the signup wizard for new orgs; return existing users to settings.
+    next_url = 'onboarding_invite_team' if in_wizard else 'org_settings'
 
     if request.method == 'POST':
         action = request.POST.get('action')
 
         if action == 'skip':
-            return redirect('onboarding_invite_team')
+            return redirect(next_url)
 
         if action == 'connect':
             # For now, store manual credentials (full OAuth can be added later)
@@ -5833,7 +5840,7 @@ def onboarding_connect_pco(request):
                 org.planning_center_secret = pco_secret
                 org.planning_center_connected_at = timezone.now()
                 org.save()
-                return redirect('onboarding_invite_team')
+                return redirect(next_url)
 
     context = {
         'organization': org,
