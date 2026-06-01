@@ -1,0 +1,213 @@
+from django.utils.safestring import SafeString
+from core.search import snippet
+
+
+def test_snippet_highlights_match_case_insensitive():
+    out = snippet("We moved the Easter set to G", "easter")
+    assert '<mark>Easter</mark>' in out
+    assert isinstance(out, SafeString)
+
+
+def test_snippet_escapes_html():
+    out = snippet("<script>alert(1)</script> easter", "easter")
+    assert '<script>' not in out
+    assert '&lt;script&gt;' in out
+    assert '<mark>easter</mark>' in out
+
+
+def test_snippet_windows_long_text():
+    text = "x" * 500 + " easter " + "y" * 500
+    out = snippet(text, "easter")
+    assert 'easter' in out.lower()
+    assert len(out) < 500
+    assert '…' in out
+
+
+import pytest
+from django.urls import reverse
+from accounts.models import User
+from core.models import (Organization, SubscriptionPlan, OrganizationMembership, Project, Task,
+                         TaskComment, Channel, ChannelMessage, DirectMessage, Announcement,
+                         ProjectDiscussion, ProjectDiscussionMessage)
+from core.search import unified_search
+
+
+@pytest.fixture
+def world(db):
+    plan = SubscriptionPlan.objects.create(slug='s-search', name='S', tier='team')
+    org = Organization.objects.create(name='Org', email='o@x.org', slug='org-search',
+                                      subscription_plan=plan, subscription_status='active')
+    other_org = Organization.objects.create(name='Other', email='o2@x.org', slug='other-search',
+                                            subscription_plan=plan, subscription_status='active')
+    alice = User.objects.create_user(username='alice@x.org', email='alice@x.org', password='supersecret1')
+    bob = User.objects.create_user(username='bob@x.org', email='bob@x.org', password='supersecret1')
+    for u in (alice, bob):
+        OrganizationMembership.objects.create(user=u, organization=org, role='member')
+        u.default_organization = org; u.save()
+    return dict(org=org, other_org=other_org, alice=alice, bob=bob)
+
+
+@pytest.mark.django_db
+def test_finds_matches_across_surfaces_for_member(world):
+    org, alice = world['org'], world['alice']
+    proj = Project.objects.create(organization=org, name='Easter project', owner=alice)
+    proj.members.add(alice)
+    task = Task.objects.create(organization=org, project=proj, title='Easter worship set', created_by=alice)
+    TaskComment.objects.create(task=task, author=alice, content='moved easter set to G')
+    chan = Channel.objects.create(organization=org, name='production', slug='production', is_private=False)
+    ChannelMessage.objects.create(channel=chan, author=alice, content='easter set list ready?')
+    Announcement.objects.create(organization=org, title='Easter service', content='plan')
+    disc = ProjectDiscussion.objects.create(organization=org, project=proj, title='Easter service plan', created_by=alice)
+    ProjectDiscussionMessage.objects.create(discussion=disc, author=alice, content='easter logistics')
+
+    res = unified_search(org, alice, 'easter')
+    assert len(res['projects']) == 1
+    assert len(res['tasks']) == 1
+    assert len(res['task_comments']) == 1
+    assert len(res['channel_messages']) == 1
+    assert len(res['announcements']) == 1
+    assert len(res['discussions']) >= 1
+    # result shape + deep link
+    assert res['tasks'][0]['url'] == reverse('task_detail', args=[proj.id, task.id])
+    assert res['channel_messages'][0]['url'] == reverse('channel_detail', args=[chan.slug])
+
+
+@pytest.mark.django_db
+def test_short_query_and_org_isolation(world):
+    org, other_org, alice = world['org'], world['other_org'], world['alice']
+    Announcement.objects.create(organization=other_org, title='Easter elsewhere', content='x')
+    assert unified_search(org, alice, 'e') == {k: [] for k in unified_search(org, alice, 'e')}  # <2 chars -> empty
+    res = unified_search(org, alice, 'easter')
+    assert res['announcements'] == []  # other org's announcement not visible
+
+
+@pytest.mark.django_db
+def test_private_channel_not_leaked(world):
+    org, alice, bob = world['org'], world['alice'], world['bob']
+    priv = Channel.objects.create(organization=org, name='leaders', slug='leaders', is_private=True)
+    priv.members.add(alice)  # bob is NOT a member
+    ChannelMessage.objects.create(channel=priv, author=alice, content='easter secret')
+    assert len(unified_search(org, alice, 'easter')['channel_messages']) == 1
+    assert unified_search(org, bob, 'easter')['channel_messages'] == []
+
+
+@pytest.mark.django_db
+def test_dm_only_for_participants(world):
+    org, alice, bob = world['org'], world['alice'], world['bob']
+    carol = User.objects.create_user(username='carol@x.org', email='carol@x.org', password='supersecret1')
+    OrganizationMembership.objects.create(user=carol, organization=org, role='member')
+    DirectMessage.objects.create(sender=alice, recipient=bob, content='easter plan')
+    assert len(unified_search(org, alice, 'easter')['direct_messages']) == 1
+    assert len(unified_search(org, bob, 'easter')['direct_messages']) == 1
+    assert unified_search(org, carol, 'easter')['direct_messages'] == []  # not a participant
+
+
+@pytest.mark.django_db
+def test_project_content_not_leaked_to_non_member(world):
+    org, alice, bob = world['org'], world['alice'], world['bob']
+    proj = Project.objects.create(organization=org, name='Private plan', owner=alice)
+    proj.members.add(alice)  # bob not a member
+    task = Task.objects.create(organization=org, project=proj, title='Easter rehearsal', created_by=alice)
+    TaskComment.objects.create(task=task, author=alice, content='easter notes')
+    a = unified_search(org, alice, 'easter')
+    assert len(a['tasks']) == 1 and len(a['task_comments']) == 1
+    b = unified_search(org, bob, 'easter')
+    assert b['tasks'] == [] and b['task_comments'] == []
+
+
+@pytest.mark.django_db
+def test_scheduled_and_inactive_announcements_excluded(world):
+    from django.utils import timezone
+    from datetime import timedelta
+    org, alice = world['org'], world['alice']
+    now = timezone.now()
+    Announcement.objects.create(organization=org, title='Easter future', content='x',
+                                publish_at=now + timedelta(days=3))
+    Announcement.objects.create(organization=org, title='Easter inactive', content='x', is_active=False)
+    Announcement.objects.create(organization=org, title='Easter expired', content='x',
+                                expires_at=now - timedelta(days=1))
+    Announcement.objects.create(organization=org, title='Easter live', content='x')
+    res = unified_search(org, alice, 'easter')
+    titles = [r['title'] for r in res['announcements']]
+    assert 'Easter live' in titles
+    assert 'Easter future' not in titles and 'Easter inactive' not in titles and 'Easter expired' not in titles
+
+
+@pytest.mark.django_db
+def test_public_channel_in_other_org_not_returned(world):
+    org, other_org, alice = world['org'], world['other_org'], world['alice']
+    foreign = Channel.objects.create(organization=other_org, name='foreign', slug='foreign', is_private=False)
+    ChannelMessage.objects.create(channel=foreign, author=alice, content='easter foreign')
+    assert unified_search(org, alice, 'easter')['channel_messages'] == []
+
+
+@pytest.mark.django_db
+def test_archived_channel_messages_excluded(world):
+    org, alice = world['org'], world['alice']
+    arch = Channel.objects.create(organization=org, name='old', slug='old', is_private=False, is_archived=True)
+    ChannelMessage.objects.create(channel=arch, author=alice, content='easter archived')
+    assert unified_search(org, alice, 'easter')['channel_messages'] == []
+
+
+@pytest.mark.django_db
+def test_project_owner_not_in_members_can_search(world):
+    # owner-only access path (user is owner but NOT added to members)
+    org, alice = world['org'], world['alice']
+    proj = Project.objects.create(organization=org, name='Owned only', owner=alice)
+    Task.objects.create(organization=org, project=proj, title='Easter owned', created_by=alice)
+    res = unified_search(org, alice, 'easter')
+    assert any(r['title'] == 'Easter owned' for r in res['tasks'])
+
+
+def _login(client, world, who='alice'):
+    client.force_login(world[who])
+    return world[who]
+
+@pytest.mark.django_db
+def test_search_view_groups_and_filters(client, world):
+    org, alice = world['org'], world['alice']
+    proj = Project.objects.create(organization=org, name='Easter project', owner=alice)
+    proj.members.add(alice)
+    Task.objects.create(organization=org, project=proj, title='Easter set', created_by=alice)
+    _login(client, world)
+    resp = client.get(reverse('search'), {'q': 'easter'})
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert 'Easter project' in body and 'Easter set' in body
+    resp2 = client.get(reverse('search'), {'q': 'easter', 'type': 'tasks'})
+    b2 = resp2.content.decode()
+    assert 'Easter set' in b2
+    assert 'Easter project' not in b2
+
+@pytest.mark.django_db
+def test_search_view_min_length_and_empty(client, world):
+    _login(client, world)
+    short = client.get(reverse('search'), {'q': 'e'}).content.decode()
+    assert 'at least 2 characters' in short.lower() or 'type at least' in short.lower()
+    empty = client.get(reverse('search'), {'q': 'zzzznomatch'}).content.decode()
+    assert 'no results' in empty.lower() or 'nothing' in empty.lower()
+
+
+@pytest.mark.django_db
+def test_nav_has_search_input(client, world):
+    org = world['org']; org.stripe_subscription_id = 'sub_x'; org.save()
+    _login(client, world)
+    body = client.get(reverse('dashboard')).content.decode()
+    assert reverse('search') in body
+    assert 'name="q"' in body
+
+
+@pytest.mark.django_db
+def test_view_all_link_when_section_at_cap(client, world):
+    org, alice = world['org'], world['alice']
+    proj = Project.objects.create(organization=org, name='Big', owner=alice)
+    proj.members.add(alice)
+    for i in range(21):  # exceed grouped cap of 20
+        Task.objects.create(organization=org, project=proj, title=f'Easter task {i}', created_by=alice)
+    _login(client, world)
+    body = client.get(reverse('search'), {'q': 'easter'}).content.decode()
+    assert 'View all' in body
+    # the tasks section is capped at 20 in grouped view
+    # following the View-all link (type=tasks) shows more
+    body2 = client.get(reverse('search'), {'q': 'easter', 'type': 'tasks'}).content.decode()
+    assert body2.lower().count('easter task') > 20 or 'easter task 20' in body2.lower()

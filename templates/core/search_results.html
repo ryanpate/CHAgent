@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% load task_filters %}
+{% block title %}Search - {{ ai_assistant_name }}{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <h1 class="text-2xl font-bold text-white mb-4">Search</h1>
+  <form method="get" action="{% url 'search' %}" class="mb-6">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search messages, comments, tasks…"
+           class="w-full bg-ch-gray border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-ch-gold">
+  </form>
+
+  {% if too_short %}
+    <p class="text-gray-400">Type at least 2 characters to search.</p>
+  {% elif not q %}
+    <p class="text-gray-400">Search across tasks, comments, discussions, channels, messages, and announcements.</p>
+  {% else %}
+    <div class="flex flex-wrap gap-2 mb-6 text-sm">
+      <a href="?q={{ q|urlencode }}" class="px-3 py-1 rounded-full {% if not type_filter %}bg-ch-gold text-ch-black{% else %}bg-ch-gray text-gray-300{% endif %}">All ({{ total }})</a>
+      {% for s in surfaces %}
+        {% if results|get_item:s %}
+        <a href="?q={{ q|urlencode }}&type={{ s }}" class="px-3 py-1 rounded-full {% if type_filter == s %}bg-ch-gold text-ch-black{% else %}bg-ch-gray text-gray-300{% endif %}">{{ surface_labels|get_item:s }} ({{ results|get_item:s|length }})</a>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    {% if total == 0 %}
+      <p class="text-gray-400">No results for "{{ q }}".</p>
+    {% else %}
+      {% for s in surfaces %}
+        {% with rows=results|get_item:s %}
+        {% if rows %}
+        <section class="mb-8">
+          <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">{{ surface_labels|get_item:s }} ({{ rows|length }})</h2>
+          <div class="space-y-3">
+            {% for r in rows %}
+            <a href="{{ r.url }}" class="block bg-ch-dark rounded-lg p-4 hover:bg-ch-gray transition">
+              <div class="flex justify-between gap-3">
+                <span class="font-medium text-white">{{ r.title }}</span>
+                <span class="text-xs text-gray-500 flex-shrink-0">{{ r.when|date:"M j, Y" }}</span>
+              </div>
+              <p class="text-sm text-gray-400 mt-1">{{ r.snippet }}</p>
+              {% if r.author %}<p class="text-xs text-gray-500 mt-1">{{ r.author }}</p>{% endif %}
+            </a>
+            {% endfor %}
+          </div>
+            {% if not type_filter and rows|length >= grouped_cap %}
+            <a href="?q={{ q|urlencode }}&type={{ s }}" class="inline-block mt-3 text-ch-gold text-sm hover:underline">View all {{ surface_labels|get_item:s }} &rarr;</a>
+            {% elif type_filter and rows|length >= type_cap %}
+            <p class="mt-3 text-gray-500 text-xs">Showing the first {{ type_cap }} results.</p>
+            {% endif %}
+        </section>
+        {% endif %}
+        {% endwith %}
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

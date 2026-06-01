@@ -287,6 +287,31 @@ def dashboard(request):
 
 
 @login_required
+def search(request):
+    """Unified communication search results page."""
+    from .search import unified_search, SURFACES, SURFACE_LABELS
+    org = get_org(request)
+    q = request.GET.get('q', '').strip()
+    q = q[:200]
+    type_filter = request.GET.get('type', '') or None
+    if type_filter not in SURFACES:
+        type_filter = None
+    results = unified_search(org, request.user, q, type=type_filter) if org else {k: [] for k in SURFACES}
+    total = sum(len(v) for v in results.values())
+    return render(request, 'core/search_results.html', {
+        'q': q,
+        'type_filter': type_filter,
+        'results': results,
+        'surfaces': SURFACES,
+        'surface_labels': SURFACE_LABELS,
+        'total': total,
+        'too_short': 0 < len(q) < 2,
+        'grouped_cap': 20,    # must match unified_search default limit_per_type
+        'type_cap': 100,      # must match the type-filtered cap in unified_search
+    })
+
+
+@login_required
 def chat(request):
     """Full-page chat interface with Aria."""
     org = get_org(request)
