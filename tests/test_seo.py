@@ -33,3 +33,5 @@ def test_homepage_targets_brand(client):
     title = re.search(r'<title>(.*?)</title>', body, re.S).group(1)
     assert title.strip().startswith('Aria')
     assert 'alternateName' in body
+    import re as _re
+    assert _re.search(r'<h1[^>]*>.*Aria.*</h1>', body, _re.S), "homepage H1 should contain the brand"
