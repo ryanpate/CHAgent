@@ -135,3 +135,18 @@ def test_dashboard_no_banners_when_within_limits(client):
     body = client.get(reverse('dashboard')).content.decode()
     assert 'AI queries this month' not in body
     assert 'plan includes' not in body
+
+@pytest.mark.django_db
+def test_billing_page_shows_usage(client):
+    from core.models import Volunteer
+    org = _org(monthly=500, used=320, vol=2)
+    org.stripe_subscription_id = 'sub_x'; org.save()
+    for i in range(3):
+        Volunteer.objects.create(organization=org, name=f'V{i}')
+    u = User.objects.create_user(username='b@x.org', email='b@x.org', password='supersecret1')
+    OrganizationMembership.objects.create(user=u, organization=org, role='owner', can_manage_billing=True)
+    u.default_organization = org; u.save()
+    client.force_login(u)
+    body = client.get(reverse('org_settings_billing')).content.decode()
+    assert '320' in body and '500' in body
+    assert 'Usage' in body or 'usage' in body
