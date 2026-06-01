@@ -31,3 +31,50 @@ def test_reset_keeps_counter_within_same_month():
     org.reset_ai_usage_if_new_month()
     org.refresh_from_db()
     assert org.ai_queries_this_month == 400
+
+
+@pytest.mark.django_db
+def test_ai_quota_properties():
+    org = _org(monthly=500, used=500)
+    assert org.ai_queries_limit == 500
+    assert org.ai_queries_remaining == 0
+    assert org.ai_quota_exceeded is True
+    assert org.ai_quota_approaching is False
+
+    org2 = _org(monthly=500, used=400)
+    assert org2.ai_query_usage_pct == 80
+    assert org2.ai_quota_approaching is True
+    assert org2.ai_quota_exceeded is False
+    assert org2.ai_queries_remaining == 100
+
+    org3 = _org(monthly=500, used=399)
+    assert org3.ai_quota_approaching is False
+
+
+@pytest.mark.django_db
+def test_unlimited_and_no_plan_never_gated():
+    unlimited = _org(monthly=-1, used=99999)
+    assert unlimited.ai_quota_exceeded is False
+    assert unlimited.ai_quota_approaching is False
+    no_plan = Organization.objects.create(name='NP', email='np@x.org',
+                                          subscription_status='active', ai_queries_this_month=99999)
+    assert no_plan.ai_quota_exceeded is False
+    assert no_plan.ai_quota_approaching is False
+
+
+@pytest.mark.django_db
+def test_volunteer_limit_properties():
+    from core.models import Volunteer
+    org = _org(vol=2)
+    for i in range(3):
+        Volunteer.objects.create(organization=org, name=f'V{i}')
+    assert org.volunteer_limit == 2
+    assert org.volunteer_limit_exceeded is True
+    assert org.volunteer_usage == (3, 2)
+
+    org_ok = _org(vol=50)
+    assert org_ok.volunteer_limit_exceeded is False
+
+    unlimited = _org(vol=-1)
+    Volunteer.objects.create(organization=unlimited, name='x')
+    assert unlimited.volunteer_limit_exceeded is False
