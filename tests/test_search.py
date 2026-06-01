@@ -186,3 +186,12 @@ def test_search_view_min_length_and_empty(client, world):
     assert 'at least 2 characters' in short.lower() or 'type at least' in short.lower()
     empty = client.get(reverse('search'), {'q': 'zzzznomatch'}).content.decode()
     assert 'no results' in empty.lower() or 'nothing' in empty.lower()
+
+
+@pytest.mark.django_db
+def test_nav_has_search_input(client, world):
+    org = world['org']; org.stripe_subscription_id = 'sub_x'; org.save()
+    _login(client, world)
+    body = client.get(reverse('dashboard')).content.decode()
+    assert reverse('search') in body
+    assert 'name="q"' in body
