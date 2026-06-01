@@ -292,6 +292,7 @@ def search(request):
     from .search import unified_search, SURFACES, SURFACE_LABELS
     org = get_org(request)
     q = request.GET.get('q', '').strip()
+    q = q[:200]
     type_filter = request.GET.get('type', '') or None
     if type_filter not in SURFACES:
         type_filter = None
@@ -305,6 +306,8 @@ def search(request):
         'surface_labels': SURFACE_LABELS,
         'total': total,
         'too_short': 0 < len(q) < 2,
+        'grouped_cap': 20,    # must match unified_search default limit_per_type
+        'type_cap': 100,      # must match the type-filtered cap in unified_search
     })
 
 

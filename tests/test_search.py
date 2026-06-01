@@ -195,3 +195,19 @@ def test_nav_has_search_input(client, world):
     body = client.get(reverse('dashboard')).content.decode()
     assert reverse('search') in body
     assert 'name="q"' in body
+
+
+@pytest.mark.django_db
+def test_view_all_link_when_section_at_cap(client, world):
+    org, alice = world['org'], world['alice']
+    proj = Project.objects.create(organization=org, name='Big', owner=alice)
+    proj.members.add(alice)
+    for i in range(21):  # exceed grouped cap of 20
+        Task.objects.create(organization=org, project=proj, title=f'Easter task {i}', created_by=alice)
+    _login(client, world)
+    body = client.get(reverse('search'), {'q': 'easter'}).content.decode()
+    assert 'View all' in body
+    # the tasks section is capped at 20 in grouped view
+    # following the View-all link (type=tasks) shows more
+    body2 = client.get(reverse('search'), {'q': 'easter', 'type': 'tasks'}).content.decode()
+    assert body2.lower().count('easter task') > 20 or 'easter task 20' in body2.lower()

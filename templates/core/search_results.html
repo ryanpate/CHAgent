@@ -43,6 +43,11 @@
             </a>
             {% endfor %}
           </div>
+            {% if not type_filter and rows|length >= grouped_cap %}
+            <a href="?q={{ q|urlencode }}&type={{ s }}" class="inline-block mt-3 text-ch-gold text-sm hover:underline">View all {{ surface_labels|get_item:s }} &rarr;</a>
+            {% elif type_filter and rows|length >= type_cap %}
+            <p class="mt-3 text-gray-500 text-xs">Showing the first {{ type_cap }} results.</p>
+            {% endif %}
         </section>
         {% endif %}
         {% endwith %}
