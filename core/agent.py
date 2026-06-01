@@ -4265,11 +4265,16 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         organization.reset_ai_usage_if_new_month()
         if organization.ai_quota_exceeded:
             limit = organization.ai_queries_limit
-            return (
+            msg = (
                 f"You've reached your plan's monthly limit of {limit} AI queries. "
                 f"Your usage resets on the 1st of next month — or upgrade your plan for more. "
                 f"You can change plans in [billing settings](/settings/billing/)."
             )
+            ChatMessage.objects.create(user=user, organization=organization,
+                                       session_id=session_id, role='user', content=question)
+            ChatMessage.objects.create(user=user, organization=organization,
+                                       session_id=session_id, role='assistant', content=msg)
+            return msg
 
     client = get_anthropic_client()
     if not client:

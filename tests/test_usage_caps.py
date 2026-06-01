@@ -150,3 +150,22 @@ def test_billing_page_shows_usage(client):
     body = client.get(reverse('org_settings_billing')).content.decode()
     assert '320' in body and '500' in body
     assert 'Usage' in body or 'usage' in body
+
+
+@pytest.mark.django_db
+def test_over_limit_user_sees_upgrade_message_in_chat(client):
+    from core.models import ChatMessage
+    org = _org(monthly=500, used=500)
+    org.stripe_subscription_id = 'sub_x'; org.save()
+    u = _login(client, org)
+    # chat_send reads session_id from the chat_session_id cookie, so set it.
+    client.cookies['chat_session_id'] = 'sess-block'
+    resp = client.post(reverse('chat_send'), {'message': 'Who is serving Sunday?'})
+    assert resp.status_code == 200
+    body = resp.content.decode().lower()
+    assert 'limit' in body and ('upgrade' in body or 'billing' in body)
+    # An assistant ChatMessage with the upgrade text must have been persisted
+    assert ChatMessage.objects.filter(session_id='sess-block', role='assistant',
+                                      content__icontains='monthly limit').exists()
+    org.refresh_from_db()
+    assert org.ai_queries_this_month == 500  # still not incremented
