@@ -1,4 +1,7 @@
 import re
+from django.db.models import Q
+from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 
@@ -10,6 +13,8 @@ def snippet(text, query, width=160):
     """
     if not text:
         return mark_safe('')
+    if not query:
+        return mark_safe(escape(text[:width]))
     lower = text.lower()
     idx = lower.find(query.lower())
     if idx == -1:
@@ -26,9 +31,6 @@ def snippet(text, query, width=160):
     highlighted = re.sub(f'({pattern})', r'<mark>\1</mark>', escaped, flags=re.IGNORECASE)
     return mark_safe(prefix + highlighted + suffix)
 
-
-from django.db.models import Q
-from django.urls import reverse
 
 SURFACES = ['projects', 'tasks', 'task_comments', 'discussions',
             'channel_messages', 'direct_messages', 'announcements']
@@ -51,6 +53,8 @@ def unified_search(organization, user, query, type=None, limit_per_type=20):
     """Search communication surfaces + task/project titles, access-scoped to `user`.
 
     Returns {surface_key: [ {type, title, snippet, url, author, when}, ... ]}.
+
+    Note: standalone tasks (project=None) and their comments are excluded in v1 — only project-scoped tasks are searched.
     """
     results = {k: [] for k in SURFACES}
     q = (query or '').strip()
@@ -119,11 +123,12 @@ def unified_search(organization, user, query, type=None, limit_per_type=20):
             'url': reverse('discussion_detail', args=[d.project_id, d.id]),
             'author': _name(d.created_by), 'when': d.created_at,
         } for d in title_qs]
+        items.sort(key=lambda r: r['when'], reverse=True)
         results['discussions'] = items[:cap]
 
     if 'channel_messages' in targets:
         from core.models import ChannelMessage
-        qs = (ChannelMessage.objects.filter(channel__organization=organization)
+        qs = (ChannelMessage.objects.filter(channel__organization=organization, channel__is_archived=False)
               .filter(Q(channel__is_private=False) | Q(channel__members=user))
               .filter(content__icontains=q)
               .distinct().select_related('channel', 'author').order_by('-created_at')[:cap])
@@ -151,7 +156,10 @@ def unified_search(organization, user, query, type=None, limit_per_type=20):
 
     if 'announcements' in targets:
         from core.models import Announcement
-        qs = (Announcement.objects.filter(organization=organization)
+        now = timezone.now()
+        qs = (Announcement.objects.filter(organization=organization, is_active=True)
+              .filter(Q(publish_at__isnull=True) | Q(publish_at__lte=now))
+              .filter(Q(expires_at__isnull=True) | Q(expires_at__gte=now))
               .filter(Q(title__icontains=q) | Q(content__icontains=q))
               .order_by('-created_at')[:cap])
         results['announcements'] = [{

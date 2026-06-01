@@ -113,3 +113,47 @@ def test_project_content_not_leaked_to_non_member(world):
     assert len(a['tasks']) == 1 and len(a['task_comments']) == 1
     b = unified_search(org, bob, 'easter')
     assert b['tasks'] == [] and b['task_comments'] == []
+
+
+@pytest.mark.django_db
+def test_scheduled_and_inactive_announcements_excluded(world):
+    from django.utils import timezone
+    from datetime import timedelta
+    org, alice = world['org'], world['alice']
+    now = timezone.now()
+    Announcement.objects.create(organization=org, title='Easter future', content='x',
+                                publish_at=now + timedelta(days=3))
+    Announcement.objects.create(organization=org, title='Easter inactive', content='x', is_active=False)
+    Announcement.objects.create(organization=org, title='Easter expired', content='x',
+                                expires_at=now - timedelta(days=1))
+    Announcement.objects.create(organization=org, title='Easter live', content='x')
+    res = unified_search(org, alice, 'easter')
+    titles = [r['title'] for r in res['announcements']]
+    assert 'Easter live' in titles
+    assert 'Easter future' not in titles and 'Easter inactive' not in titles and 'Easter expired' not in titles
+
+
+@pytest.mark.django_db
+def test_public_channel_in_other_org_not_returned(world):
+    org, other_org, alice = world['org'], world['other_org'], world['alice']
+    foreign = Channel.objects.create(organization=other_org, name='foreign', slug='foreign', is_private=False)
+    ChannelMessage.objects.create(channel=foreign, author=alice, content='easter foreign')
+    assert unified_search(org, alice, 'easter')['channel_messages'] == []
+
+
+@pytest.mark.django_db
+def test_archived_channel_messages_excluded(world):
+    org, alice = world['org'], world['alice']
+    arch = Channel.objects.create(organization=org, name='old', slug='old', is_private=False, is_archived=True)
+    ChannelMessage.objects.create(channel=arch, author=alice, content='easter archived')
+    assert unified_search(org, alice, 'easter')['channel_messages'] == []
+
+
+@pytest.mark.django_db
+def test_project_owner_not_in_members_can_search(world):
+    # owner-only access path (user is owner but NOT added to members)
+    org, alice = world['org'], world['alice']
+    proj = Project.objects.create(organization=org, name='Owned only', owner=alice)
+    Task.objects.create(organization=org, project=proj, title='Easter owned', created_by=alice)
+    res = unified_search(org, alice, 'easter')
+    assert any(r['title'] == 'Easter owned' for r in res['tasks'])
