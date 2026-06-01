@@ -219,6 +219,8 @@ def resource_pco_guide(request):
 def dashboard(request):
     """Command center dashboard with priority cards and activity feed."""
     org = get_org(request)
+    if org:
+        org.reset_ai_usage_if_new_month()
 
     volunteer_qs = Volunteer.objects.all()
     interaction_qs = Interaction.objects.all()
@@ -272,6 +274,13 @@ def dashboard(request):
         'followup_summary': followup_summary,
         'interactions_this_week': interactions_this_week,
         'pco_connected': pco_connected,
+        'ai_quota_exceeded': org.ai_quota_exceeded if org else False,
+        'ai_quota_approaching': org.ai_quota_approaching if org else False,
+        'ai_queries_used': org.ai_queries_this_month if org else 0,
+        'ai_queries_limit': org.ai_queries_limit if org else None,
+        'volunteer_over_limit': org.volunteer_limit_exceeded if org else False,
+        'volunteer_count': org.get_volunteer_count() if org else 0,
+        'volunteer_limit': org.volunteer_limit if org else None,
     }
 
     return render(request, 'core/dashboard.html', context)
@@ -281,6 +290,8 @@ def dashboard(request):
 def chat(request):
     """Full-page chat interface with Aria."""
     org = get_org(request)
+    if org:
+        org.reset_ai_usage_if_new_month()
 
     # Get or create session ID from cookie for chat
     session_id = request.COOKIES.get('chat_session_id')
@@ -304,6 +315,10 @@ def chat(request):
         'session_id': session_id,
         'initial_message': initial_message,
         'pco_connected': bool(org and org.has_pco_credentials()),
+        'ai_quota_exceeded': org.ai_quota_exceeded if org else False,
+        'ai_quota_approaching': org.ai_quota_approaching if org else False,
+        'ai_queries_used': org.ai_queries_this_month if org else 0,
+        'ai_queries_limit': org.ai_queries_limit if org else None,
     }
 
     response = render(request, 'core/chat.html', context)
@@ -445,8 +460,7 @@ def chat_send(request):
         )
     else:
         # Process as a question using RAG
-        organization = getattr(request, 'organization', None)
-        response_text = query_agent(message, request.user, session_id, organization=organization)
+        response_text = query_agent(message, request.user, session_id, organization=org)
 
     # Get the two most recent messages (user + assistant)
     recent_messages = ChatMessage.objects.filter(

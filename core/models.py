@@ -324,13 +324,77 @@ class Organization(models.Model):
             return True
         return current_count < max_value
 
-    def increment_ai_usage(self):
-        """Increment AI query counter for the month."""
+    @property
+    def ai_queries_limit(self):
+        """Monthly AI-query limit (-1 = unlimited; None when no plan)."""
+        if not self.subscription_plan:
+            return None
+        return self.subscription_plan.max_ai_queries_monthly
+
+    @property
+    def _ai_limited(self):
+        """True only when a finite (>=0) AI limit applies."""
+        lim = self.ai_queries_limit
+        return lim is not None and lim >= 0
+
+    @property
+    def ai_queries_remaining(self):
+        if not self._ai_limited:
+            return None
+        return max(0, self.ai_queries_limit - self.ai_queries_this_month)
+
+    @property
+    def ai_query_usage_pct(self):
+        if not self._ai_limited or self.ai_queries_limit == 0:
+            return 0
+        return int(self.ai_queries_this_month / self.ai_queries_limit * 100)
+
+    @property
+    def ai_quota_exceeded(self):
+        """Pure read — callers should call reset_ai_usage_if_new_month() first."""
+        if not self._ai_limited:
+            return False
+        return self.ai_queries_this_month >= self.ai_queries_limit
+
+    @property
+    def ai_quota_approaching(self):
+        if not self._ai_limited or self.ai_quota_exceeded:
+            return False
+        return self.ai_query_usage_pct >= 80
+
+    @property
+    def volunteer_limit(self):
+        if not self.subscription_plan:
+            return None
+        return self.subscription_plan.max_volunteers
+
+    @property
+    def volunteer_limit_exceeded(self):
+        lim = self.volunteer_limit
+        if lim is None or lim < 0:
+            return False
+        return self.get_volunteer_count() > lim
+
+    @property
+    def volunteer_usage(self):
+        """(count, limit) for display."""
+        return (self.get_volunteer_count(), self.volunteer_limit)
+
+    def reset_ai_usage_if_new_month(self):
+        """Zero the monthly AI counter when the calendar month has rolled over.
+
+        Persists the reset. Safe to call before reading quota properties.
+        """
         now = timezone.now()
-        # Reset counter if it's a new month
-        if self.ai_queries_reset_at is None or self.ai_queries_reset_at.month != now.month:
+        last = self.ai_queries_reset_at
+        if last is None or (last.year, last.month) != (now.year, now.month):
             self.ai_queries_this_month = 0
             self.ai_queries_reset_at = now
+            self.save(update_fields=['ai_queries_this_month', 'ai_queries_reset_at'])
+
+    def increment_ai_usage(self):
+        """Increment AI query counter for the month."""
+        self.reset_ai_usage_if_new_month()
         self.ai_queries_this_month += 1
         self.save(update_fields=['ai_queries_this_month', 'ai_queries_reset_at'])
 
