@@ -186,7 +186,7 @@
                 <div class="text-sm text-gray-400">AI Queries</div>
                 {% if current_plan %}
                 <div class="text-xs text-gray-500 mt-1">
-                    of {{ current_plan.max_ai_queries_monthly }} monthly limit
+                    of {% if current_plan.max_ai_queries_monthly == -1 %}unlimited{% else %}{{ current_plan.max_ai_queries_monthly }} monthly limit{% endif %}
                 </div>
                 {% endif %}
             </div>
