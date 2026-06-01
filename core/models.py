@@ -324,13 +324,21 @@ class Organization(models.Model):
             return True
         return current_count < max_value
 
-    def increment_ai_usage(self):
-        """Increment AI query counter for the month."""
+    def reset_ai_usage_if_new_month(self):
+        """Zero the monthly AI counter when the calendar month has rolled over.
+
+        Persists the reset. Safe to call before reading quota properties.
+        """
         now = timezone.now()
-        # Reset counter if it's a new month
-        if self.ai_queries_reset_at is None or self.ai_queries_reset_at.month != now.month:
+        last = self.ai_queries_reset_at
+        if last is None or (last.year, last.month) != (now.year, now.month):
             self.ai_queries_this_month = 0
             self.ai_queries_reset_at = now
+            self.save(update_fields=['ai_queries_this_month', 'ai_queries_reset_at'])
+
+    def increment_ai_usage(self):
+        """Increment AI query counter for the month."""
+        self.reset_ai_usage_if_new_month()
         self.ai_queries_this_month += 1
         self.save(update_fields=['ai_queries_this_month', 'ai_queries_reset_at'])
 
