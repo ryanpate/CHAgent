@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timezone as dt_tz
+from django.utils import timezone
 from core.models import Organization, SubscriptionPlan
 
 
@@ -9,7 +10,8 @@ def _org(monthly=500, vol=50, used=0):
         max_ai_queries_monthly=monthly, max_volunteers=vol)
     return Organization.objects.create(
         name='Cap Org', email='c@x.org', subscription_plan=plan,
-        subscription_status='active', ai_queries_this_month=used)
+        subscription_status='active', ai_queries_this_month=used,
+        ai_queries_reset_at=timezone.now())
 
 
 @pytest.mark.django_db
@@ -78,3 +80,26 @@ def test_volunteer_limit_properties():
     unlimited = _org(vol=-1)
     Volunteer.objects.create(organization=unlimited, name='x')
     assert unlimited.volunteer_limit_exceeded is False
+
+
+from accounts.models import User
+
+@pytest.mark.django_db
+def test_query_agent_blocks_when_over_limit():
+    from core.agent import query_agent
+    org = _org(monthly=500, used=500)
+    user = User.objects.create_user(username='q@x.org', email='q@x.org', password='supersecret1')
+    before = org.ai_queries_this_month
+    result = query_agent("Who is serving Sunday?", user, "sess-1", organization=org)
+    assert 'limit' in result.lower()
+    assert 'upgrade' in result.lower() or 'billing' in result.lower()
+    org.refresh_from_db()
+    assert org.ai_queries_this_month == before  # blocked before any Claude call -> no increment
+
+@pytest.mark.django_db
+def test_query_agent_guard_skipped_when_not_exceeded():
+    # The guard's exact condition must be False for under-limit and unlimited orgs.
+    under = _org(monthly=500, used=10)
+    unlimited = _org(monthly=-1, used=99999)
+    assert under.ai_quota_exceeded is False
+    assert unlimited.ai_quota_exceeded is False

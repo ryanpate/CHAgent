@@ -4261,6 +4261,16 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
     Returns:
         The AI assistant's response.
     """
+    if organization is not None:
+        organization.reset_ai_usage_if_new_month()
+        if organization.ai_quota_exceeded:
+            limit = organization.ai_queries_limit
+            return (
+                f"You've reached your plan's monthly limit of {limit} AI queries. "
+                f"Your usage resets on the 1st of next month — or upgrade your plan for more. "
+                f"You can change plans in [billing settings](/settings/billing/)."
+            )
+
     client = get_anthropic_client()
     if not client:
         return "I'm sorry, but the AI service is not currently available. Please check that the ANTHROPIC_API_KEY is configured."
