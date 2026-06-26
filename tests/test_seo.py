@@ -79,3 +79,16 @@ def test_apex_host_not_redirected(client):
     """The canonical apex host must serve directly with no redirect loop."""
     resp = client.get('/pricing/', HTTP_HOST='aria.church', secure=True)
     assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_signup_page_has_indexable_content_and_single_h1(client):
+    """/signup/ was thin (~118 words); it needs real content to get indexed,
+    and exactly one H1 for clean on-page SEO. The form must remain intact."""
+    body = client.get('/signup/').content.decode()
+    assert body.count('<h1') == 1
+    assert 'What you get' in body and 'Frequently asked questions' in body
+    # form still present and complete
+    assert '<form method="post"' in body
+    for field in ['first_name', 'name="email"', 'name="password"', 'church_name', 'name="plan"']:
+        assert field in body, f"signup form missing {field}"

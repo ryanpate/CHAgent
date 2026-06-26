@@ -6,17 +6,61 @@
 
 {% block beta_banner %}{% endblock %}
 {% block header_badge %}{% endblock %}
+{% block container_class %}max-w-5xl{% endblock %}
 
 {% block content %}
-<div class="max-w-md mx-auto">
-    <p class="text-xs text-gray-400 text-center mb-6">
-        <a href="{% url 'security' %}" class="hover:text-gray-300">Your data is secure</a> &middot;
-        <a href="{% url 'privacy' %}" class="hover:text-gray-300">Privacy policy</a>
-    </p>
+<div class="grid md:grid-cols-2 gap-10 items-start">
+    <!-- Value + FAQ (indexable content) -->
+    <div class="order-2 md:order-1">
+        <h1 class="text-3xl font-bold text-white mb-3">Start your free trial of Aria</h1>
+        <p class="text-gray-400 mb-6">
+            Aria is AI-powered worship team management software that connects to Planning Center.
+            Create your account and connect your Planning Center data in a few minutes &mdash; no
+            credit card charge until your 14-day trial ends.
+        </p>
 
-    <div class="bg-ch-dark rounded-lg border border-ch-gray p-8">
-        <h1 class="text-2xl font-bold text-white mb-2">Start your free trial</h1>
-        <p class="text-gray-400 mb-6">Create your account and get started with Aria.</p>
+        <h2 class="text-lg font-semibold text-white mb-3">What you get</h2>
+        <ul class="space-y-2 text-gray-300 mb-6">
+            <li>&middot; Instant answers about schedules, songs, blockouts, and volunteers from your live Planning Center data</li>
+            <li>&middot; Volunteer care tools to log interactions and track follow-ups so no one falls through the cracks</li>
+            <li>&middot; Team communication, projects, and tasks in one place</li>
+            <li>&middot; A native iOS app with push notifications</li>
+        </ul>
+
+        <h2 class="text-lg font-semibold text-white mb-3">Trial details</h2>
+        <p class="text-gray-400 mb-6">
+            Your 14-day free trial includes full access. We ask for a card so your account continues
+            seamlessly if you keep it, but you are not charged until the trial ends, and you can
+            cancel anytime before then. See <a href="{% url 'pricing' %}" class="text-ch-gold hover:underline">pricing</a>
+            for plan details.
+        </p>
+
+        <h2 class="text-lg font-semibold text-white mb-3">Frequently asked questions</h2>
+        <div class="space-y-4 text-sm">
+            <div>
+                <p class="text-white font-medium">Do I need a Planning Center account?</p>
+                <p class="text-gray-400">Yes. Aria reads your live Planning Center data, so you connect your existing account during setup. See the <a href="{% url 'resource_pco_guide' %}" class="text-ch-gold hover:underline">Planning Center setup guide</a>.</p>
+            </div>
+            <div>
+                <p class="text-white font-medium">Will I be charged during the trial?</p>
+                <p class="text-gray-400">No. Your card is not charged until the 14-day trial ends, and you can cancel anytime before then.</p>
+            </div>
+            <div>
+                <p class="text-white font-medium">How long does setup take?</p>
+                <p class="text-gray-400">A few minutes. After creating your account you connect Planning Center and can start asking questions right away.</p>
+            </div>
+        </div>
+
+        <p class="text-xs text-gray-500 mt-6">
+            <a href="{% url 'security' %}" class="hover:text-gray-300">Your data is secure</a> &middot;
+            <a href="{% url 'privacy' %}" class="hover:text-gray-300">Privacy policy</a>
+        </p>
+    </div>
+
+    <!-- Signup form -->
+    <div class="order-1 md:order-2 bg-ch-dark rounded-lg border border-ch-gray p-8">
+        <h2 class="text-2xl font-bold text-white mb-2">Create your account</h2>
+        <p class="text-gray-400 mb-6">Get started with Aria in a couple of minutes.</p>
 
         {% if errors %}
         <div class="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6">
