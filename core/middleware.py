@@ -5,12 +5,33 @@ This middleware injects the current organization into each request,
 enabling tenant isolation throughout the application.
 """
 import logging
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden, HttpResponsePermanentRedirect
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.deprecation import MiddlewareMixin
 
 logger = logging.getLogger(__name__)
+
+
+class WwwRedirectMiddleware(MiddlewareMixin):
+    """
+    301-redirect the ``www.`` host to the bare apex domain.
+
+    The apex (e.g. https://aria.church) is the canonical host used in the
+    sitemap and ``<link rel="canonical">`` tags. Redirecting ``www`` prevents
+    duplicate-content indexing and clears the "Not found (404)" entries Google
+    reports for www.aria.church. Tenant subdomains (slug.aria.church) and the
+    apex are left untouched.
+    """
+
+    def process_request(self, request):
+        host = request.get_host()
+        if host.split(':')[0].lower().startswith('www.'):
+            bare_host = host.split(':', 1)[0][4:]  # strip leading "www."
+            return HttpResponsePermanentRedirect(
+                f'https://{bare_host}{request.get_full_path()}'
+            )
+        return None
 
 
 class TenantMiddleware(MiddlewareMixin):

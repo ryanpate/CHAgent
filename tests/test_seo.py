@@ -48,3 +48,34 @@ def test_pco_faq_jsonld_answers_match_visible(client):
     # both the distinctive visible phrase and the same phrase in JSON-LD should be present
     assert body.count('service types, teams, and people') >= 2  # visible + json-ld
     assert body.count('Start a free trial at aria.church') >= 1  # json-ld plain-text version
+
+
+@pytest.mark.django_db
+def test_public_pages_link_to_orphan_pages(client):
+    """Every public page (via base_public footer/header) must link to blog and
+    resources so Google has a crawl path — these were 'discovered, not indexed'."""
+    body = client.get('/').content.decode()
+    for link in [
+        '/pricing/',
+        '/resources/',
+        '/blog/',
+        '/resources/planning-center-setup-guide/',
+        '/blog/ai-for-planning-center-worship-teams/',
+        '/blog/best-ai-church-software-2026/',
+    ]:
+        assert link in body, f"public footer/header should link to {link}"
+
+
+@pytest.mark.django_db
+def test_www_host_redirects_to_apex(client):
+    """www.aria.church 404'd in Search Console; it must 301 to the apex host."""
+    resp = client.get('/pricing/', HTTP_HOST='www.aria.church', secure=True)
+    assert resp.status_code == 301
+    assert resp.headers['Location'] == 'https://aria.church/pricing/'
+
+
+@pytest.mark.django_db
+def test_apex_host_not_redirected(client):
+    """The canonical apex host must serve directly with no redirect loop."""
+    resp = client.get('/pricing/', HTTP_HOST='aria.church', secure=True)
+    assert resp.status_code == 200

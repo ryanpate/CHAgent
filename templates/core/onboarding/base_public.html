@@ -80,7 +80,9 @@
                     {% block header_badge %}{% endblock %}
                 </div>
                 <div class="flex items-center gap-4">
-                    <span class="text-gray-400 text-sm hidden sm:inline">Worship Arts Team Portal</span>
+                    <a href="{% url 'pricing' %}" class="text-gray-300 hover:text-white text-sm hidden sm:inline">Pricing</a>
+                    <a href="{% url 'resources_list' %}" class="text-gray-300 hover:text-white text-sm hidden sm:inline">Resources</a>
+                    <a href="{% url 'blog:list' %}" class="text-gray-300 hover:text-white text-sm hidden sm:inline">Blog</a>
                     <a href="{% url 'login' %}"
                        class="text-gray-300 hover:text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-colors">
                         Sign In
@@ -101,17 +103,47 @@
         </main>
 
         <!-- Footer -->
-        <footer class="bg-ch-dark border-t border-ch-gray py-4 px-6 text-center text-gray-500 text-sm">
-            <p>&copy; {% now "Y" %} Aria. All rights reserved.</p>
-            <p class="text-xs text-gray-600 mt-2">
-                <a href="{% url 'privacy' %}" class="hover:text-gray-400">Privacy</a>
-                <span class="mx-2">|</span>
-                <a href="{% url 'security' %}" class="hover:text-gray-400">Security</a>
-                <span class="mx-2">|</span>
-                <a href="https://apps.apple.com/us/app/aria-wa-assistant/id6759796456" target="_blank" rel="noopener noreferrer" class="hover:text-gray-400">iOS App</a>
-                <span class="mx-2">|</span>
-                Song tempo data powered by <a href="https://getsongbpm.com" target="_blank" class="hover:text-gray-400">GetSongBPM.com</a>
-            </p>
+        <footer class="bg-ch-dark border-t border-ch-gray py-10 px-6 text-gray-500 text-sm">
+            <div class="max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-8 text-left">
+                <div>
+                    <h2 class="text-gray-300 font-semibold mb-3">Product</h2>
+                    <ul class="space-y-2">
+                        <li><a href="{% url 'home' %}" class="hover:text-gray-300">Overview</a></li>
+                        <li><a href="{% url 'pricing' %}" class="hover:text-gray-300">Pricing</a></li>
+                        <li><a href="{% url 'onboarding_signup' %}" class="hover:text-gray-300">Start Free Trial</a></li>
+                        <li><a href="{% url 'login' %}" class="hover:text-gray-300">Sign In</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h2 class="text-gray-300 font-semibold mb-3">Resources</h2>
+                    <ul class="space-y-2">
+                        <li><a href="{% url 'resources_list' %}" class="hover:text-gray-300">All Resources</a></li>
+                        <li><a href="{% url 'resource_pco_guide' %}" class="hover:text-gray-300">Planning Center Setup Guide</a></li>
+                        <li><a href="{% url 'resource_volunteer_application' %}" class="hover:text-gray-300">Volunteer Application Template</a></li>
+                        <li><a href="{% url 'resource_schedule_template' %}" class="hover:text-gray-300">Worship Schedule Template</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h2 class="text-gray-300 font-semibold mb-3">Blog</h2>
+                    <ul class="space-y-2">
+                        <li><a href="{% url 'blog:list' %}" class="hover:text-gray-300">All Articles</a></li>
+                        <li><a href="/blog/ai-for-planning-center-worship-teams/" class="hover:text-gray-300">AI for Planning Center</a></li>
+                        <li><a href="/blog/best-ai-church-software-2026/" class="hover:text-gray-300">Best AI Church Software 2026</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h2 class="text-gray-300 font-semibold mb-3">Company</h2>
+                    <ul class="space-y-2">
+                        <li><a href="{% url 'security' %}" class="hover:text-gray-300">Security</a></li>
+                        <li><a href="{% url 'privacy' %}" class="hover:text-gray-300">Privacy</a></li>
+                        <li><a href="https://apps.apple.com/us/app/aria-wa-assistant/id6759796456" target="_blank" rel="noopener noreferrer" class="hover:text-gray-300">iOS App</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="max-w-6xl mx-auto mt-8 pt-6 border-t border-ch-gray text-center text-xs text-gray-600">
+                <p>&copy; {% now "Y" %} Aria. All rights reserved.</p>
+                <p class="mt-2">Song tempo data powered by <a href="https://getsongbpm.com" target="_blank" class="hover:text-gray-400">GetSongBPM.com</a></p>
+            </div>
         </footer>
     </div>
 </body>
