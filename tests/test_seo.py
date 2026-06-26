@@ -26,6 +26,21 @@ def test_pco_guide_has_faq_and_compelling_title(client):
     assert 'Frequently asked questions' in body or 'Frequently Asked Questions' in body
     assert '2026' in body
 
+
+@pytest.mark.django_db
+def test_pco_guide_title_is_ctr_optimized(client):
+    """CTR fix: title must be keyword-first, carry the '6 Steps' number hook,
+    and stay short enough to avoid SERP truncation (no double-brand suffix)."""
+    import re
+    body = client.get('/resources/planning-center-setup-guide/').content.decode()
+    title = re.search(r'<title>(.*?)</title>', body, re.S).group(1).strip()
+    assert title.startswith('Planning Center Setup Guide')
+    assert '6 Steps' in title
+    assert len(title) <= 60, f"title too long ({len(title)}): {title}"
+    # internal links into the topic cluster (relevance + funnel)
+    for link in ['/integrations/', '/blog/ai-for-planning-center-worship-teams/', '/signup/']:
+        assert link in body
+
 @pytest.mark.django_db
 def test_homepage_targets_brand(client):
     import re
