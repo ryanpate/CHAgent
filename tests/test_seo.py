@@ -82,6 +82,21 @@ def test_apex_host_not_redirected(client):
 
 
 @pytest.mark.django_db
+def test_integrations_page_targets_planning_center(client):
+    """The integrations page anchors the Planning Center partner listing and
+    targets 'planning center integration' — one H1, real content, breadcrumb."""
+    resp = client.get('/integrations/')
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert body.count('<h1') == 1
+    assert 'Planning Center' in body
+    assert '"@type": "BreadcrumbList"' in body
+    # crawl path to the conversion + supporting pages
+    for link in ['/signup/', '/pricing/', '/resources/planning-center-setup-guide/']:
+        assert link in body
+
+
+@pytest.mark.django_db
 def test_signup_page_has_indexable_content_and_single_h1(client):
     """/signup/ was thin (~118 words); it needs real content to get indexed,
     and exactly one H1 for clean on-page SEO. The form must remain intact."""

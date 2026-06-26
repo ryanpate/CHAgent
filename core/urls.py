@@ -7,6 +7,7 @@ urlpatterns = [
     # Public pages
     path('', views.home, name='home'),
     path('pricing/', views.pricing, name='pricing'),
+    path('integrations/', views.integrations, name='integrations'),
     path('security/', views.security_page, name='security'),
     path('privacy/', views.privacy_policy, name='privacy'),
     # Resources (SEO content)

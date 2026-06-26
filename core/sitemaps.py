@@ -16,6 +16,7 @@ class StaticViewSitemap(Sitemap):
         return [
             'home',
             'pricing',
+            'integrations',
             'security',
             'privacy',
             'onboarding_signup',
@@ -34,6 +35,7 @@ class StaticViewSitemap(Sitemap):
         priorities = {
             'home': 1.0,
             'pricing': 0.9,
+            'integrations': 0.8,
             'onboarding_signup': 0.8,
             'resources_list': 0.7,
             'security': 0.6,
@@ -49,6 +51,7 @@ class StaticViewSitemap(Sitemap):
         frequencies = {
             'home': 'weekly',
             'pricing': 'monthly',
+            'integrations': 'monthly',
             'security': 'monthly',
             'privacy': 'monthly',
             'onboarding_signup': 'monthly',

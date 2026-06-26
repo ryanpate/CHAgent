@@ -1,0 +1,130 @@
+{% extends "core/onboarding/base_public.html" %}
+
+{% block title %}Planning Center Integration for Worship Teams | Aria{% endblock %}
+
+{% block meta_description %}Aria's Planning Center integration reads your live People, Services, and Songs data so you can ask plain-language questions about schedules, volunteers, blockouts, and setlists.{% endblock %}
+
+{% block og_title %}Planning Center Integration for Worship Teams | Aria{% endblock %}
+{% block og_description %}How Aria integrates with Planning Center Online to answer questions about your worship team's schedules, volunteers, songs, and availability.{% endblock %}
+
+{% block schema_markup %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://aria.church/"},
+        {"@type": "ListItem", "position": 2, "name": "Integrations", "item": "https://aria.church/integrations/"}
+    ]
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="text-center mb-12">
+    <span class="inline-block bg-ch-gold/20 text-ch-gold text-sm font-medium px-3 py-1 rounded-full mb-4">Integrations</span>
+    <h1 class="text-4xl font-bold text-white mb-4">Aria + Planning Center</h1>
+    <p class="text-lg text-gray-400 max-w-2xl mx-auto">
+        Aria connects directly to Planning Center Online and reads your live data, so you can ask
+        plain-language questions about your worship team instead of clicking through screens.
+        Planning Center stays your source of truth &mdash; Aria just makes it instantly answerable.
+    </p>
+    <div class="mt-6">
+        <a href="{% url 'onboarding_signup' %}"
+           class="inline-block bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-3 px-8 rounded-lg transition-colors">
+            Start a free trial
+        </a>
+    </div>
+</div>
+
+<!-- What Aria reads -->
+<h2 class="text-2xl font-bold text-white mb-6 text-center">What the Planning Center integration reads</h2>
+<div class="grid md:grid-cols-3 gap-6 mb-12">
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <h3 class="text-lg font-semibold text-white mb-2">People</h3>
+        <p class="text-gray-400 text-sm">
+            Names, teams, contact info, and blockout dates &mdash; so you can find who's available and how to reach them.
+        </p>
+    </div>
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <h3 class="text-lg font-semibold text-white mb-2">Services</h3>
+        <p class="text-gray-400 text-sm">
+            Plans, team assignments, and service types &mdash; so you can see who's serving and what's scheduled, for any date.
+        </p>
+    </div>
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <h3 class="text-lg font-semibold text-white mb-2">Songs</h3>
+        <p class="text-gray-400 text-sm">
+            Setlists, keys, tempos, and play history &mdash; plus chord charts and lyrics from your song attachments.
+        </p>
+    </div>
+</div>
+
+<!-- Example questions -->
+<h2 class="text-2xl font-bold text-white mb-6 text-center">Questions you can ask once connected</h2>
+<div class="bg-ch-dark border border-ch-gray rounded-xl p-6 mb-12 max-w-3xl mx-auto">
+    <ul class="space-y-3 text-gray-300">
+        <li>&ldquo;Who's serving this Sunday, and what are their phone numbers?&rdquo;</li>
+        <li>&ldquo;When did we last play this song, and what key was it in?&rdquo;</li>
+        <li>&ldquo;Who's blocked out on a specific date?&rdquo;</li>
+        <li>&ldquo;Show me the chord chart and lyrics for a song.&rdquo;</li>
+        <li>&ldquo;Who hasn't served in the last two months?&rdquo;</li>
+    </ul>
+    <p class="text-gray-500 text-sm mt-4">
+        See more in our guide to
+        <a href="/blog/ai-for-planning-center-worship-teams/" class="text-ch-gold hover:underline">AI for Planning Center worship teams</a>.
+    </p>
+</div>
+
+<!-- How to connect + privacy -->
+<div class="grid md:grid-cols-2 gap-6 mb-12">
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <h2 class="text-xl font-semibold text-white mb-2">How to connect</h2>
+        <p class="text-gray-400 text-sm mb-3">
+            Connecting takes a few minutes: create your Aria account, then authorize your Planning
+            Center account. Aria reads your data through Planning Center's official API &mdash; no
+            re-entering your team, no duplicate database to maintain.
+        </p>
+        <a href="{% url 'resource_pco_guide' %}" class="text-ch-gold hover:underline text-sm">Read the Planning Center setup guide &rarr;</a>
+    </div>
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-6">
+        <h2 class="text-xl font-semibold text-white mb-2">Your data stays yours</h2>
+        <p class="text-gray-400 text-sm mb-3">
+            Each church's data is fully isolated, encrypted in transit, and never used to train
+            public models. Planning Center remains your system of record.
+        </p>
+        <a href="{% url 'security' %}" class="text-ch-gold hover:underline text-sm">How Aria protects your data &rarr;</a>
+    </div>
+</div>
+
+<!-- FAQ -->
+<h2 class="text-2xl font-bold text-white mb-6 text-center">Planning Center integration FAQ</h2>
+<div class="max-w-3xl mx-auto space-y-4 mb-12">
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-5">
+        <h3 class="text-white font-medium mb-1">Does Aria work with my Planning Center plan?</h3>
+        <p class="text-gray-400 text-sm">Yes. Aria works with any Planning Center Services plan, including the free tier.</p>
+    </div>
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-5">
+        <h3 class="text-white font-medium mb-1">Does Aria replace Planning Center?</h3>
+        <p class="text-gray-400 text-sm">No. Aria reads from Planning Center and sits on top of it. Planning Center stays your source of truth.</p>
+    </div>
+    <div class="bg-ch-dark border border-ch-gray rounded-xl p-5">
+        <h3 class="text-white font-medium mb-1">Do I have to re-enter my team?</h3>
+        <p class="text-gray-400 text-sm">No. Aria reads the people, teams, and plans you already maintain in Planning Center.</p>
+    </div>
+</div>
+
+<!-- CTA -->
+<div class="text-center bg-ch-dark border border-ch-gray rounded-xl p-8 max-w-3xl mx-auto">
+    <h2 class="text-2xl font-bold text-white mb-3">Connect Planning Center in minutes</h2>
+    <p class="text-gray-400 mb-6">Start a free 14-day trial and ask your first question today.</p>
+    <a href="{% url 'onboarding_signup' %}"
+       class="inline-block bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-3 px-8 rounded-lg transition-colors">
+        Start free trial
+    </a>
+    <p class="text-gray-500 text-sm mt-4">
+        Or <a href="{% url 'pricing' %}" class="text-ch-gold hover:underline">see pricing</a>.
+    </p>
+</div>
+{% endblock %}

@@ -181,6 +181,11 @@ def pricing(request):
     return render(request, 'core/pricing.html', context)
 
 
+def integrations(request):
+    """Public integrations page — anchors the Planning Center integration (SEO)."""
+    return render(request, 'core/integrations.html')
+
+
 def security_page(request):
     """Public security page describing platform security measures."""
     return render(request, 'core/security.html')
