@@ -158,13 +158,10 @@ def home(request):
 
     from .models import SubscriptionPlan
 
-    # Get plans for pricing section (order by actual DB field, not property)
-    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly_cents')
+    # Plans for the pricing section, in display order (Starter → Enterprise).
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('sort_order')
 
-    context = {
-        'plans': plans,
-    }
-    return render(request, 'core/landing.html', context)
+    return render(request, 'core/landing.html', {'plans': plans})
 
 
 def pricing(request):

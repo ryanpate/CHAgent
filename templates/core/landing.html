@@ -66,292 +66,446 @@
 
 {% block extra_head %}
 <style>
-    .gradient-text {
-        background: linear-gradient(135deg, #c9a227 0%, #f0d060 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
+    /* --- Playfair Display (hero headline only), self-hosted to satisfy CSP --- */
+    @font-face {
+        font-family: 'Playfair Display';
+        src: url('/static/fonts/PlayfairDisplay-Bold.woff2') format('woff2');
+        font-weight: 700; font-style: normal; font-display: swap;
     }
-    .feature-card:hover {
-        transform: translateY(-4px);
-        border-color: #c9a227;
+    @font-face {
+        font-family: 'Playfair Display';
+        src: url('/static/fonts/PlayfairDisplay-BoldItalic.woff2') format('woff2');
+        font-weight: 700; font-style: italic; font-display: swap;
+    }
+
+    /* All landing styles scoped under .lp so they never touch shared chrome. */
+    .lp {
+        font-family: 'Brandon Grotesque', ui-sans-serif, system-ui, sans-serif;
+        --gold: #c9a227; --gold-hover: #eab308; --gold-soft: #f0d060;
+        --bg: #0f0f0f; --card: #1a1a1a; --inset: #252525; --border: #333;
+        --t1: #fff; --t2: #a0a0a0; --t3: #6b7280; --t4: #4b5563; --on-gold: #000;
+        scroll-behavior: smooth;
+    }
+    .lp section { scroll-margin-top: 24px; }
+
+    /* buttons */
+    .lp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+        font-weight: 500; border-radius: 8px; border: 1px solid transparent; white-space: nowrap; cursor: pointer;
+        transition: background .2s ease, color .2s, border-color .2s, transform .2s; }
+    .lp-btn:active { transform: translateY(1px); }
+    .lp-btn-gold { background: var(--gold); color: var(--on-gold); }
+    .lp-btn-gold:hover { background: var(--gold-hover); }
+    .lp-btn-outline { background: var(--inset); color: var(--t1); }
+    .lp-btn-outline:hover { background: var(--border); }
+    .lp-btn-md { padding: .7rem 1.4rem; font-size: 14px; }
+    .lp-btn-lg { padding: .95rem 1.9rem; font-size: 18px; }
+
+    /* hero */
+    .lp-hero { padding: 60px 0 64px; position: relative; overflow: hidden; }
+    .lp-hero::before { content: ""; position: absolute; top: -280px; left: 50%; transform: translateX(-50%);
+        width: 760px; height: 560px; background: radial-gradient(ellipse at center, rgba(201,162,39,.13), transparent 66%);
+        pointer-events: none; }
+    .lp-hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; position: relative; }
+    .lp-kick { color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    .lp-h1 { font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 58px; line-height: 1.06;
+        letter-spacing: -0.01em; margin-top: 20px; color: var(--t1); }
+    .lp-h1 em { font-style: italic; color: var(--gold); }
+    .lp-lede { margin-top: 24px; font-size: 18px; line-height: 1.55; color: var(--t2); max-width: 40ch; }
+    .lp-cta { display: flex; align-items: center; gap: 22px; margin-top: 32px; flex-wrap: wrap; }
+    .lp-link { color: var(--gold); font-size: 15px; font-weight: 500; display: inline-flex; align-items: center; gap: 7px; }
+    .lp-link:hover { color: var(--gold-soft); }
+    .lp-microtrust { margin-top: 30px; display: flex; align-items: center; gap: 8px; color: var(--t3); font-size: 14px; }
+    .lp-microtrust svg { color: var(--gold); flex-shrink: 0; }
+    .lp-right { align-self: stretch; position: relative; display: flex; align-items: center; justify-content: center;
+        background: radial-gradient(ellipse at 60% 40%, rgba(201,162,39,.16), transparent 62%); min-height: 360px; }
+    .lp-right::before { content: ""; position: absolute; left: 0; top: 12%; bottom: 12%; width: 1px; background: var(--border); }
+    .lp-medallion { width: 300px; height: 300px; border-radius: 50%; border: 1px solid rgba(201,162,39,.30);
+        display: flex; align-items: center; justify-content: center; position: relative; }
+    .lp-medallion::after { content: ""; position: absolute; inset: 26px; border-radius: 50%; border: 1px solid rgba(201,162,39,.15); }
+    .lp-medallion img { width: 200px; height: 200px; object-fit: contain; }
+
+    /* trust strip */
+    .lp-trust { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+        display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; padding: 22px 28px; margin-bottom: 8px; }
+    .lp-trust-item { display: flex; align-items: center; gap: 10px; color: var(--t2); font-size: 14px; }
+    .lp-trust-item svg { color: var(--gold); flex-shrink: 0; }
+
+    /* sections */
+    .lp-sec { padding: 80px 0; }
+    .lp-sechead { text-align: center; max-width: 620px; margin: 0 auto 48px; }
+    .lp-kicker { color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .lp-h2 { font-size: 38px; line-height: 1.12; font-weight: 700; letter-spacing: -0.015em; margin-top: 14px; color: var(--t1); }
+    .lp-sechead p { margin-top: 16px; font-size: 18px; color: var(--t2); }
+
+    /* features */
+    .lp-feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .lp-feat { background: var(--card); border: 1px solid var(--inset); border-radius: 12px; padding: 28px;
+        transition: border-color .2s, transform .2s; }
+    .lp-feat:hover { border-color: var(--gold); transform: translateY(-4px); }
+    .lp-feat-ico { width: 46px; height: 46px; border-radius: 10px; background: rgba(201,162,39,.20); color: var(--gold);
+        display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+    .lp-feat h3 { font-size: 20px; font-weight: 700; margin-bottom: 9px; color: var(--t1); }
+    .lp-feat p { color: var(--t2); font-size: 14px; line-height: 1.6; }
+
+    /* panel band (spotlight + pricing) */
+    .lp-band { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 64px 48px; }
+
+    /* spotlight */
+    .lp-spot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+    .lp-spot h2 { font-size: 34px; line-height: 1.14; font-weight: 700; letter-spacing: -0.015em; color: var(--t1); }
+    .lp-spot .lp-lede2 { margin-top: 16px; color: var(--t2); font-size: 18px; line-height: 1.55; }
+    .lp-checklist { margin-top: 26px; display: flex; flex-direction: column; gap: 14px; }
+    .lp-check { display: flex; gap: 12px; align-items: flex-start; }
+    .lp-check .ck { width: 24px; height: 24px; border-radius: 50%; background: rgba(201,162,39,.20); color: var(--gold);
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .lp-check b { font-weight: 500; color: var(--t1); }
+    .lp-check span { display: block; color: var(--t2); font-size: 14px; margin-top: 2px; }
+    .lp-insight { background: var(--bg); border: 1px solid var(--inset); border-radius: 16px; padding: 24px; }
+    .lp-insight-row { display: flex; align-items: center; gap: 14px; padding: 15px; border-radius: 12px;
+        background: var(--card); margin-bottom: 12px; }
+    .lp-insight-row:last-child { margin-bottom: 0; }
+    .lp-insight-row.alert { border-left: 3px solid var(--gold); }
+    .lp-insight-ic { width: 38px; height: 38px; border-radius: 10px; background: var(--inset); color: var(--t2);
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .lp-insight-row.alert .lp-insight-ic { background: rgba(201,162,39,.20); color: var(--gold); }
+    .lp-insight-row p { font-size: 14px; color: var(--t1); }
+    .lp-insight-row .sub { color: var(--t3); font-size: 12px; margin-top: 2px; }
+    .lp-insight-pill { margin-left: auto; flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 4px 10px;
+        border-radius: 999px; background: rgba(201,162,39,.20); color: var(--gold); }
+
+    /* how it works */
+    .lp-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; position: relative; }
+    .lp-steps-line { position: absolute; top: 26px; left: 12.5%; right: 12.5%; height: 1px;
+        background: linear-gradient(90deg, transparent, var(--border), var(--border), transparent); z-index: 0; }
+    .lp-step { text-align: center; position: relative; z-index: 1; }
+    .lp-step-n { width: 52px; height: 52px; margin: 0 auto 18px; border-radius: 50%; background: var(--gold);
+        color: var(--on-gold); font-weight: 700; font-size: 20px; display: flex; align-items: center; justify-content: center; }
+    .lp-step h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--t1); }
+    .lp-step p { color: var(--t2); font-size: 14px; line-height: 1.6; }
+
+    /* pricing */
+    .lp-toggle { display: inline-flex; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+        padding: 4px; gap: 4px; margin: 0 auto 40px; }
+    .lp-toggle button { border: none; background: none; cursor: pointer; padding: 8px 20px; border-radius: 6px;
+        font-family: inherit; font-size: 14px; font-weight: 500; color: var(--t2); transition: all .2s; }
+    .lp-toggle button.on { background: var(--gold); color: var(--on-gold); }
+    .lp-toggle .save { color: var(--gold); font-size: 12px; margin-left: 5px; }
+    .lp-toggle button.on .save { color: var(--on-gold); }
+    .lp-plans { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: stretch; }
+    .lp-plan { background: var(--bg); border: 1px solid var(--inset); border-radius: 12px; padding: 26px;
+        display: flex; flex-direction: column; }
+    .lp-plan.pop { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 40px rgba(201,162,39,.15); }
+    .lp-plan-tag { align-self: flex-start; height: 24px; display: inline-flex; align-items: center; padding: 0 11px;
+        background: var(--gold); color: var(--on-gold); font-size: 11px; font-weight: 700; letter-spacing: .04em;
+        text-transform: uppercase; border-radius: 999px; margin-bottom: 16px; }
+    .lp-plan-tag.ghost { background: transparent; }
+    .lp-plan h3 { font-size: 24px; font-weight: 700; color: var(--t1); }
+    .lp-plan .desc { color: var(--t2); font-size: 14px; margin-top: 6px; min-height: 40px; }
+    .lp-plan .amt { margin: 18px 0; }
+    .lp-plan .amt .num { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: var(--t1); }
+    .lp-plan .amt .per { color: var(--t2); font-size: 14px; }
+    .lp-plan ul { list-style: none; margin: 0 0 22px; padding: 20px 0 0; border-top: 1px solid var(--border);
+        display: flex; flex-direction: column; gap: 11px; flex: 1; }
+    .lp-plan li { display: flex; gap: 9px; align-items: flex-start; font-size: 14px; color: var(--t2); }
+    .lp-plan li svg { color: var(--gold); flex-shrink: 0; margin-top: 2px; }
+    .lp-plan .lp-btn { width: 100%; }
+
+    /* ios */
+    .lp-ios { display: grid; grid-template-columns: 1.3fr .7fr; gap: 40px; align-items: center; }
+    .lp-ios h2 { font-size: 32px; font-weight: 700; letter-spacing: -0.015em; margin-top: 14px; color: var(--t1); }
+    .lp-ios p { color: var(--t2); margin-top: 14px; line-height: 1.55; }
+    .lp-ios-list { margin: 22px 0 26px; display: flex; flex-direction: column; gap: 11px; }
+    .lp-ios-list .ck { width: 22px; height: 22px; }
+    .lp-ios-art { display: flex; align-items: center; justify-content: center; }
+    .lp-ios-art img { width: 168px; height: 168px; border-radius: 36px; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+
+    /* final cta */
+    .lp-final { text-align: center; padding: 88px 0; position: relative; overflow: hidden; }
+    .lp-final::before { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+        width: 680px; height: 420px; background: radial-gradient(ellipse at center, rgba(201,162,39,.14), transparent 68%); }
+    .lp-final h2 { position: relative; font-size: 44px; font-weight: 700; letter-spacing: -0.02em; color: var(--t1); }
+    .lp-final p { position: relative; color: var(--t2); font-size: 18px; margin-top: 18px; }
+    .lp-final .lp-cta { position: relative; justify-content: center; margin-top: 34px; }
+
+    @media (max-width: 920px) {
+        .lp-hero-grid, .lp-spot-grid, .lp-ios { grid-template-columns: 1fr; }
+        .lp-feat-grid, .lp-plans, .lp-steps { grid-template-columns: 1fr 1fr; }
+        .lp-h1 { font-size: 42px; text-align: center; }
+        .lp-hero-grid > div:first-child { text-align: center; }
+        .lp-kick { display: block; }
+        .lp-lede, .lp-microtrust { margin-left: auto; margin-right: auto; }
+        .lp-cta { justify-content: center; }
+        .lp-right { min-height: 0; order: -1; }
+        .lp-right::before { display: none; }
+        .lp-medallion { width: 220px; height: 220px; }
+        .lp-medallion img { width: 150px; height: 150px; }
+        .lp-steps-line { display: none; }
+        .lp-band { padding: 40px 24px; }
+        .lp-ios-art { order: -1; }
+    }
+    @media (max-width: 560px) {
+        .lp-feat-grid, .lp-plans, .lp-steps, .lp-trust { grid-template-columns: 1fr; }
+        .lp-h1 { font-size: 36px; }
+        .lp-h2, .lp-final h2 { font-size: 30px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .lp, .lp * { scroll-behavior: auto; }
+        .lp-feat:hover { transform: none; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Hero Section -->
-<div class="text-center py-16 px-4">
-    <h1 class="text-4xl md:text-6xl font-bold text-white mb-6"><span class="gradient-text">Aria</span> — AI-Powered Worship Team Management</h1>
-    <p class="text-xl md:text-2xl text-gray-300 mb-4 max-w-3xl mx-auto">
-        Meet Aria - Your intelligent assistant for worship arts teams with Planning Center integration
-    </p>
-    <p class="text-xl text-gray-400 mt-4">AI for your worship team — start a free 14-day trial.</p>
-    <p class="text-lg text-gray-400 mb-8 max-w-2xl mx-auto">
-        Get instant answers about schedules, volunteers, and songs. Track volunteer relationships, manage follow-ups, and build stronger connections with your team - all in one place.
-    </p>
-    <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
-        <a href="{% url 'onboarding_signup' %}"
-           class="bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-4 px-8 rounded-lg text-lg transition-colors">
-            Start Free Trial
-        </a>
-        <a href="{% url 'pricing' %}"
-           class="bg-ch-gray hover:bg-ch-gray/80 text-white font-semibold py-4 px-8 rounded-lg text-lg transition-colors">
-            View Pricing
-        </a>
+<div class="lp" id="top">
+
+    <!-- Hero (Variation C — editorial) -->
+    <section class="lp-hero">
+        <div class="lp-hero-grid">
+            <div>
+                <span class="lp-kick">AI worship team management</span>
+                <h1 class="lp-h1"><span style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Aria — </span>Shepherd your team, <em>not</em> your spreadsheets.</h1>
+                <p class="lp-lede">Aria quietly remembers every name, prayer request and follow-up — so you can lead your worship team with presence, not paperwork.</p>
+                <div class="lp-cta">
+                    <a class="lp-btn lp-btn-gold lp-btn-lg" href="{% url 'onboarding_signup' %}">Start your free trial</a>
+                    <a class="lp-link" href="#how">See how it works
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                    </a>
+                </div>
+                <p class="lp-microtrust">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+                    Works with Planning Center · 14-day free trial
+                </p>
+            </div>
+            <div class="lp-right">
+                <div class="lp-medallion"><img src="/static/aria-logo.png" alt="Aria dove logo" width="200" height="200"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trust strip -->
+    <div class="lp-trust">
+        <div class="lp-trust-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            Syncs with Planning Center
+        </div>
+        <div class="lp-trust-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+            Native iOS app
+        </div>
+        <div class="lp-trust-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            Encrypted &amp; org-isolated
+        </div>
+        <div class="lp-trust-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+            Cancel anytime
+        </div>
     </div>
-    <div class="mt-6">
-        <a href="https://apps.apple.com/us/app/aria-wa-assistant/id6759796456" target="_blank" rel="noopener noreferrer"
-           class="inline-block hover:opacity-80 transition-opacity">
-            <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" alt="Download on the App Store" style="height: 44px;">
-        </a>
-    </div>
-    <p class="text-gray-500 text-sm mt-4">14-day free trial. Cancel anytime — your card isn't charged until your trial ends.</p>
+
+    <!-- Features -->
+    <section class="lp-sec" id="features">
+        <div class="lp-sechead">
+            <span class="lp-kicker">Everything in one place</span>
+            <h2 class="lp-h2">Built for the way worship teams actually work</h2>
+            <p>From Sunday scheduling to quiet pastoral care, Aria gives leaders one calm place to lead their team well.</p>
+        </div>
+        <div class="lp-feat-grid">
+            <div class="lp-feat">
+                <div class="lp-feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg></div>
+                <h3>Just ask Aria</h3>
+                <p>Get instant answers about schedules, blockouts, songs and contacts — no more digging through spreadsheets and group texts.</p>
+            </div>
+            <div class="lp-feat">
+                <div class="lp-feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg></div>
+                <h3>Know your volunteers</h3>
+                <p>Log interactions, remember the personal details and keep every prayer request in one place. Care that doesn't slip through the cracks.</p>
+            </div>
+            <div class="lp-feat">
+                <div class="lp-feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg></div>
+                <h3>Never drop a follow-up</h3>
+                <p>Aria turns conversations into follow-ups automatically and reminds you about birthdays, check-ins and action items.</p>
+            </div>
+            <div class="lp-feat">
+                <div class="lp-feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
+                <h3>Planning Center, connected</h3>
+                <p>Link your Planning Center account once. Schedules, songs and chord charts stay in sync and ready whenever you ask.</p>
+            </div>
+            <div class="lp-feat">
+                <div class="lp-feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/></svg></div>
+                <h3>Keep the team in sync</h3>
+                <p>Announcements, channels, direct messages and song submissions — keep your whole team connected without another app.</p>
+            </div>
+            <div class="lp-feat">
+                <div class="lp-feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div>
+                <h3>See who needs you</h3>
+                <p>Proactive care insights surface the volunteers you haven't connected with lately — so no one quietly slips away.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Proactive-care spotlight -->
+    <section class="lp-sec lp-spot">
+        <div class="lp-band">
+            <div class="lp-spot-grid">
+                <div>
+                    <span class="lp-kicker">Proactive care</span>
+                    <h2 style="margin-top:14px">Lead like you remember everything — because Aria does.</h2>
+                    <p class="lp-lede2">Every conversation you log makes Aria smarter about your team. It quietly keeps watch and tells you who to reach out to next.</p>
+                    <div class="lp-checklist">
+                        <div class="lp-check"><span class="ck"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span><div><b>Prayer requests that resurface</b><span>Aria reminds you to check back in, at the right time.</span></div></div>
+                        <div class="lp-check"><span class="ck"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span><div><b>Engagement at a glance</b><span>Spot the volunteers who've gone quiet before they drift.</span></div></div>
+                        <div class="lp-check"><span class="ck"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span><div><b>One shared memory for your team</b><span>Co-leaders see the same context, so care is never siloed.</span></div></div>
+                    </div>
+                </div>
+                <div class="lp-insight">
+                    <div class="lp-insight-row alert">
+                        <div class="lp-insight-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg></div>
+                        <div><p><b>Follow up with Sarah</b></p><p class="sub">Her mom is back in the hospital — flagged 5 days ago</p></div>
+                        <span class="lp-insight-pill">Due</span>
+                    </div>
+                    <div class="lp-insight-row">
+                        <div class="lp-insight-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg></div>
+                        <div><p><b>David Wilson hasn't served in 6 weeks</b></p><p class="sub">Consider a quick check-in</p></div>
+                    </div>
+                    <div class="lp-insight-row">
+                        <div class="lp-insight-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                        <div><p><b>Emily's birthday is Thursday</b></p><p class="sub">Send a note from the team</p></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="lp-sec" id="how">
+        <div class="lp-sechead">
+            <span class="lp-kicker">Up and running fast</span>
+            <h2 class="lp-h2">From sign-up to caring in minutes</h2>
+        </div>
+        <div class="lp-steps">
+            <div class="lp-steps-line"></div>
+            <div class="lp-step"><div class="lp-step-n">1</div><h3>Sign up</h3><p>Create your organization in seconds and start your 14-day free trial.</p></div>
+            <div class="lp-step"><div class="lp-step-n">2</div><h3>Connect</h3><p>Link Planning Center to bring in your team, schedules and songs.</p></div>
+            <div class="lp-step"><div class="lp-step-n">3</div><h3>Invite your team</h3><p>Add co-leaders and volunteers so everyone shares the same context.</p></div>
+            <div class="lp-step"><div class="lp-step-n">4</div><h3>Start caring</h3><p>Ask Aria anything and log your first interaction. That's it.</p></div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="lp-sec lp-spot" id="pricing">
+        <div class="lp-band">
+            <div class="lp-sechead">
+                <span class="lp-kicker">Simple, transparent pricing</span>
+                <h2 class="lp-h2">Plans for teams of every size</h2>
+                <p>Every plan includes Aria, Planning Center integration and the iOS app. 14-day free trial on all.</p>
+            </div>
+            <div style="display:flex;justify-content:center">
+                <div class="lp-toggle">
+                    <button class="on" id="lpMBtn" onclick="lpSetBilling('m')">Monthly</button>
+                    <button id="lpYBtn" onclick="lpSetBilling('y')">Yearly <span class="save">Save 17%</span></button>
+                </div>
+            </div>
+            <div class="lp-plans">
+                {% for plan in plans %}
+                {% if plan.name == 'Enterprise' %}
+                <div class="lp-plan">
+                    <span class="lp-plan-tag ghost">&nbsp;</span>
+                    <h3>{{ plan.name }}</h3>
+                    <p class="desc">{{ plan.description|default:"For multi-campus organizations." }}</p>
+                    <div class="amt"><span class="num">Custom</span></div>
+                    <ul>
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Everything in Ministry</li>
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Multi-campus support</li>
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Priority support</li>
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Invoicing &amp; onboarding</li>
+                    </ul>
+                    <a class="lp-btn lp-btn-outline lp-btn-md" href="mailto:support@aria.church?subject=Enterprise%20plan%20inquiry">Contact sales</a>
+                </div>
+                {% else %}
+                <div class="lp-plan{% if plan.name == 'Team' %} pop{% endif %}">
+                    {% if plan.name == 'Team' %}<span class="lp-plan-tag">Most popular</span>{% else %}<span class="lp-plan-tag ghost">&nbsp;</span>{% endif %}
+                    <h3>{{ plan.name }}</h3>
+                    <p class="desc">{{ plan.description }}</p>
+                    <div class="amt"><span class="num" data-m="${{ plan.monthly_price|floatformat:2 }}" data-y="${{ plan.yearly_monthly_equivalent|floatformat:2 }}">${{ plan.monthly_price|floatformat:2 }}</span><span class="per">/month</span></div>
+                    <ul>
+                        {% if plan.max_users and plan.max_users > 0 %}
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>{{ plan.max_users }} team members</li>
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>{{ plan.max_volunteers }} volunteers</li>
+                        {% else %}
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Unlimited members &amp; volunteers</li>
+                        {% endif %}
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>{% if plan.max_ai_queries_monthly and plan.max_ai_queries_monthly > 0 %}{{ plan.max_ai_queries_monthly }} AI queries / month{% else %}Unlimited AI queries{% endif %}</li>
+                        {% if plan.features.api_access %}
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>API access</li>
+                        {% if plan.features.custom_branding %}<li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Custom branding</li>{% endif %}
+                        {% elif plan.features.care_insights %}
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Analytics + AI care insights</li>
+                        {% elif plan.features.analytics %}
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Analytics dashboard</li>
+                        {% else %}
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Planning Center + iOS app</li>
+                        {% endif %}
+                    </ul>
+                    <a class="lp-btn {% if plan.name == 'Team' %}lp-btn-gold{% else %}lp-btn-outline{% endif %} lp-btn-md" href="{% url 'onboarding_signup' %}">Start free trial</a>
+                </div>
+                {% endif %}
+                {% empty %}
+                <p style="grid-column:1/-1;text-align:center;color:var(--t2)">Pricing details are available on our <a href="{% url 'pricing' %}" class="lp-link" style="display:inline-flex">pricing page</a>.</p>
+                {% endfor %}
+            </div>
+            <div style="text-align:center;margin-top:32px">
+                <a href="{% url 'pricing' %}" class="lp-link" style="justify-content:center">View full pricing details
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- iOS app -->
+    <section class="lp-sec" id="ios">
+        <div class="lp-band lp-ios">
+            <div>
+                <span class="lp-kicker">Now on iPhone &amp; iPad</span>
+                <h2>Take Aria with you, everywhere ministry happens.</h2>
+                <p>The native iOS app brings your whole worship portal to your pocket — with Face ID login, push notifications and follow-up reminders.</p>
+                <div class="lp-ios-list">
+                    <div class="lp-check"><span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span><div><b>Face ID / Touch ID login</b></div></div>
+                    <div class="lp-check"><span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span><div><b>Push notifications &amp; follow-up reminders</b></div></div>
+                    <div class="lp-check"><span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span><div><b>Offline access &amp; native sharing</b></div></div>
+                </div>
+                <a href="https://apps.apple.com/us/app/aria-wa-assistant/id6759796456" target="_blank" rel="noopener noreferrer" style="display:inline-block" class="hover:opacity-80 transition-opacity">
+                    <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" alt="Download on the App Store" style="height:46px">
+                </a>
+            </div>
+            <div class="lp-ios-art">
+                <img src="/static/icons/icon-512x512.png" alt="Aria iOS app icon">
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="lp-final">
+        <h2>Ready to care for your team better?</h2>
+        <p>Start your free 14-day trial today. No charge until it ends — cancel anytime.</p>
+        <div class="lp-cta">
+            <a class="lp-btn lp-btn-gold lp-btn-lg" href="{% url 'onboarding_signup' %}">Start your free trial</a>
+            <a class="lp-btn lp-btn-outline lp-btn-lg" href="#pricing">Compare plans</a>
+        </div>
+    </section>
+
 </div>
 
-<!-- Demo/Screenshot Section -->
-<div class="bg-ch-dark rounded-2xl border border-ch-gray p-2 max-w-4xl mx-auto mb-20">
-    <div class="bg-ch-gray rounded-xl p-6">
-        <div class="flex items-start gap-4 mb-4">
-            <div class="w-10 h-10 bg-ch-gold/20 rounded-full flex items-center justify-center flex-shrink-0">
-                <span class="text-ch-gold font-bold">You</span>
-            </div>
-            <div class="bg-ch-dark rounded-lg p-4 flex-1">
-                <p class="text-gray-300">Who's on the team this Sunday?</p>
-            </div>
-        </div>
-        <div class="flex items-start gap-4">
-            <div class="w-10 h-10 bg-ch-gold rounded-full flex items-center justify-center flex-shrink-0">
-                <span class="text-ch-black font-bold text-sm">Aria</span>
-            </div>
-            <div class="bg-ch-gold/10 border border-ch-gold/30 rounded-lg p-4 flex-1">
-                <p class="text-gray-200">Here's who's scheduled for <strong>Sunday, December 15th</strong>:</p>
-                <ul class="mt-2 text-gray-300 text-sm space-y-1">
-                    <li><strong>Worship Leader:</strong> Sarah Johnson</li>
-                    <li><strong>Vocals:</strong> Mike Chen, Emily Davis</li>
-                    <li><strong>Keys:</strong> David Wilson</li>
-                    <li><strong>Drums:</strong> Chris Martinez</li>
-                    <li><strong>Sound:</strong> Alex Thompson</li>
-                </ul>
-                <p class="mt-2 text-gray-400 text-sm">Would you like me to show you the setlist or any volunteer details?</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Features Section -->
-<div class="py-16">
-    <h2 class="text-3xl font-bold text-white text-center mb-4">Everything Your Team Needs</h2>
-    <p class="text-gray-400 text-center mb-12 max-w-2xl mx-auto">
-        Aria combines AI-powered insights with practical tools to help you care for your volunteers better.
-    </p>
-
-    <div class="grid md:grid-cols-3 gap-6">
-        <!-- Feature 1 -->
-        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
-            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
-                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
-                </svg>
-            </div>
-            <h3 class="text-xl font-semibold text-white mb-2">AI Assistant</h3>
-            <p class="text-gray-400">Ask Aria about schedules, volunteers, songs, and more. Get instant answers without searching through spreadsheets.</p>
-        </div>
-
-        <!-- Feature 2 -->
-        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
-            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
-                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-                </svg>
-            </div>
-            <h3 class="text-xl font-semibold text-white mb-2">Volunteer Care</h3>
-            <p class="text-gray-400">Log interactions, track personal details, and never forget a prayer request. Build deeper relationships with your team.</p>
-        </div>
-
-        <!-- Feature 3 -->
-        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
-            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
-                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                </svg>
-            </div>
-            <h3 class="text-xl font-semibold text-white mb-2">Follow-up Tracking</h3>
-            <p class="text-gray-400">Create and manage follow-ups automatically. Get reminders for birthdays, prayer requests, and action items.</p>
-        </div>
-
-        <!-- Feature 4 -->
-        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
-            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
-                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                </svg>
-            </div>
-            <h3 class="text-xl font-semibold text-white mb-2">Planning Center Integration</h3>
-            <p class="text-gray-400">Connect directly to Planning Center. Access schedules, songs, chord charts, and volunteer info instantly.</p>
-        </div>
-
-        <!-- Feature 5 -->
-        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
-            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
-                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
-                </svg>
-            </div>
-            <h3 class="text-xl font-semibold text-white mb-2">Team Communication</h3>
-            <p class="text-gray-400">Announcements, channels, direct messages, and project management. Keep your team connected and informed.</p>
-        </div>
-
-        <!-- Feature 6 -->
-        <div class="feature-card bg-ch-dark rounded-xl border border-ch-gray p-6 transition-all duration-300">
-            <div class="w-12 h-12 bg-ch-gold/20 rounded-lg flex items-center justify-center mb-4">
-                <svg class="w-6 h-6 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                </svg>
-            </div>
-            <h3 class="text-xl font-semibold text-white mb-2">Analytics & Insights</h3>
-            <p class="text-gray-400">Track engagement, identify volunteers who need attention, and get proactive care alerts powered by AI.</p>
-        </div>
-    </div>
-</div>
-
-<!-- How It Works Section -->
-<div class="py-16 bg-ch-dark rounded-2xl border border-ch-gray p-8 my-16">
-    <h2 class="text-3xl font-bold text-white text-center mb-12">How It Works</h2>
-
-    <div class="grid md:grid-cols-4 gap-8">
-        <div class="text-center">
-            <div class="w-12 h-12 bg-ch-gold rounded-full flex items-center justify-center mx-auto mb-4">
-                <span class="text-ch-black font-bold text-xl">1</span>
-            </div>
-            <h3 class="text-lg font-semibold text-white mb-2">Sign Up</h3>
-            <p class="text-gray-400 text-sm">Create your organization in seconds. Start your 14-day free trial.</p>
-        </div>
-
-        <div class="text-center">
-            <div class="w-12 h-12 bg-ch-gold rounded-full flex items-center justify-center mx-auto mb-4">
-                <span class="text-ch-black font-bold text-xl">2</span>
-            </div>
-            <h3 class="text-lg font-semibold text-white mb-2">Connect</h3>
-            <p class="text-gray-400 text-sm">Link your Planning Center account to import your team data.</p>
-        </div>
-
-        <div class="text-center">
-            <div class="w-12 h-12 bg-ch-gold rounded-full flex items-center justify-center mx-auto mb-4">
-                <span class="text-ch-black font-bold text-xl">3</span>
-            </div>
-            <h3 class="text-lg font-semibold text-white mb-2">Invite Team</h3>
-            <p class="text-gray-400 text-sm">Add your team leaders and volunteers to collaborate.</p>
-        </div>
-
-        <div class="text-center">
-            <div class="w-12 h-12 bg-ch-gold rounded-full flex items-center justify-center mx-auto mb-4">
-                <span class="text-ch-black font-bold text-xl">4</span>
-            </div>
-            <h3 class="text-lg font-semibold text-white mb-2">Start Caring</h3>
-            <p class="text-gray-400 text-sm">Use Aria to track interactions and care for your volunteers.</p>
-        </div>
-    </div>
-</div>
-
-<!-- Pricing Preview -->
-<div class="py-16">
-    <h2 class="text-3xl font-bold text-white text-center mb-4">Simple, Transparent Pricing</h2>
-    <p class="text-gray-400 text-center mb-12">Plans for teams of all sizes. All include a 14-day free trial.</p>
-
-    <div class="grid md:grid-cols-4 gap-6">
-        {% for plan in plans %}
-        <div class="bg-ch-dark rounded-xl border {% if plan.name == 'Team' %}border-ch-gold{% else %}border-ch-gray{% endif %} p-6 text-center
-                    {% if plan.name == 'Team' %}ring-2 ring-ch-gold{% endif %}">
-            {% if plan.name == 'Team' %}
-            <span class="inline-block bg-ch-gold text-ch-black text-xs font-bold px-3 py-1 rounded-full mb-4">POPULAR</span>
-            {% endif %}
-            <h3 class="text-xl font-bold text-white">{{ plan.name }}</h3>
-            <div class="my-4">
-                <span class="text-3xl font-bold text-white">${{ plan.monthly_price|floatformat:2 }}</span>
-                <span class="text-gray-400">/mo</span>
-            </div>
-            <p class="text-gray-400 text-sm mb-4">
-                {% if plan.max_users %}{{ plan.max_users }} users{% else %}Unlimited{% endif %}
-            </p>
-        </div>
-        {% empty %}
-        <div class="col-span-4 text-center text-gray-400">
-            <p>Contact us for pricing information.</p>
-        </div>
-        {% endfor %}
-    </div>
-
-    <div class="text-center mt-8">
-        <a href="{% url 'pricing' %}" class="text-ch-gold hover:underline">View full pricing details &rarr;</a>
-    </div>
-</div>
-
-<!-- iOS App Section -->
-<div class="py-16 bg-ch-dark rounded-2xl border border-ch-gray p-8 my-16">
-    <div class="flex flex-col md:flex-row items-center gap-8">
-        <div class="flex-1 text-center md:text-left">
-            <h2 class="text-3xl font-bold text-white mb-4">Now Available on iOS</h2>
-            <p class="text-gray-400 mb-4">
-                Take Aria with you. The native iOS app brings the full power of your worship team portal to your iPhone and iPad with Face ID login, push notifications, and offline access.
-            </p>
-            <ul class="text-gray-400 text-sm space-y-2 mb-6">
-                <li class="flex items-center gap-2">
-                    <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                    Face ID / Touch ID biometric login
-                </li>
-                <li class="flex items-center gap-2">
-                    <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                    Native push notifications
-                </li>
-                <li class="flex items-center gap-2">
-                    <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                    Follow-up reminders & quick actions
-                </li>
-                <li class="flex items-center gap-2">
-                    <svg class="w-5 h-5 text-ch-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                    Offline access & native sharing
-                </li>
-            </ul>
-            <a href="https://apps.apple.com/us/app/aria-wa-assistant/id6759796456" target="_blank" rel="noopener noreferrer"
-               class="inline-block hover:opacity-80 transition-opacity">
-                <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" alt="Download on the App Store" style="height: 44px;">
-            </a>
-        </div>
-        <div class="flex-shrink-0">
-            <div class="w-48 h-48 bg-ch-gold/10 rounded-3xl border border-ch-gold/30 flex items-center justify-center">
-                <svg class="w-20 h-20 text-ch-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                </svg>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- CTA Section -->
-<div class="py-16 text-center">
-    <h2 class="text-3xl font-bold text-white mb-4">Ready to Transform Your Team?</h2>
-    <p class="text-gray-400 mb-8 max-w-xl mx-auto">
-        Join churches using Aria to build stronger relationships with their volunteers.
-    </p>
-    <a href="{% url 'onboarding_signup' %}"
-       class="inline-block bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-4 px-8 rounded-lg text-lg transition-colors">
-        Start Free Trial
-    </a>
-    <p class="text-gray-500 text-sm mt-4">Cancel anytime.</p>
-</div>
-
-<!-- Footer Links -->
-<div class="border-t border-ch-gray pt-8 mt-8">
-    <div class="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-500">
-        <div class="flex gap-6">
-            <a href="{% url 'pricing' %}" class="hover:text-gray-300">Pricing</a>
-            <a href="{% url 'onboarding_signup' %}" class="hover:text-gray-300">Get Started</a>
-        </div>
-        <p>Questions? <a href="mailto:support@aria.church" class="text-ch-gold hover:underline">support@aria.church</a></p>
-    </div>
-    <div class="text-center text-xs text-gray-600 mt-6">
-        Song tempo data powered by <a href="https://getsongbpm.com" target="_blank" class="hover:text-gray-400">GetSongBPM.com</a>
-    </div>
-</div>
+<script>
+    function lpSetBilling(mode) {
+        var m = mode === 'm';
+        document.getElementById('lpMBtn').classList.toggle('on', m);
+        document.getElementById('lpYBtn').classList.toggle('on', !m);
+        document.querySelectorAll('.lp-plan .amt .num[data-m]').forEach(function (el) {
+            el.textContent = m ? el.getAttribute('data-m') : el.getAttribute('data-y');
+        });
+        document.querySelectorAll('.lp-plan .amt .per').forEach(function (el) {
+            if (el.parentElement.querySelector('[data-m]')) el.textContent = m ? '/month' : '/mo, billed yearly';
+        });
+    }
+</script>
 {% endblock %}
