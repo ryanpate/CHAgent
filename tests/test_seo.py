@@ -97,6 +97,34 @@ def test_apex_host_not_redirected(client):
 
 
 @pytest.mark.django_db
+def test_www_over_http_redirects_to_https_apex_in_one_hop(client):
+    """GSC flagged a 2-hop http-www -> https-www -> apex chain. WwwRedirect runs
+    before SecurityMiddleware so http://www collapses straight to https apex."""
+    resp = client.get('/pricing/', HTTP_HOST='www.aria.church', secure=False)
+    assert resp.status_code == 301
+    assert resp.headers['Location'] == 'https://aria.church/pricing/'
+
+
+@pytest.mark.django_db
+def test_public_page_titles_are_single_brand_and_not_truncated(client):
+    """GSC: several titles double-branded ('... | Aria | ARIA - AI Worship...')
+    and exceeded ~60 chars, hurting CTR. Each public <title> must contain the
+    brand once and stay within a sane length."""
+    import re
+    pages = ['/', '/pricing/', '/security/', '/privacy/', '/integrations/',
+             '/resources/', '/resources/worship-schedule-template/',
+             '/resources/volunteer-application-template/',
+             '/resources/planning-center-setup-guide/', '/blog/']
+    for p in pages:
+        body = client.get(p).content.decode()
+        title = re.search(r'<title>(.*?)</title>', body, re.S).group(1).strip()
+        # Brand must never appear twice (the double-brand bug). Exactly one is
+        # the norm; the PCO setup guide is a deliberate brandless CTR exception.
+        assert title.lower().count('aria') <= 1, f"{p}: double-brand title: {title!r}"
+        assert len(title) <= 65, f"{p}: title too long ({len(title)}): {title!r}"
+
+
+@pytest.mark.django_db
 def test_integrations_page_targets_planning_center(client):
     """The integrations page anchors the Planning Center partner listing and
     targets 'planning center integration' — one H1, real content, breadcrumb."""

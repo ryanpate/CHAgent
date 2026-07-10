@@ -76,8 +76,11 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
+    # WwwRedirect runs BEFORE SecurityMiddleware so a www request collapses to
+    # the https apex in a SINGLE hop (http://www -> https://apex), instead of
+    # http://www -> https://www -> https://apex (SSL redirect then www strip).
     'core.middleware.WwwRedirectMiddleware',  # Canonicalize www -> apex (SEO)
+    'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

@@ -31,7 +31,7 @@ def blog_list(request):
         'page_obj': page_obj,
         'categories': categories,
         'recent_posts': recent_posts,
-        'meta_title': 'Worship Team Management Blog | Tips & Best Practices | Aria',
+        'meta_title': 'Worship Team Management Blog | Tips & Best Practices',
         'meta_description': 'Learn best practices for worship team management, volunteer coordination, and church technology. Tips for using Planning Center, building volunteer relationships, and more.',
     }
     return render(request, 'blog/post_list.html', context)
