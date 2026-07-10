@@ -18,6 +18,39 @@
     ]
 }
 </script>
+
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+        {
+            "@type": "Question",
+            "name": "How do I make a worship team schedule?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "List your service dates for the month, add a column for each position (worship leader, vocals, keys, guitar, bass, drums, sound, projection), collect volunteer blockout dates first, then fill each slot on a fair rotation so no one serves too often. Confirm every volunteer before you publish the schedule. This free template gives you that structure ready to fill in."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "How far in advance should I schedule my worship team?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Most teams schedule at least a month ahead so volunteers can plan around work and family. Building the schedule in monthly blocks also makes it easier to balance rotation and spot gaps before they become last-minute scrambles."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What positions should a worship schedule include?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "A typical worship schedule covers worship leader, vocals, keys, acoustic and electric guitar, bass, drums, plus tech roles like sound (FOH) and projection or lyrics. Add or remove columns to match how your team is organized."
+            }
+        }
+    ]
+}
+</script>
 {% endblock %}
 
 {% block resource_title %}Worship Schedule Template{% endblock %}
@@ -98,9 +131,35 @@
         <li><strong>Build in flexibility</strong> - Have backup options for last-minute changes</li>
     </ol>
 
+    <h2>Frequently Asked Questions</h2>
+    <h3>How do I make a worship team schedule?</h3>
+    <p>
+        List your service dates for the month, add a column for each position, collect volunteer
+        blockout dates first, then fill each slot on a fair rotation so no one serves too often.
+        Confirm every volunteer before you publish. This template gives you that structure ready
+        to fill in &mdash; and the <a href="{% url 'resource_pco_guide' %}">Planning Center setup guide</a>
+        shows how to move the same workflow into software once your team outgrows a spreadsheet.
+    </p>
+    <h3>How far in advance should I schedule?</h3>
+    <p>
+        Most teams schedule at least a month ahead so volunteers can plan around work and family,
+        which also makes it easier to balance rotation and spot gaps early.
+    </p>
+    <h3>What positions should a worship schedule include?</h3>
+    <p>
+        A typical schedule covers worship leader, vocals, keys, acoustic and electric guitar, bass,
+        and drums, plus tech roles like sound (FOH) and projection or lyrics. Adjust the columns to
+        match your team.
+    </p>
+
     <h2>Ready for Something Better?</h2>
     <p>
-        Spreadsheets work, but Aria makes scheduling easier. With Planning Center integration, you can ask questions like "Who's available next Sunday?" and get instant answers. Start your free trial to experience the difference.
+        Spreadsheets work, but they don't know who's already blocked out or who served last week.
+        <a href="{% url 'home' %}">Aria</a> connects to
+        <a href="{% url 'integrations' %}">Planning Center</a> so you can ask
+        "Who's available next Sunday?" and get an instant answer &mdash; see
+        <a href="{% url 'blog:post_detail' slug='ai-for-planning-center-worship-teams' %}">how AI works with Planning Center</a>.
+        <a href="{% url 'onboarding_signup' %}">Start your free trial</a> to experience the difference.
     </p>
 </div>
 {% endblock %}

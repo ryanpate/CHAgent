@@ -150,3 +150,24 @@ def test_signup_page_has_indexable_content_and_single_h1(client):
     assert '<form method="post"' in body
     for field in ['first_name', 'name="email"', 'name="password"', 'church_name', 'name="plan"']:
         assert field in body, f"signup form missing {field}"
+
+
+@pytest.mark.django_db
+def test_thin_resource_pages_have_depth_and_faq_schema(client):
+    """/resources/ and the schedule template were 'not indexed' partly for thin
+    content. They now carry FAQPage schema and enough unique text to index."""
+    for path in ['/resources/', '/resources/worship-schedule-template/']:
+        body = client.get(path).content.decode()
+        assert '"@type": "FAQPage"' in body, f"{path} missing FAQPage schema"
+        words = len(re.sub(r'<[^>]+>', ' ', body).split())
+        assert words >= 700, f"{path} too thin ({words} words)"
+
+
+@pytest.mark.django_db
+def test_resource_hub_cross_links_the_cluster(client):
+    """The resources hub should pass link equity into the topic cluster."""
+    body = client.get('/resources/').content.decode()
+    for link in ['/resources/worship-schedule-template/', '/integrations/',
+                 '/resources/planning-center-setup-guide/',
+                 '/blog/ai-for-planning-center-worship-teams/']:
+        assert link in body, f"resources hub missing link to {link}"

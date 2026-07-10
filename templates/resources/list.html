@@ -70,6 +70,48 @@
     ]
 }
 </script>
+
+<!-- FAQPage Schema -->
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+        {
+            "@type": "Question",
+            "name": "Are these worship team resources really free?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Every template and guide on this page is free to download and use for your church or worship ministry, with no account required. You only need an Aria account if you want to manage your team with the app itself."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What's the best way to organize a worship team schedule?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Start from a recurring rotation so no volunteer serves too often, track blockout dates before you schedule, and confirm each person before publishing. Our free worship schedule template gives you a ready-made structure for vocals, band, and tech, and Planning Center automates the same workflow once your team grows."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "Do I need Planning Center to use these templates?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "No. The volunteer application and schedule templates work as standalone spreadsheets and documents. The Planning Center setup guide is for teams that use — or want to start using — Planning Center Services to schedule people and plan songs."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "How does Aria help beyond these templates?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Aria connects to your Planning Center data and answers questions like who's serving this Sunday, remembers volunteer prayer requests and follow-ups, and helps you care for your team instead of managing spreadsheets. The templates are a starting point; Aria automates the ongoing work."
+            }
+        }
+    ]
+}
+</script>
 {% endblock %}
 
 {% block container_class %}max-w-6xl{% endblock %}
@@ -77,8 +119,16 @@
 {% block content %}
 <div class="mb-12">
     <h1 class="text-3xl md:text-4xl font-bold text-white mb-4">Free Worship Team Resources</h1>
-    <p class="text-gray-400 text-lg">
-        Templates, guides, and best practices to help you manage your worship team more effectively.
+    <p class="text-gray-400 text-lg mb-4">
+        Free templates, guides, and best practices to help worship leaders recruit volunteers,
+        build fair schedules, and get the most out of Planning Center &mdash; no account required.
+    </p>
+    <p class="text-gray-400">
+        Leading a worship team means juggling people, songs, and Sunday logistics every week.
+        These resources give you a proven starting point for the parts that eat the most time:
+        onboarding new volunteers, planning a rotation that keeps everyone fresh, and setting up
+        the tools that hold it all together. Download what you need, adapt it to your church,
+        and come back for the guides whenever you're ready to go deeper.
     </p>
 </div>
 
@@ -132,6 +182,53 @@
            class="text-ch-gold hover:underline text-sm font-medium">
             Read Guide &rarr;
         </a>
+    </div>
+</div>
+
+<!-- FAQ Section -->
+<div class="mb-12">
+    <h2 class="text-2xl font-bold text-white mb-6">Frequently asked questions</h2>
+    <div class="space-y-6">
+        <div>
+            <h3 class="text-lg font-semibold text-white mb-2">Are these worship team resources really free?</h3>
+            <p class="text-gray-400">
+                Yes. Every template and guide here is free to download and use for your church or
+                worship ministry, with no account required. You only need an Aria account if you
+                want to manage your team with the app itself.
+            </p>
+        </div>
+        <div>
+            <h3 class="text-lg font-semibold text-white mb-2">What's the best way to organize a worship team schedule?</h3>
+            <p class="text-gray-400">
+                Start from a recurring rotation so no volunteer serves too often, track blockout
+                dates <em>before</em> you schedule, and confirm each person before publishing. Our
+                <a href="{% url 'resource_schedule_template' %}" class="text-ch-gold hover:underline">free worship schedule template</a>
+                gives you a ready-made structure for vocals, band, and tech, and
+                <a href="{% url 'integrations' %}" class="text-ch-gold hover:underline">Planning Center</a>
+                automates the same workflow once your team grows.
+            </p>
+        </div>
+        <div>
+            <h3 class="text-lg font-semibold text-white mb-2">Do I need Planning Center to use these templates?</h3>
+            <p class="text-gray-400">
+                No. The volunteer application and schedule templates work as standalone spreadsheets
+                and documents. The
+                <a href="{% url 'resource_pco_guide' %}" class="text-ch-gold hover:underline">Planning Center setup guide</a>
+                is for teams that use &mdash; or want to start using &mdash; Planning Center Services
+                to schedule people and plan songs.
+            </p>
+        </div>
+        <div>
+            <h3 class="text-lg font-semibold text-white mb-2">How does Aria help beyond these templates?</h3>
+            <p class="text-gray-400">
+                <a href="{% url 'home' %}" class="text-ch-gold hover:underline">Aria</a>
+                connects to your Planning Center data and answers questions like who's serving this
+                Sunday, remembers volunteer prayer requests and follow-ups, and helps you care for
+                your team instead of managing spreadsheets. See
+                <a href="{% url 'blog:post_detail' slug='ai-for-planning-center-worship-teams' %}" class="text-ch-gold hover:underline">how AI works with Planning Center</a>
+                for a deeper look.
+            </p>
+        </div>
     </div>
 </div>
 
