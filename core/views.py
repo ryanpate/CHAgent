@@ -6053,13 +6053,16 @@ def onboarding_connect_pco(request):
             if pco_app_id and pco_secret:
                 org.planning_center_app_id = pco_app_id
                 org.planning_center_secret = pco_secret
+                org.pco_auth_method = 'manual'
                 org.planning_center_connected_at = timezone.now()
                 org.save()
                 return redirect(next_url)
 
+    from . import pco_oauth
     context = {
         'organization': org,
-        'is_connected': bool(org.planning_center_app_id),
+        'is_connected': org.has_pco_credentials(),
+        'pco_oauth_configured': pco_oauth.is_configured(),
     }
     return render(request, 'core/onboarding/connect_pco.html', context)
 

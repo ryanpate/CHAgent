@@ -36,6 +36,16 @@
         </div>
         {% endif %}
 
+        {% if pco_oauth_configured %}
+        <a href="{% url 'pco_oauth_start' %}"
+           class="w-full flex items-center justify-center gap-2 bg-ch-gold hover:bg-ch-gold/90 text-ch-black font-semibold py-3 px-6 rounded-lg transition-colors mb-4">
+            Connect with Planning Center
+        </a>
+        <p class="text-center text-gray-500 text-sm mb-4">The fastest way — sign in to Planning Center and authorize Aria.</p>
+        <details class="mb-2">
+            <summary class="cursor-pointer text-gray-400 text-sm hover:text-white">Enter credentials manually</summary>
+            <div class="mt-4">
+        {% endif %}
         <form method="post" class="space-y-6">
             {% csrf_token %}
 
@@ -76,6 +86,10 @@
                 </button>
             </div>
         </form>
+        {% if pco_oauth_configured %}
+            </div>
+        </details>
+        {% endif %}
     </div>
 
     <div class="mt-8 text-center text-gray-500 text-sm">

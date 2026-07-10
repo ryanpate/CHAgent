@@ -77,3 +77,27 @@ def test_callback_happy_path_stores_tokens(client, settings):
     assert org.pco_auth_method == 'oauth'
     assert org.planning_center_connected_at is not None
     assert org.pco_token_expires_at is not None
+
+
+@pytest.mark.django_db
+def test_connect_page_shows_oauth_button_when_configured(client, settings):
+    settings.PCO_OAUTH_CLIENT_ID = 'cid'
+    settings.PCO_OAUTH_CLIENT_SECRET = 'csec'
+    _login_orgless_owner(client, db=True)
+    resp = client.get(reverse('onboarding_connect_pco'))
+    content = resp.content.decode()
+    assert 'Connect with Planning Center' in content
+    assert reverse('pco_oauth_start') in content
+
+
+@pytest.mark.django_db
+def test_manual_connect_sets_auth_method(client, settings):
+    org = _login_orgless_owner(client, db=True)
+    resp = client.post(reverse('onboarding_connect_pco'), {
+        'action': 'connect', 'pco_app_id': 'AID', 'pco_secret': 'SEC',
+    })
+    assert resp.status_code == 302
+    org.refresh_from_db()
+    assert org.planning_center_app_id == 'AID'
+    assert org.planning_center_secret == 'SEC'
+    assert org.pco_auth_method == 'manual'
