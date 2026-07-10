@@ -5518,6 +5518,20 @@ def subscription_success(request):
 # Organization Onboarding Views
 # ============================================================================
 
+def _default_trial_plan():
+    """Plan level for card-free trials (spec decision: Team).
+
+    Falls back to the cheapest active plan so a missing Team seed can't
+    create plan-less orgs (which would have unlimited AI queries).
+    """
+    from .models import SubscriptionPlan
+    return (
+        SubscriptionPlan.objects.filter(is_active=True, tier='team').first()
+        or SubscriptionPlan.objects.filter(is_active=True)
+        .order_by('price_monthly_cents').first()
+    )
+
+
 @ratelimit(key='core.ip.ratelimit_client_ip', rate='5/h', method='POST', block=False)
 def onboarding_signup(request):
     """
@@ -5569,6 +5583,7 @@ def onboarding_signup(request):
             org = Organization.objects.create(
                 name=church_name, email=request.user.email,
                 subscription_status='trial',
+                subscription_plan=_default_trial_plan(),
                 trial_ends_at=timezone.now() + timedelta(days=trial_days),
             )
             OrganizationMembership.objects.create(
@@ -5590,7 +5605,7 @@ def onboarding_signup(request):
         plan_slug = request.POST.get('plan') or request.GET.get('plan')
         if plan_slug:
             request.session['preselected_plan_slug'] = plan_slug
-        return redirect('onboarding_select_plan')
+        return redirect('onboarding_connect_pco')
 
     if request.method == 'POST':
         first_name = request.POST.get('first_name', '').strip()
@@ -5634,6 +5649,7 @@ def onboarding_signup(request):
                 org = Organization.objects.create(
                     name=church_name, email=email,
                     subscription_status='trial',
+                    subscription_plan=_default_trial_plan(),
                     trial_ends_at=timezone.now() + timedelta(days=trial_days),
                 )
                 OrganizationMembership.objects.create(
@@ -5662,7 +5678,7 @@ def onboarding_signup(request):
         plan_slug = request.POST.get('plan') or request.GET.get('plan')
         if plan_slug:
             request.session['preselected_plan_slug'] = plan_slug
-        return redirect('onboarding_select_plan')
+        return redirect('onboarding_connect_pco')
 
     return render(request, 'core/onboarding/signup.html', {
         'create_org_only': create_org_only,

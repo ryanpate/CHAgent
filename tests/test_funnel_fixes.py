@@ -65,7 +65,7 @@ class TestOrglessUser:
             'church_name': 'Fresh Start Church',
         })
         assert response.status_code == 302
-        assert response['Location'].endswith(reverse('onboarding_select_plan'))
+        assert response['Location'].endswith(reverse('onboarding_connect_pco'))
 
         org = Organization.objects.get(name='Fresh Start Church')
         assert org.subscription_status == 'trial'

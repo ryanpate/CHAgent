@@ -21,7 +21,7 @@ def test_open_signup_creates_trial_org_and_redirects_to_plan(client, subscriptio
         'church_name': 'New Life Church',
     })
     assert resp.status_code == 302
-    assert resp.url == reverse('onboarding_select_plan')
+    assert resp.url == reverse('onboarding_connect_pco')
     user = User.objects.get(email='pat@newchurch.org')
     org = Organization.objects.get(name='New Life Church')
     assert org.subscription_status == 'trial'
