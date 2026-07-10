@@ -1,7 +1,10 @@
 """Card-free trial: signup skips plan/checkout, orgs trial at Team level."""
 import pytest
+from datetime import timedelta
+from unittest.mock import patch, MagicMock
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -89,3 +92,59 @@ def test_backfill_assigns_team_plan_to_planless_trials(team_plan):
     active_untouched.refresh_from_db()
     assert planless.subscription_plan_id == team_plan.id
     assert active_untouched.subscription_plan_id is None
+
+
+def _billing_owner(client, team_plan, trial_delta_hours):
+    from core.models import Organization, OrganizationMembership
+    org = Organization.objects.create(
+        name='MidTrial', email='midtrial@x.org',
+        subscription_status='trial', subscription_plan=team_plan,
+        stripe_customer_id='cus_midtrial',
+        trial_ends_at=timezone.now() + timedelta(hours=trial_delta_hours),
+    )
+    user = User.objects.create_user(
+        username=f'mid{trial_delta_hours}@x.org',
+        email=f'mid{trial_delta_hours}@x.org', password='supersecret1',
+    )
+    OrganizationMembership.objects.create(
+        user=user, organization=org, role='owner', can_manage_billing=True,
+    )
+    user.default_organization = org
+    user.save()
+    client.force_login(user)
+    return org
+
+
+@pytest.mark.django_db
+def test_mid_trial_checkout_passes_trial_end(client, team_plan, settings):
+    settings.STRIPE_SECRET_KEY = 'sk_test_x'
+    settings.STRIPE_PRICE_TEAM_MONTHLY = 'price_team_m'
+    org = _billing_owner(client, team_plan, trial_delta_hours=24 * 10)
+
+    fake_session = MagicMock()
+    fake_session.url = 'https://checkout.stripe.test/cs_1'
+    with patch('stripe.checkout.Session.create', return_value=fake_session) as create:
+        response = client.post(reverse('subscribe'), {
+            'plan_id': team_plan.id, 'billing_period': 'monthly',
+        })
+
+    assert response.status_code == 302
+    sub_data = create.call_args.kwargs['subscription_data']
+    assert sub_data['trial_end'] == int(org.trial_ends_at.timestamp())
+
+
+@pytest.mark.django_db
+def test_trial_ending_within_48h_charges_immediately(client, team_plan, settings):
+    settings.STRIPE_SECRET_KEY = 'sk_test_x'
+    settings.STRIPE_PRICE_TEAM_MONTHLY = 'price_team_m'
+    _billing_owner(client, team_plan, trial_delta_hours=24)
+
+    fake_session = MagicMock()
+    fake_session.url = 'https://checkout.stripe.test/cs_2'
+    with patch('stripe.checkout.Session.create', return_value=fake_session) as create:
+        client.post(reverse('subscribe'), {
+            'plan_id': team_plan.id, 'billing_period': 'monthly',
+        })
+
+    sub_data = create.call_args.kwargs['subscription_data']
+    assert 'trial_end' not in sub_data

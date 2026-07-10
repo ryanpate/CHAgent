@@ -5398,6 +5398,16 @@ def subscribe(request):
                 org.stripe_customer_id = customer.id
                 org.save(update_fields=['stripe_customer_id'])
 
+            # Honor the remainder of a card-free trial: card saved now, first
+            # charge at trial end. Stripe Checkout requires trial_end to be at
+            # least 48h in the future; inside that window billing starts now.
+            subscription_data = {
+                'metadata': {'organization_id': str(org.id)},
+            }
+            if (org.subscription_status == 'trial' and org.trial_ends_at
+                    and org.trial_ends_at > timezone.now() + timedelta(hours=48)):
+                subscription_data['trial_end'] = int(org.trial_ends_at.timestamp())
+
             # Create checkout session
             session = stripe.checkout.Session.create(
                 customer=org.stripe_customer_id,
@@ -5406,6 +5416,7 @@ def subscribe(request):
                     'price': stripe_price_id,
                     'quantity': 1,
                 }],
+                subscription_data=subscription_data,
                 success_url=request.build_absolute_uri(
                     reverse('subscription_success')
                 ) + '?session_id={CHECKOUT_SESSION_ID}',
