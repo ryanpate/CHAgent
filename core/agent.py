@@ -4128,7 +4128,7 @@ def create_followup_from_pending(pending: dict, follow_up_date, user) -> 'Follow
     return followup
 
 
-def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None, service_type: str = None) -> str:
+def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None, service_type: str = None, organization=None) -> str:
     """
     Handle a pending date lookup by fetching the data from Planning Center.
 
@@ -4150,7 +4150,7 @@ def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None, ser
     logger.info(f"Handling pending date lookup: '{date_str}' (type: {lookup_type}, service_type: {lookup_service_type})")
 
     from .planning_center import PlanningCenterServicesAPI
-    services_api = PlanningCenterServicesAPI()
+    services_api = PlanningCenterServicesAPI(organization=organization)
 
     if not services_api.is_configured:
         return "\n[DATE LOOKUP: Planning Center is not configured.]\n"
@@ -4385,7 +4385,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         logger.info(f"Detected confirmation for pending date lookup: {pending_date}")
 
         # Handle the date lookup
-        date_data_context = handle_pending_date_lookup(pending_date)
+        date_data_context = handle_pending_date_lookup(pending_date, organization=organization)
 
         # Clear the pending lookup
         conversation_context.clear_pending_date_lookup()

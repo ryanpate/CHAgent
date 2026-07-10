@@ -651,7 +651,7 @@ class ReportGenerator:
         # Try to get Planning Center data
         try:
             from .planning_center import PlanningCenterAPI
-            pco = PlanningCenterAPI()
+            pco = PlanningCenterAPI(organization=self.organization)
 
             # Get recent plans
             plans = pco.get_recent_plans(limit=10, service_type_name=service_type)

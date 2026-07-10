@@ -80,3 +80,21 @@ def test_no_org_falls_back_to_global_settings(settings):
     with patch('core.planning_center.requests.get', return_value=_ok({'data': []})) as get:
         api._get('/people/v2/people')
     assert get.call_args.kwargs.get('auth') == ('GLOBAL_ID', 'GLOBAL_SECRET')
+
+
+@pytest.mark.django_db
+def test_volunteer_matcher_uses_org_credentials():
+    """VolunteerMatcher threads its org into the PCO client (isolation leak fix)."""
+    from core.models import Organization
+    from core.volunteer_matching import VolunteerMatcher
+    org = Organization.objects.create(
+        name='Matcher Co', email='vm@x.org',
+        planning_center_app_id='VMAPP', planning_center_secret='VMSECRET',
+    )
+    matcher = VolunteerMatcher(organization=org)
+    assert matcher.pco_api.organization is org
+    assert matcher.pco_api.is_configured
+    with patch('core.planning_center.requests.get', return_value=_ok({'data': []})) as get:
+        matcher.pco_api._get('/people/v2/people')
+    assert get.call_args.kwargs.get('auth') == ('VMAPP', 'VMSECRET')
+    assert 'Authorization' not in (get.call_args.kwargs.get('headers') or {})
