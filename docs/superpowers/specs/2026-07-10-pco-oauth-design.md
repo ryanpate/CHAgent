@@ -26,6 +26,9 @@ those credentials OAuth tokens.
 1. Build the per-org plumbing AND OAuth together (one project).
 2. Keep the manual App ID/Secret form as a collapsible fallback; OAuth is the
    primary path. PATs still work per PCO docs.
+3. Encrypt all PCO secrets at rest (new OAuth tokens AND the existing
+   `planning_center_secret`, whose help text already claims "encrypted at
+   rest"). `cryptography` (Fernet) is already installed — no new dependency.
 
 ## PCO OAuth facts (from developer.planning.center)
 
@@ -50,9 +53,16 @@ those credentials OAuth tokens.
    `PCO_OAUTH_CLIENT_ID` and `PCO_OAUTH_CLIENT_SECRET`.
 4. Scopes `people` and `services` are requested per-authorization; no app-level
    scope config needed beyond enabling those products.
+5. Set `FIELD_ENCRYPTION_KEY` in Railway env to a Fernet key (generate with
+   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`).
+   Required in production; if unset, encrypted fields fall back to a key
+   derived from `SECRET_KEY` (fine for dev/tests, NOT for production — a
+   `SECRET_KEY` rotation would then orphan the data). Never lose this key: the
+   stored OAuth tokens and manual secret become unreadable without it (users
+   would re-authorize / re-enter the manual secret).
 
-Nothing ships broken if these env vars are absent: the OAuth button renders a
-"Planning Center connection isn't configured yet — enter credentials manually
+Nothing ships broken if the OAuth env vars are absent: the OAuth button renders
+a "Planning Center connection isn't configured yet — enter credentials manually
 below" message and the manual form still works.
 
 ## Piece 1 — per-org credential plumbing
@@ -103,22 +113,53 @@ current global-fallback behavior — acceptable, not a regression.
 
 ## Piece 2 — OAuth flow
 
+### Encrypted field (`core/fields.py`, new)
+
+- `EncryptedTextField(models.TextField)` — transparent Fernet encryption:
+  - `get_prep_value(value)`: return `Fernet(key).encrypt(value.encode())`
+    decoded to str; pass through empty/None unchanged.
+  - `from_db_value(value, ...)`: attempt `Fernet(key).decrypt`; on
+    `InvalidToken` (a legacy plaintext value not yet migrated) return the raw
+    value unchanged, so reads never crash during the migration window.
+  - Key resolution helper `_fernet()`: use `settings.FIELD_ENCRYPTION_KEY` if
+    set; else derive a stable key from `SECRET_KEY`
+    (`base64.urlsafe_b64encode(sha256(SECRET_KEY).digest())`) so dev/tests need
+    no config.
+  - Column type stays text; encrypted output is base64 (fits, no length cap) —
+    hence TextField, not CharField.
+
 ### Model (`core/models.py`, new migration)
 
 New `Organization` fields (all `null=True/blank=True`):
-- `pco_access_token = CharField(max_length=512)`
-- `pco_refresh_token = CharField(max_length=512)`
+- `pco_access_token = EncryptedTextField()`
+- `pco_refresh_token = EncryptedTextField()`
 - `pco_token_expires_at = DateTimeField()`
 - `pco_auth_method = CharField(max_length=10, blank=True)`  # 'oauth' | 'manual' | ''
 
+Change existing field:
+- `planning_center_secret` → `EncryptedTextField` (was CharField; help text
+  already says "encrypted at rest"). `planning_center_app_id` stays plaintext
+  (it is the Basic-auth identifier, not the secret).
+
 `has_pco_credentials()` extended: True if `pco_access_token` OR
 (`planning_center_app_id` and `planning_center_secret`).
+
+### Data migration (encrypt existing secrets)
+
+Separate migration after the schema migration: iterate
+`Organization.objects.exclude(planning_center_secret='')` and
+`.save(update_fields=['planning_center_secret'])`. Because `from_db_value`
+tolerates plaintext (returns it raw) and `get_prep_value` always encrypts, this
+transforms Cherry Hills' existing plaintext secret into ciphertext. Reverse op
+is a noop. Safe on Railway (migrate runs on deploy before serving).
 
 ### Settings / env
 
 - `PCO_OAUTH_CLIENT_ID`, `PCO_OAUTH_CLIENT_SECRET` (env, may be empty).
 - `PCO_OAUTH_REDIRECT_URI` defaulting to
   `https://aria.church/onboarding/pco/callback/` (override via env for local).
+- `FIELD_ENCRYPTION_KEY` (env; falls back to a SECRET_KEY-derived key when
+  unset — see `core/fields.py`).
 - Authorize/token URLs as module constants in a small `core/pco_oauth.py`.
 
 ### `core/pco_oauth.py` (new — keeps OAuth logic out of the 6k-line views.py)
@@ -164,11 +205,14 @@ New `Organization` fields (all `null=True/blank=True`):
 
 - CSRF on the OAuth round trip via the `state` param (session-stored, compared,
   single-use).
-- Tokens stored plaintext on the model, matching the existing
-  `planning_center_secret` CharField pattern. Field-level encryption at rest is
-  pre-existing tech debt tracked separately — explicitly OUT of scope here to
-  avoid ballooning the change. Noted so it's a conscious decision, not an
-  oversight.
+- All PCO secrets (OAuth access + refresh tokens, manual
+  `planning_center_secret`) encrypted at rest via `EncryptedTextField` (Fernet).
+  Key from `FIELD_ENCRYPTION_KEY` env, SECRET_KEY-derived fallback for dev.
+- Key management: losing `FIELD_ENCRYPTION_KEY` orphans stored secrets (re-auth
+  / re-enter required). Key ROTATION (re-encrypting existing data under a new
+  key) is out of scope for this change — single active key only.
+- The global env `PLANNING_CENTER_SECRET` fallback stays as an env var (not DB),
+  so it is not a DB-at-rest concern.
 
 ## Testing
 
@@ -188,12 +232,19 @@ New `Organization` fields (all `null=True/blank=True`):
 - Manual form still connects and sets `pco_auth_method='manual'`.
 - A spot-check that a representative agent handler passes `organization=` into
   the API constructor (e.g. via a mock asserting the constructor arg).
+- `EncryptedTextField`: a saved value is ciphertext in the DB (raw column value
+  != plaintext) but reads back equal to the original; a legacy plaintext value
+  reads back unchanged (InvalidToken fallback); round-trips through a model
+  save/reload.
+- Data migration: an org with a plaintext secret has ciphertext in the column
+  afterward and still reads back the original secret.
 - No live PCO network calls anywhere in tests.
 
 ## Out of scope
 
-- Token encryption at rest (pre-existing pattern; separate change).
+- Encryption KEY ROTATION (re-encrypting under a new key); single active key.
+- Encrypting non-PCO secrets (Stripe keys, etc.) — separate change if wanted.
 - Real-time/webhook PCO sync.
 - Scopes beyond `people services`.
 - Migrating Cherry Hills off its manual/global key — it keeps working via the
-  fallback.
+  fallback (its secret is now encrypted at rest by the data migration).
