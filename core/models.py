@@ -3345,7 +3345,7 @@ class TaskTemplate(models.Model):
             try:
                 from .planning_center import PlanningCenterServicesAPI
                 from datetime import timedelta as _td
-                api = PlanningCenterServicesAPI()
+                api = PlanningCenterServicesAPI(organization=self.project.organization)
                 start_str = from_date.strftime('%Y-%m-%d')
                 end_str = (from_date + _td(days=365)).strftime('%Y-%m-%d')
                 plans = api.get_plans_by_date_range(

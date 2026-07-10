@@ -294,7 +294,7 @@ def get_song_bpm(song_id: str, organization=None, song_details: dict = None,
 
     # Initialize API if not provided
     if services_api is None:
-        services_api = PlanningCenterServicesAPI()
+        services_api = PlanningCenterServicesAPI(organization=organization)
 
     # Fetch song details if not provided
     if song_details is None and services_api.is_configured:
