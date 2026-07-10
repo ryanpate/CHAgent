@@ -47,6 +47,7 @@ def organization_context(request):
         # Subscription status flags
         'is_trial': False,
         'show_trial_warning': False,
+        'trial_has_card': False,
         'is_past_due': False,
         'subscription_status': None,
         # Badge counts
@@ -70,6 +71,7 @@ def organization_context(request):
         # Subscription status for warning banners
         context['is_trial'] = organization.is_trial
         context['show_trial_warning'] = organization.show_trial_warning
+        context['trial_has_card'] = bool(organization.stripe_subscription_id)
         context['is_past_due'] = organization.subscription_status == 'past_due'
         context['subscription_status'] = organization.subscription_status
 

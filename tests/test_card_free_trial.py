@@ -148,3 +148,25 @@ def test_trial_ending_within_48h_charges_immediately(client, team_plan, settings
 
     sub_data = create.call_args.kwargs['subscription_data']
     assert 'trial_end' not in sub_data
+
+
+@pytest.mark.django_db
+def test_trial_banner_shows_days_left_and_plan_cta(client, team_plan):
+    _billing_owner(client, team_plan, trial_delta_hours=24 * 10)
+    response = client.get(reverse('dashboard'))
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert 'days left' in content
+    assert 'Choose your plan' in content
+
+
+@pytest.mark.django_db
+def test_trial_banner_hides_cta_once_card_on_file(client, team_plan):
+    from core.models import Organization
+    org = _billing_owner(client, team_plan, trial_delta_hours=24 * 10)
+    org.stripe_subscription_id = 'sub_hascard'
+    org.save()
+    response = client.get(reverse('dashboard'))
+    content = response.content.decode()
+    assert 'days left' in content
+    assert 'Choose your plan' not in content

@@ -366,14 +366,16 @@
     <div id="ptr-indicator" class="ptr-indicator"></div>
     {% if user.is_authenticated %}
     <!-- Subscription Warning Banners -->
-    {% if show_trial_warning %}
-    <div class="bg-amber-600 text-white px-4 py-2 text-center text-sm">
-        <span class="font-medium">Trial ending soon!</span>
-        Your free trial expires in {{ trial_days_remaining }} day{{ trial_days_remaining|pluralize }}.
-        {% if can_manage_billing or is_owner %}
-        <a href="{% url 'subscribe' %}" class="underline font-semibold ml-2">Subscribe now</a>
-        {% else %}
-        Contact your account owner to subscribe.
+    {% if is_trial %}
+    <div class="{% if show_trial_warning %}bg-amber-600{% else %}bg-ch-dark border-b border-ch-gray{% endif %} text-white px-4 py-2 text-center text-sm">
+        <span class="font-medium">Free trial{% if show_trial_warning %} — ending soon{% endif %}:</span>
+        {{ trial_days_remaining }} day{{ trial_days_remaining|pluralize }} left.
+        {% if not trial_has_card %}
+            {% if can_manage_billing or is_owner %}
+            <a href="{% url 'subscribe' %}" class="underline font-semibold ml-2 text-ch-gold{% if show_trial_warning %} text-white{% endif %}">Choose your plan</a>
+            {% else %}
+            Contact your account owner to subscribe.
+            {% endif %}
         {% endif %}
     </div>
     {% endif %}
