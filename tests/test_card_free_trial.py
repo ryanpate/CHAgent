@@ -65,3 +65,27 @@ def test_default_trial_plan_falls_back_to_cheapest_active(db):
         price_monthly_cents=7999, is_active=True,
     )
     assert _default_trial_plan().id == cheap.id
+
+
+@pytest.mark.django_db
+def test_backfill_assigns_team_plan_to_planless_trials(team_plan):
+    import importlib
+    from django.apps import apps
+    from core.models import Organization
+
+    planless = Organization.objects.create(
+        name='Planless Trial', email='planless@x.org',
+        subscription_status='trial', subscription_plan=None,
+    )
+    active_untouched = Organization.objects.create(
+        name='Active NoPlan', email='activenp@x.org',
+        subscription_status='active', subscription_plan=None,
+    )
+
+    migration = importlib.import_module('core.migrations.0050_backfill_trial_plan')
+    migration.backfill_trial_plan(apps, None)
+
+    planless.refresh_from_db()
+    active_untouched.refresh_from_db()
+    assert planless.subscription_plan_id == team_plan.id
+    assert active_untouched.subscription_plan_id is None
