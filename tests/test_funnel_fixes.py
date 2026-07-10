@@ -151,6 +151,7 @@ def test_subscription_success_finalizes_from_stripe_session(
     fake_session = MagicMock()
     fake_session.subscription = fake_sub
     fake_session.customer = 'cus_123'
+    fake_session.metadata = {}
 
     client.force_login(user_alpha_owner)
     with patch('stripe.checkout.Session.retrieve', return_value=fake_session):
@@ -183,6 +184,7 @@ def test_finalize_checkout_rejects_session_owned_by_another_customer(
     fake_session = MagicMock()
     fake_session.subscription = fake_sub
     fake_session.customer = 'cus_someone_else'
+    fake_session.metadata = {}
 
     client.force_login(user_alpha_owner)
     with patch('stripe.checkout.Session.retrieve', return_value=fake_session):

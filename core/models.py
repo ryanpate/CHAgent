@@ -261,9 +261,9 @@ class Organization(models.Model):
         """Check if trial period has ended without converting to paid."""
         if self.subscription_status != 'trial':
             return False
-        if self.trial_ends_at and timezone.now() > self.trial_ends_at:
-            return True
-        return False
+        if not self.trial_ends_at:
+            return True  # trial with no end date: fail closed, not free-forever
+        return timezone.now() > self.trial_ends_at
 
     @property
     def trial_days_remaining(self):

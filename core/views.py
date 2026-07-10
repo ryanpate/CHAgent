@@ -5356,6 +5356,13 @@ def subscribe(request):
         messages.error(request, "You don't have permission to manage billing.")
         return redirect('subscription_required')
 
+    # Already has a live subscription — send to the billing portal instead of
+    # letting them complete a second checkout (double billing). Cancelled and
+    # past_due orgs still fall through, since re-subscribing is legitimate.
+    if org.stripe_subscription_id and org.subscription_status in ('active', 'trial'):
+        messages.info(request, "You already have a subscription. Manage your plan in the billing portal.")
+        return redirect('billing_portal')
+
     if request.method == 'POST':
         plan_id = request.POST.get('plan_id')
         billing_period = request.POST.get('billing_period', 'monthly')
@@ -5436,8 +5443,9 @@ def subscribe(request):
             messages.error(request, "Unable to process payment. Please try again.")
             return redirect('subscription_required')
 
-    # GET request - show plan selection
-    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly_cents')
+    # GET request - show plan selection (Enterprise excluded — no Stripe
+    # price, contact-sales only, so POSTing it would error).
+    plans = SubscriptionPlan.objects.filter(is_active=True).exclude(tier='enterprise').order_by('price_monthly_cents')
     return render(request, 'core/subscribe.html', {
         'organization': org,
         'plans': plans,
@@ -5480,6 +5488,18 @@ def _finalize_checkout_session(org, session_id):
     if trial_end_ts:
         from datetime import datetime, timezone as dt_timezone
         org.trial_ends_at = datetime.fromtimestamp(trial_end_ts, tz=dt_timezone.utc)
+
+    # Apply the plan the customer actually purchased — set on the checkout
+    # session's metadata by `subscribe`/`onboarding_checkout` — so upgrades
+    # and downgrades take effect instead of leaving the org on its old plan.
+    meta = getattr(session, 'metadata', None) or {}
+    plan_id = meta.get('plan_id') if hasattr(meta, 'get') else None
+    if plan_id:
+        from .models import SubscriptionPlan
+        purchased = SubscriptionPlan.objects.filter(id=plan_id, is_active=True).first()
+        if purchased:
+            org.subscription_plan = purchased
+
     org.subscription_started_at = timezone.now()
     org.save()
     return True
@@ -5521,7 +5541,16 @@ def subscription_success(request):
             )
             return redirect('dashboard')
 
-    messages.success(request, "Welcome! Your subscription is now active.")
+    if org and org.subscription_status == 'trial':
+        # Card saved to honor the remainder of a card-free trial — no charge
+        # yet, so don't tell them billing is already active.
+        messages.success(
+            request,
+            "Your card is saved. Your plan starts when your free trial ends "
+            "— you won't be charged before then."
+        )
+    else:
+        messages.success(request, "Welcome! Your subscription is now active.")
     return redirect('dashboard')
 
 
@@ -5911,6 +5940,17 @@ def onboarding_checkout(request):
     success_url = request.build_absolute_uri('/onboarding/checkout/success/')
     cancel_url = request.build_absolute_uri('/onboarding/checkout/cancel/')
 
+    # Honor the remainder of a card-free trial: card saved now, first charge
+    # at trial end. Without this, a day-13 org converting through this flow
+    # gets 14 MORE free days (repeatably). Stripe Checkout requires trial_end
+    # to be at least 48h in the future; inside that window billing starts now.
+    subscription_data = {
+        'metadata': {'organization_id': str(org.id)},
+    }
+    if (org.subscription_status == 'trial' and org.trial_ends_at
+            and org.trial_ends_at > timezone.now() + timedelta(hours=48)):
+        subscription_data['trial_end'] = int(org.trial_ends_at.timestamp())
+
     # Create checkout session
     try:
         checkout_session = stripe.checkout.Session.create(
@@ -5923,12 +5963,7 @@ def onboarding_checkout(request):
             mode='subscription',
             success_url=success_url + '?session_id={CHECKOUT_SESSION_ID}',
             cancel_url=cancel_url,
-            subscription_data={
-                'trial_period_days': getattr(settings, 'TRIAL_PERIOD_DAYS', 14),
-                'metadata': {
-                    'organization_id': str(org.id),
-                },
-            },
+            subscription_data=subscription_data,
             metadata={
                 'organization_id': str(org.id),
                 'plan_id': str(plan.id),
