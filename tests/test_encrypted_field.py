@@ -52,3 +52,17 @@ def test_field_reads_legacy_plaintext_unchanged(settings):
                     ['legacy-plaintext', org.id])
     org.refresh_from_db()
     assert org.planning_center_secret == 'legacy-plaintext'  # InvalidToken fallback
+
+
+@pytest.mark.django_db
+def test_undecryptable_value_is_logged(settings, caplog):
+    import logging
+    from core.models import Organization
+    org = Organization.objects.create(name='Bad Key Co', email='badkey@x.org')
+    with connection.cursor() as cur:
+        cur.execute('UPDATE core_organization SET planning_center_secret=%s WHERE id=%s',
+                    ['not-a-valid-token', org.id])
+    with caplog.at_level(logging.WARNING, logger='core.fields'):
+        org.refresh_from_db()
+        _ = org.planning_center_secret
+    assert any('did not decrypt' in r.message for r in caplog.records)
