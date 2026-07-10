@@ -170,3 +170,11 @@ def test_trial_banner_hides_cta_once_card_on_file(client, team_plan):
     content = response.content.decode()
     assert 'days left' in content
     assert 'Choose your plan' not in content
+
+
+@pytest.mark.django_db
+def test_signup_page_says_no_card_required(client):
+    response = client.get(reverse('onboarding_signup'))
+    content = response.content.decode()
+    assert 'No credit card required' in content
+    assert 'We ask for a card' not in content
