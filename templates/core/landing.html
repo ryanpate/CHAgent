@@ -637,12 +637,6 @@
             var ex = EXCHANGES[idx];
             msgs.appendChild(make('div', 'lp-demo-user', ex.q));
             scrollBottom();
-            if (REDUCED) {
-                msgs.appendChild(make('div', 'lp-demo-aria', ex.a));
-                scrollBottom();
-                afterExchange();
-                return;
-            }
             var typing = make('div', 'lp-demo-typing', '<i></i><i></i><i></i>');
             msgs.appendChild(typing);
             scrollBottom();
@@ -653,9 +647,13 @@
         }
 
         if (REDUCED) {
-            // Render everything instantly, fully expanded.
+            // Render everything instantly, fully expanded — one finale at the end.
             pending = [];
-            for (var i = 0; i < EXCHANGES.length; i++) play(i);
+            for (var i = 0; i < EXCHANGES.length; i++) {
+                msgs.appendChild(make('div', 'lp-demo-user', EXCHANGES[i].q));
+                msgs.appendChild(make('div', 'lp-demo-aria', EXCHANGES[i].a));
+            }
+            renderFinale();
         } else {
             play(0);
         }
