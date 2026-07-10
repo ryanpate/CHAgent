@@ -6053,15 +6053,78 @@ def onboarding_connect_pco(request):
             if pco_app_id and pco_secret:
                 org.planning_center_app_id = pco_app_id
                 org.planning_center_secret = pco_secret
+                org.pco_auth_method = 'manual'
                 org.planning_center_connected_at = timezone.now()
                 org.save()
                 return redirect(next_url)
 
+    from . import pco_oauth
     context = {
         'organization': org,
-        'is_connected': bool(org.planning_center_app_id),
+        'is_connected': org.has_pco_credentials(),
+        'pco_oauth_configured': pco_oauth.is_configured(),
     }
     return render(request, 'core/onboarding/connect_pco.html', context)
+
+
+@login_required
+def pco_oauth_start(request):
+    """Begin the Planning Center OAuth flow."""
+    import secrets
+    from django.contrib import messages
+    from . import pco_oauth
+
+    org = _resolve_onboarding_org(request)
+    if not org:
+        return redirect('onboarding_signup')
+
+    if not pco_oauth.is_configured():
+        messages.info(request, "Planning Center sign-in isn't available right now. "
+                               "You can enter credentials manually below.")
+        return redirect('onboarding_connect_pco')
+
+    state = secrets.token_urlsafe(24)
+    request.session['pco_oauth_state'] = state
+    return redirect(pco_oauth.build_authorize_url(state))
+
+
+@login_required
+def pco_oauth_callback(request):
+    """Handle the Planning Center OAuth redirect back."""
+    from django.contrib import messages
+    from . import pco_oauth
+
+    in_wizard = bool(request.session.get('onboarding_org_id'))
+    next_url = 'onboarding_invite_team' if in_wizard else 'org_settings'
+
+    org = _resolve_onboarding_org(request)
+    if not org:
+        return redirect('onboarding_signup')
+
+    code = request.GET.get('code', '')
+    state = request.GET.get('state', '')
+    expected = request.session.pop('pco_oauth_state', None)
+    if not code or not state or state != expected:
+        messages.error(request, "Planning Center connection failed (invalid state). Please try again.")
+        return redirect('onboarding_connect_pco')
+
+    try:
+        tokens = pco_oauth.exchange_code(code)
+    except Exception as e:
+        logger.error(f"PCO code exchange failed for org {getattr(org, 'slug', '?')}: {e}")
+        messages.error(request, "Couldn't connect Planning Center. Please try again "
+                                "or enter credentials manually.")
+        return redirect('onboarding_connect_pco')
+
+    from datetime import timedelta
+    org.pco_access_token = tokens.get('access_token', '')
+    org.pco_refresh_token = tokens.get('refresh_token', '')
+    org.pco_token_expires_at = timezone.now() + timedelta(seconds=int(tokens.get('expires_in', 7200)))
+    org.pco_auth_method = 'oauth'
+    org.planning_center_connected_at = timezone.now()
+    org.save()
+    messages.success(request, "Planning Center connected.")
+    return redirect(next_url)
 
 
 @login_required

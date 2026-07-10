@@ -1306,8 +1306,8 @@ def handle_compound_team_contact_query(date_reference: str, contact_type: str, o
     """
     from .planning_center import PlanningCenterAPI, PlanningCenterServicesAPI
 
-    services_api = PlanningCenterServicesAPI()
-    people_api = PlanningCenterAPI()
+    services_api = PlanningCenterServicesAPI(organization=organization)
+    people_api = PlanningCenterAPI(organization=organization)
 
     if not services_api.is_configured:
         return "\n[PLANNING CENTER: The Planning Center integration is not configured. Unable to look up team schedules.]\n"
@@ -1443,7 +1443,7 @@ def handle_team_roster_query(team_keyword: str, organization=None) -> str:
     """
     from .planning_center import PlanningCenterServicesAPI
 
-    services_api = PlanningCenterServicesAPI()
+    services_api = PlanningCenterServicesAPI(organization=organization)
 
     if not services_api.is_configured:
         return "\n[PLANNING CENTER: The Planning Center integration is not configured. Unable to look up team rosters.]\n"
@@ -3113,7 +3113,7 @@ def confirm_volunteer_match(
     elif pco_id:
         # Create/get volunteer from PCO
         from .planning_center import PlanningCenterAPI
-        pco_api = PlanningCenterAPI()
+        pco_api = PlanningCenterAPI(organization=interaction.organization)
         person = pco_api.get_person_by_id(pco_id)
 
         if person:
@@ -3776,7 +3776,7 @@ def handle_song_selection(selection_index: int, pending_suggestions: list, query
     logger.info(f"User selected song: '{song_title}' (index {selection_index}, id {song_id})")
 
     from .planning_center import PlanningCenterServicesAPI
-    services_api = PlanningCenterServicesAPI()
+    services_api = PlanningCenterServicesAPI(organization=organization)
 
     if not services_api.is_configured:
         return "\n[SONG SELECTION: Planning Center is not configured.]\n"
@@ -4128,7 +4128,7 @@ def create_followup_from_pending(pending: dict, follow_up_date, user) -> 'Follow
     return followup
 
 
-def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None, service_type: str = None) -> str:
+def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None, service_type: str = None, organization=None) -> str:
     """
     Handle a pending date lookup by fetching the data from Planning Center.
 
@@ -4150,7 +4150,7 @@ def handle_pending_date_lookup(pending_lookup: dict, query_type: str = None, ser
     logger.info(f"Handling pending date lookup: '{date_str}' (type: {lookup_type}, service_type: {lookup_service_type})")
 
     from .planning_center import PlanningCenterServicesAPI
-    services_api = PlanningCenterServicesAPI()
+    services_api = PlanningCenterServicesAPI(organization=organization)
 
     if not services_api.is_configured:
         return "\n[DATE LOOKUP: Planning Center is not configured.]\n"
@@ -4385,7 +4385,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
         logger.info(f"Detected confirmation for pending date lookup: {pending_date}")
 
         # Handle the date lookup
-        date_data_context = handle_pending_date_lookup(pending_date)
+        date_data_context = handle_pending_date_lookup(pending_date, organization=organization)
 
         # Clear the pending lookup
         conversation_context.clear_pending_date_lookup()
@@ -4509,7 +4509,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             if choice == 'song':
                 # Process as a song query
                 from .planning_center import PlanningCenterServicesAPI
-                services_api = PlanningCenterServicesAPI()
+                services_api = PlanningCenterServicesAPI(organization=organization)
                 if services_api.is_configured:
                     song_data_context = ""
                     songs = services_api.search_songs(extracted_value)
@@ -4545,8 +4545,8 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
             else:
                 # Process as a person query
                 from .planning_center import PlanningCenterAPI, PlanningCenterServicesAPI
-                pco_api = PlanningCenterAPI()
-                services_api = PlanningCenterServicesAPI()
+                pco_api = PlanningCenterAPI(organization=organization)
+                services_api = PlanningCenterServicesAPI(organization=organization)
                 if pco_api.is_configured:
                     search_result = pco_api.search_person_with_suggestions(extracted_value)
                     if search_result.get('found') and search_result.get('details'):
@@ -4953,8 +4953,8 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
     if pco_query and pco_person_name:
         logger.info(f"PCO data query detected: {pco_query_type} for '{pco_person_name}'")
         from .planning_center import PlanningCenterAPI, PlanningCenterServicesAPI
-        pco_api = PlanningCenterAPI()
-        services_api = PlanningCenterServicesAPI()
+        pco_api = PlanningCenterAPI(organization=organization)
+        services_api = PlanningCenterServicesAPI(organization=organization)
 
         if pco_api.is_configured:
             # Check if this is a first-name-only query
@@ -5037,7 +5037,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
     if blockout_query:
         logger.info(f"Blockout query detected: {blockout_query_type} for person='{blockout_person}', date='{blockout_date}'")
         from .planning_center import PlanningCenterServicesAPI
-        services_api = PlanningCenterServicesAPI()
+        services_api = PlanningCenterServicesAPI(organization=organization)
 
         if services_api.is_configured:
             if blockout_query_type == 'person_blockouts':
@@ -5103,7 +5103,7 @@ def query_agent(question: str, user, session_id: str, organization=None) -> str:
     if song_query:
         logger.info(f"Song query detected: {song_query_type} for '{song_value}'")
         from .planning_center import PlanningCenterServicesAPI
-        services_api = PlanningCenterServicesAPI()
+        services_api = PlanningCenterServicesAPI(organization=organization)
 
         if services_api.is_configured:
             # Check if user is asking about lyrics/chords (even in setlist context)

@@ -37,14 +37,48 @@ class PlanningCenterAPI:
 
     BASE_URL = "https://api.planningcenteronline.com"
 
-    def __init__(self):
-        self.app_id = settings.PLANNING_CENTER_APP_ID
-        self.secret = settings.PLANNING_CENTER_SECRET
+    def __init__(self, organization=None):
+        self.organization = organization
+        self.access_token = ''
+        self.app_id = ''
+        self.secret = ''
+        if organization is not None and getattr(organization, 'pco_access_token', ''):
+            self.access_token = organization.pco_access_token
+        elif organization is not None and organization.planning_center_app_id and organization.planning_center_secret:
+            self.app_id = organization.planning_center_app_id
+            self.secret = organization.planning_center_secret
+        else:
+            self.app_id = settings.PLANNING_CENTER_APP_ID
+            self.secret = settings.PLANNING_CENTER_SECRET
 
     @property
     def is_configured(self) -> bool:
         """Check if Planning Center credentials are configured."""
-        return bool(self.app_id and self.secret)
+        return bool(self.access_token or (self.app_id and self.secret))
+
+    def _ensure_fresh_token(self):
+        """Refresh an expired OAuth access token in place. No-op for manual/global."""
+        from datetime import timedelta
+        from django.utils import timezone
+        from . import pco_oauth
+
+        org = self.organization
+        if not self.access_token or org is None:
+            return
+        expires_at = getattr(org, 'pco_token_expires_at', None)
+        if expires_at and expires_at - timezone.now() > timedelta(minutes=5):
+            return  # still fresh
+        try:
+            tokens = pco_oauth.refresh_access_token(org.pco_refresh_token)
+        except Exception as e:
+            logger.error(f"PCO token refresh failed for org {getattr(org, 'slug', '?')}: {e}")
+            return
+        org.pco_access_token = tokens.get('access_token', '')
+        org.pco_refresh_token = tokens.get('refresh_token', org.pco_refresh_token)
+        expires_in = int(tokens.get('expires_in', 7200))
+        org.pco_token_expires_at = timezone.now() + timedelta(seconds=expires_in)
+        org.save(update_fields=['pco_access_token', 'pco_refresh_token', 'pco_token_expires_at'])
+        self.access_token = org.pco_access_token
 
     def _get(self, endpoint: str, params: dict = None, retry_on_429: bool = True) -> dict:
         """
@@ -68,14 +102,25 @@ class PlanningCenterAPI:
         max_retries = 3 if retry_on_429 else 1
         base_delay = 2.0  # Start with 2 second delay
 
+        if self.access_token:
+            self._ensure_fresh_token()
+
         for attempt in range(max_retries):
             try:
-                response = requests.get(
-                    url,
-                    auth=(self.app_id, self.secret),
-                    params=params,
-                    timeout=30
-                )
+                if self.access_token:
+                    response = requests.get(
+                        url,
+                        headers={'Authorization': f'Bearer {self.access_token}'},
+                        params=params,
+                        timeout=30,
+                    )
+                else:
+                    response = requests.get(
+                        url,
+                        auth=(self.app_id, self.secret),
+                        params=params,
+                        timeout=30,
+                    )
                 response.raise_for_status()
                 return response.json()
             except requests.exceptions.HTTPError as e:
@@ -1941,11 +1986,18 @@ class PlanningCenterServicesAPI(PlanningCenterAPI):
             return None
 
         try:
-            response = requests.get(
-                attachment_url,
-                auth=(self.app_id, self.secret),
-                timeout=30
-            )
+            if self.access_token:
+                response = requests.get(
+                    attachment_url,
+                    headers={'Authorization': f'Bearer {self.access_token}'},
+                    timeout=30,
+                )
+            else:
+                response = requests.get(
+                    attachment_url,
+                    auth=(self.app_id, self.secret),
+                    timeout=30,
+                )
             response.raise_for_status()
 
             # Check content length

@@ -60,7 +60,7 @@ class VolunteerMatcher:
     """
 
     def __init__(self, organization=None):
-        self.pco_api = PlanningCenterAPI()
+        self.pco_api = PlanningCenterAPI(organization=organization)
         self.organization = organization
 
     def find_volunteer(self, name: str) -> VolunteerMatch:

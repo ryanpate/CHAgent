@@ -24,6 +24,7 @@ The product is **out of closed beta and live publicly with paid subscriptions**.
 - ✅ **Conversion/first-run UI** — mobile-responsive pricing comparison, dashboard empty-state + "Connect Planning Center" first-run banner, PCO-dependent quick actions disabled until connected, password-reset flow (`/accounts/password-reset/`).
 - ✅ **SEO** — registered blog category sitemap + sitemap-200 guard test, rescued the PCO setup guide (FAQ schema), brand-targeted homepage, generated `static/og-image.png` + `twitter-card.png` (via `scripts/generate_og_images.py`), seeded 2 blog posts.
 - ✅ **Unified communication search** — `core/search.py::unified_search()` searches task comments, project discussions, channel messages, DMs, announcements, and task/project titles from a nav search box → `/search/?q=`; access control mirrors each list view; `icontains` (NOT Postgres FTS — the test DB is SQLite).
+- ✅ **Planning Center OAuth + per-org credentials + encryption (July 2026)** — "Connect with Planning Center" OAuth button (`pco_oauth_start`/`pco_oauth_callback`, one PCO app for all churches, scopes `people services`, `state` CSRF, lazy refresh of the 2h access token via `core/pco_oauth.py`); the manual App ID/Secret form is retained as a collapsible fallback. **Closed a latent isolation gap:** `PlanningCenterAPI(organization=...)` now resolves creds org-OAuth-token → org-manual → global env, and all per-org call sites thread `organization` (previously every org queried the single global PCO account). PCO secrets/tokens are encrypted at rest via `core/fields.py::EncryptedTextField` (Fernet, key from `FIELD_ENCRYPTION_KEY`, SECRET_KEY-derived fallback in dev; production guard fails loud without the key on Railway). New Org fields: `pco_access_token`/`pco_refresh_token` (encrypted), `pco_token_expires_at`, `pco_auth_method`; migrations `0051`/`0052` (data migration encrypts existing secrets).
 
 > **GOTCHA:** `/onboarding/*` is a `TenantMiddleware` PUBLIC_URL, so `request.organization` is NOT set in onboarding views — they resolve the org from `session['onboarding_org_id']`, then `session['organization_id']`, then `request.user.get_primary_organization()`. Forgetting the fallbacks caused a "Connect Planning Center link does nothing" bug (fixed). Also: `chat_send` renders `ChatMessage` rows from the DB and ignores `query_agent`'s return value — any early-return path in `query_agent` MUST persist its messages or the response never appears.
 
@@ -292,9 +293,21 @@ DATABASE_URL=postgres://...
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...  # For embeddings
 
-# Planning Center (now per-organization, legacy support)
+# Planning Center — global fallback (manual PAT). Per-org creds/OAuth tokens
+# take priority; this is used only when an org has neither.
 PLANNING_CENTER_APP_ID=your-app-id
 PLANNING_CENTER_SECRET=your-secret
+
+# Planning Center OAuth (ONE app for all churches; register at
+# api.planningcenteronline.com, redirect URI https://aria.church/onboarding/pco/callback/)
+PCO_OAUTH_CLIENT_ID=
+PCO_OAUTH_CLIENT_SECRET=
+PCO_OAUTH_REDIRECT_URI=https://aria.church/onboarding/pco/callback/
+
+# Field-level encryption key for PCO secrets/tokens at rest (Fernet).
+# Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# REQUIRED in production (Railway); dev/tests fall back to a SECRET_KEY-derived key.
+FIELD_ENCRYPTION_KEY=
 
 # Stripe Billing
 STRIPE_SECRET_KEY=sk_live_...
