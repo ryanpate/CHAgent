@@ -150,6 +150,7 @@ def test_subscription_success_finalizes_from_stripe_session(
     fake_sub.trial_end = None
     fake_session = MagicMock()
     fake_session.subscription = fake_sub
+    fake_session.customer = 'cus_123'
 
     client.force_login(user_alpha_owner)
     with patch('stripe.checkout.Session.retrieve', return_value=fake_session):
@@ -161,6 +162,35 @@ def test_subscription_success_finalizes_from_stripe_session(
     org_alpha.refresh_from_db()
     assert org_alpha.stripe_subscription_id == 'sub_resub_1'
     assert org_alpha.subscription_status == 'active'
+
+
+@pytest.mark.django_db
+def test_finalize_checkout_rejects_session_owned_by_another_customer(
+    client, user_alpha_owner, org_alpha, settings,
+):
+    """A checkout session for a different Stripe customer must not activate
+    this org (IDOR: session_id comes from the query string)."""
+    settings.STRIPE_SECRET_KEY = 'sk_test_x'
+    org_alpha.subscription_status = 'cancelled'
+    org_alpha.stripe_customer_id = 'cus_123'
+    org_alpha.stripe_subscription_id = ''
+    org_alpha.save()
+
+    fake_sub = MagicMock()
+    fake_sub.id = 'sub_stolen'
+    fake_sub.status = 'active'
+    fake_sub.trial_end = None
+    fake_session = MagicMock()
+    fake_session.subscription = fake_sub
+    fake_session.customer = 'cus_someone_else'
+
+    client.force_login(user_alpha_owner)
+    with patch('stripe.checkout.Session.retrieve', return_value=fake_session):
+        client.get(reverse('subscription_success') + '?session_id=cs_theirs')
+
+    org_alpha.refresh_from_db()
+    assert org_alpha.stripe_subscription_id == ''
+    assert org_alpha.subscription_status == 'cancelled'
 
 
 # ---------------------------------------------------------------------------

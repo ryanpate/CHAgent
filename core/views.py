@@ -5444,6 +5444,19 @@ def _finalize_checkout_session(org, session_id):
     import stripe
 
     session = stripe.checkout.Session.retrieve(session_id, expand=['subscription'])
+
+    # session_id comes from the query string — only honor sessions that belong
+    # to this org's Stripe customer, or any leaked/foreign checkout session
+    # could mark an expired org active.
+    session_customer = getattr(session, 'customer', None)
+    if not session_customer or session_customer != org.stripe_customer_id:
+        logger.warning(
+            f"Refusing to finalize checkout session {session_id} for org "
+            f"{org.slug}: session customer {session_customer!r} does not match "
+            f"org customer {org.stripe_customer_id!r}"
+        )
+        return False
+
     sub = session.subscription
     if not sub:
         return False
