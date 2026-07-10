@@ -315,3 +315,26 @@ def test_subscribe_already_subscribed_redirects_to_billing_portal(client, team_p
     response = client.get(reverse('subscribe'))
     assert response.status_code == 302
     assert response['Location'] == reverse('billing_portal')
+
+
+@pytest.mark.django_db
+def test_null_trial_end_renders_subscription_required_not_loop(client, team_plan):
+    """A 'trial' org with no trial_ends_at fails closed to the subscription
+    page (200), not an infinite dashboard<->required redirect loop."""
+    from core.models import Organization, OrganizationMembership
+    org = Organization.objects.create(
+        name='NullDate Trial', email='nulldate@x.org',
+        subscription_status='trial', subscription_plan=team_plan,
+        trial_ends_at=None,
+    )
+    user = User.objects.create_user(
+        username='nulldate@x.org', email='nulldate@x.org', password='supersecret1',
+    )
+    OrganizationMembership.objects.create(
+        user=user, organization=org, role='owner', can_manage_billing=True,
+    )
+    user.default_organization = org
+    user.save()
+    client.force_login(user)
+    response = client.get(reverse('subscription_required'))
+    assert response.status_code == 200

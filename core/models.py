@@ -252,7 +252,9 @@ class Organization(models.Model):
         """Check if organization is in trial period."""
         if self.subscription_status != 'trial':
             return False
-        if self.trial_ends_at and timezone.now() > self.trial_ends_at:
+        if not self.trial_ends_at:  # Fail closed: null dates are not valid trials
+            return False
+        if timezone.now() > self.trial_ends_at:
             return False
         return True
 
