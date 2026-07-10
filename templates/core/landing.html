@@ -231,7 +231,9 @@
         .lp-kick { display: block; }
         .lp-lede, .lp-microtrust { margin-left: auto; margin-right: auto; }
         .lp-cta { justify-content: center; }
-        .lp-right { min-height: 0; order: -1; }
+        /* Demo chat stacks BELOW the headline/CTA on mobile (order:-1 was for
+           the old decorative medallion, which sat above the H1) */
+        .lp-right { min-height: 0; margin-top: 34px; }
         .lp-right::before { display: none; }
         .lp-steps-line { display: none; }
         .lp-band { padding: 40px 24px; }
