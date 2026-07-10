@@ -240,18 +240,6 @@ class TenantMiddleware(MiddlewareMixin):
             )
             return redirect('subscription_required')
 
-        # Card-required trial: a trialing org that never completed Stripe checkout
-        # (no subscription on file) must finish checkout before using the app.
-        # Beta (grandfathered) and active orgs are unaffected. Onboarding/billing
-        # pages are PUBLIC_URLS and never reach this check, so no redirect loop.
-        if (organization.subscription_status == 'trial'
-                and not organization.stripe_subscription_id):
-            logger.info(
-                f"Org {organization.slug} is trialing without a payment method; "
-                "redirecting to complete checkout."
-            )
-            return redirect('onboarding_select_plan')
-
         # Check for past_due status - allow access but they'll see a warning
         if organization.subscription_status == 'past_due':
             logger.warning(
