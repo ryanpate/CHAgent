@@ -3,6 +3,8 @@ from django.conf import settings
 from django.utils import timezone
 import secrets
 
+from .fields import EncryptedTextField
+
 # Try to import pgvector, fall back to a placeholder if not available
 try:
     from pgvector.django import VectorField
@@ -189,12 +191,20 @@ class Organization(models.Model):
         blank=True,
         help_text="Planning Center App ID for this organization"
     )
-    planning_center_secret = models.CharField(
-        max_length=200,
-        blank=True,
+    planning_center_secret = EncryptedTextField(
+        blank=True, default='',
         help_text="Planning Center Secret (encrypted at rest)"
     )
     planning_center_connected_at = models.DateTimeField(null=True, blank=True)
+
+    # Planning Center OAuth
+    pco_access_token = EncryptedTextField(blank=True, default='')
+    pco_refresh_token = EncryptedTextField(blank=True, default='')
+    pco_token_expires_at = models.DateTimeField(null=True, blank=True)
+    pco_auth_method = models.CharField(
+        max_length=10, blank=True, default='',
+        help_text="How PCO is connected: 'oauth' | 'manual' | ''"
+    )
 
     # API Access
     api_key = models.CharField(
@@ -401,7 +411,9 @@ class Organization(models.Model):
         self.save(update_fields=['ai_queries_this_month', 'ai_queries_reset_at'])
 
     def has_pco_credentials(self):
-        """Check if Planning Center credentials are configured."""
+        """True if PCO is connected via OAuth or manual app_id/secret."""
+        if self.pco_access_token:
+            return True
         return bool(self.planning_center_app_id and self.planning_center_secret)
 
     def get_user_count(self):
