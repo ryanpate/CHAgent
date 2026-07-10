@@ -119,10 +119,6 @@
     .lp-right { align-self: stretch; position: relative; display: flex; align-items: center; justify-content: center;
         background: radial-gradient(ellipse at 60% 40%, rgba(201,162,39,.16), transparent 62%); min-height: 360px; }
     .lp-right::before { content: ""; position: absolute; left: 0; top: 12%; bottom: 12%; width: 1px; background: var(--border); }
-    .lp-medallion { width: 300px; height: 300px; border-radius: 50%; border: 1px solid rgba(201,162,39,.30);
-        display: flex; align-items: center; justify-content: center; position: relative; }
-    .lp-medallion::after { content: ""; position: absolute; inset: 26px; border-radius: 50%; border: 1px solid rgba(201,162,39,.15); }
-    .lp-medallion img { width: 200px; height: 200px; object-fit: contain; }
 
     /* trust strip */
     .lp-trust { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
@@ -235,10 +231,10 @@
         .lp-kick { display: block; }
         .lp-lede, .lp-microtrust { margin-left: auto; margin-right: auto; }
         .lp-cta { justify-content: center; }
-        .lp-right { min-height: 0; order: -1; }
+        /* Demo chat stacks BELOW the headline/CTA on mobile (order:-1 was for
+           the old decorative medallion, which sat above the H1) */
+        .lp-right { min-height: 0; margin-top: 34px; }
         .lp-right::before { display: none; }
-        .lp-medallion { width: 220px; height: 220px; }
-        .lp-medallion img { width: 150px; height: 150px; }
         .lp-steps-line { display: none; }
         .lp-band { padding: 40px 24px; }
         .lp-ios-art { order: -1; }
@@ -251,6 +247,43 @@
     @media (prefers-reduced-motion: reduce) {
         .lp, .lp * { scroll-behavior: auto; }
         .lp-feat:hover { transform: none; }
+    }
+
+    /* Hero chat demo */
+    .lp-demo { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--border);
+        border-radius: 16px; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.35); }
+    .lp-demo-head { display: flex; align-items: center; gap: 9px; padding: 14px 18px;
+        border-bottom: 1px solid var(--inset); }
+    .lp-demo-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--gold);
+        box-shadow: 0 0 8px rgba(201,162,39,.8); }
+    .lp-demo-name { font-weight: 700; font-size: 14px; color: var(--t1); }
+    .lp-demo-tag { margin-left: auto; font-size: 11px; color: var(--t3); border: 1px solid var(--inset);
+        border-radius: 999px; padding: 2px 9px; }
+    .lp-demo-msgs { padding: 16px 18px; max-height: 340px; overflow-y: auto;
+        display: flex; flex-direction: column; gap: 12px; }
+    .lp-demo-user { align-self: flex-end; background: var(--inset); color: var(--t1);
+        border-radius: 12px 12px 3px 12px; padding: 9px 13px; font-size: 14px; max-width: 85%; }
+    .lp-demo-aria { align-self: flex-start; color: var(--t2); font-size: 14px; line-height: 1.55;
+        max-width: 95%; }
+    .lp-demo-aria strong { color: var(--t1); font-weight: 600; }
+    .lp-demo-typing { align-self: flex-start; display: inline-flex; gap: 5px; padding: 6px 2px; }
+    .lp-demo-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--gold);
+        opacity: .35; animation: lpDemoPulse 1s infinite; }
+    .lp-demo-typing i:nth-child(2) { animation-delay: .18s; }
+    .lp-demo-typing i:nth-child(3) { animation-delay: .36s; }
+    @keyframes lpDemoPulse { 0%,100% { opacity: .25; } 50% { opacity: 1; } }
+    .lp-demo-chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 16px; }
+    .lp-demo-chips:empty { padding: 0; }
+    .lp-demo-chip { border: 1px solid rgba(201,162,39,.45); color: var(--gold); background: transparent;
+        border-radius: 999px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
+        transition: background .15s ease, color .15s ease; }
+    .lp-demo-chip:hover { background: rgba(201,162,39,.15); }
+    .lp-demo-finale { align-self: stretch; text-align: center; border-top: 1px solid var(--inset);
+        margin-top: 4px; padding-top: 14px; }
+    .lp-demo-finale p { color: var(--t1); font-size: 15px; margin-bottom: 10px; }
+    .lp-demo-finale em { color: var(--gold); font-style: italic; }
+    @media (prefers-reduced-motion: reduce) {
+        .lp-demo-typing i { animation: none; opacity: .7; }
     }
 </style>
 {% endblock %}
@@ -278,7 +311,15 @@
                 </p>
             </div>
             <div class="lp-right">
-                <div class="lp-medallion"><img src="/static/aria-logo.png" alt="Aria dove logo" width="200" height="200"></div>
+                <div class="lp-demo" id="lpDemo">
+                    <div class="lp-demo-head">
+                        <span class="lp-demo-dot" aria-hidden="true"></span>
+                        <span class="lp-demo-name">Aria</span>
+                        <span class="lp-demo-tag">Sample data</span>
+                    </div>
+                    <div class="lp-demo-msgs" id="lpDemoMsgs" aria-live="polite"></div>
+                    <div class="lp-demo-chips" id="lpDemoChips"></div>
+                </div>
             </div>
         </div>
     </section>
@@ -509,5 +550,115 @@
             if (el.parentElement.querySelector('[data-m]')) el.textContent = m ? '/month' : '/mo, billed yearly';
         });
     }
+
+    // ---- Hero chat demo (scripted; no backend, no AI calls) ----
+    (function () {
+        var msgs = document.getElementById('lpDemoMsgs');
+        var chipsEl = document.getElementById('lpDemoChips');
+        if (!msgs || !chipsEl) return;
+
+        var EXCHANGES = [
+            {
+                q: "Who's on the team this Sunday?",
+                a: "This Sunday at Morning Main you have:<br><strong>Vocals:</strong> Sarah J., Marcus L., Elena R.<br><strong>Band:</strong> Dave (drums), Priya (keys), Tom (bass), Grace (electric)<br><strong>Tech:</strong> Kevin (FOH), Amber (lyrics)<br><br>Heads up — Tom is blocked out the following two Sundays, so you may want a backup bassist for the 19th."
+            },
+            {
+                q: "Any follow-ups for me?",
+                a: "Two things this week:<br><br>1. When you talked with <strong>Sarah</strong> after service two weeks ago, she mentioned her mom's surgery was coming up. That was last Thursday — might be a good day to check in.<br><br>2. You still have an open follow-up to send <strong>Marcus</strong> the in-ear monitor recommendation you promised him."
+            },
+            {
+                q: "What key is Goodness of God in?",
+                a: "<strong>Goodness of God</strong> is in <strong>B</strong> in your Planning Center library (85 BPM).<br><br>You last played it three weeks ago, and it's been in rotation 8 times this year — your team knows this one well."
+            }
+        ];
+        var SIGNUP_URL = "{% url 'onboarding_signup' %}";
+        var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var TYPING_MS = 700;
+        var REVEAL_MS = 2500;
+        var TICK_MS = 35;
+        var pending = [1, 2];  // exchange indexes not yet played (0 auto-plays)
+
+        function make(tag, cls, html) {
+            var node = document.createElement(tag);
+            node.className = cls;
+            if (html) node.innerHTML = html;
+            return node;
+        }
+
+        function scrollBottom() { msgs.scrollTop = msgs.scrollHeight; }
+
+        function renderChips() {
+            chipsEl.innerHTML = '';
+            pending.forEach(function (idx) {
+                var chip = make('button', 'lp-demo-chip', EXCHANGES[idx].q);
+                chip.type = 'button';
+                chip.addEventListener('click', function () {
+                    pending = pending.filter(function (p) { return p !== idx; });
+                    chipsEl.innerHTML = '';
+                    play(idx);
+                });
+                chipsEl.appendChild(chip);
+            });
+        }
+
+        function renderFinale() {
+            var finale = make('div', 'lp-demo-finale',
+                '<p>Ask Aria about <em>your</em> team.</p>' +
+                '<a class="lp-btn lp-btn-gold lp-btn-md" href="' + SIGNUP_URL + '">Start your free trial</a>');
+            msgs.appendChild(finale);
+            scrollBottom();
+        }
+
+        function afterExchange() {
+            if (pending.length === 0) {
+                chipsEl.innerHTML = '';
+                renderFinale();
+            } else {
+                renderChips();
+            }
+        }
+
+        function revealAnswer(answerHtml, done) {
+            var bubble = make('div', 'lp-demo-aria', '');
+            msgs.appendChild(bubble);
+            var tokens = answerHtml.split(/(<[^>]+>|\s+)/).filter(function (t) { return t !== ''; });
+            var perTick = Math.max(1, Math.ceil(tokens.length / (REVEAL_MS / TICK_MS)));
+            var shown = 0;
+            var timer = setInterval(function () {
+                shown = Math.min(tokens.length, shown + perTick);
+                bubble.innerHTML = tokens.slice(0, shown).join('');
+                scrollBottom();
+                if (shown >= tokens.length) {
+                    clearInterval(timer);
+                    done();
+                }
+            }, TICK_MS);
+        }
+
+        function play(idx) {
+            var ex = EXCHANGES[idx];
+            msgs.appendChild(make('div', 'lp-demo-user', ex.q));
+            scrollBottom();
+            var typing = make('div', 'lp-demo-typing', '<i></i><i></i><i></i>');
+            msgs.appendChild(typing);
+            scrollBottom();
+            setTimeout(function () {
+                typing.remove();
+                revealAnswer(ex.a, afterExchange);
+            }, TYPING_MS);
+        }
+
+        if (REDUCED) {
+            // Render everything instantly, fully expanded — one finale at the end.
+            pending = [];
+            for (var i = 0; i < EXCHANGES.length; i++) {
+                msgs.appendChild(make('div', 'lp-demo-user', EXCHANGES[i].q));
+                msgs.appendChild(make('div', 'lp-demo-aria', EXCHANGES[i].a));
+            }
+            renderFinale();
+        } else {
+            play(0);
+        }
+    })();
 </script>
 {% endblock %}
