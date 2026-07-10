@@ -292,6 +292,28 @@ SONGBPM_API_KEY = os.environ.get('SONGBPM_API_KEY', '')
 PLANNING_CENTER_APP_ID = os.environ.get('PLANNING_CENTER_APP_ID', '')
 PLANNING_CENTER_SECRET = os.environ.get('PLANNING_CENTER_SECRET', '')
 
+# Planning Center OAuth (single app for all churches)
+PCO_OAUTH_CLIENT_ID = os.environ.get('PCO_OAUTH_CLIENT_ID', '')
+PCO_OAUTH_CLIENT_SECRET = os.environ.get('PCO_OAUTH_CLIENT_SECRET', '')
+PCO_OAUTH_REDIRECT_URI = os.environ.get(
+    'PCO_OAUTH_REDIRECT_URI', 'https://aria.church/onboarding/pco/callback/'
+)
+
+# Field-level encryption key (Fernet). Falls back to a SECRET_KEY-derived key.
+FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY', '')
+
+# Fail loud if the field-encryption key is missing in real production (Railway
+# deploy). The SECRET_KEY-derived fallback in core/fields.py is only acceptable
+# for local dev and tests; in production a missing key would silently tie all
+# encrypted data to SECRET_KEY, so a SECRET_KEY rotation would orphan it.
+if not DEBUG and RAILWAY_PUBLIC_DOMAIN and not FIELD_ENCRYPTION_KEY:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        "FIELD_ENCRYPTION_KEY must be set in production. Generate one with: "
+        "python -c \"from cryptography.fernet import Fernet; "
+        "print(Fernet.generate_key().decode())\""
+    )
+
 # Web Push Notifications (VAPID keys)
 # Generate VAPID keys with: npx web-push generate-vapid-keys
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
