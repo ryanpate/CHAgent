@@ -25,10 +25,8 @@ from .middleware import require_superadmin
 
 def get_client_ip(request):
     """Extract client IP from request, handling proxies."""
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR')
+    from .ip import client_ip
+    return client_ip(request)
 
 
 def log_admin_action(request, action, organization=None, target_user=None, **details):

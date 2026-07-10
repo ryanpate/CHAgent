@@ -4,6 +4,7 @@ Views for the Cherry Hills Worship Arts Portal.
 All views are tenant-scoped - data is filtered by the current organization.
 """
 import json
+import logging
 import uuid
 from datetime import timedelta
 
@@ -28,6 +29,8 @@ from .agent import (
     confirm_volunteer_match,
     skip_volunteer_match
 )
+
+logger = logging.getLogger(__name__)
 from .volunteer_matching import VolunteerMatcher, MatchType
 
 import re
@@ -5280,6 +5283,7 @@ def billing_portal(request):
     - Cancel subscription
     - Change plan
     """
+    from django.contrib import messages
     from .models import OrganizationMembership
 
     # Get user's organization
@@ -5333,6 +5337,7 @@ def subscribe(request):
 
     Creates a new Stripe checkout session for the selected plan.
     """
+    from django.contrib import messages
     from .models import OrganizationMembership, SubscriptionPlan
 
     # Get user's organization
@@ -5428,17 +5433,69 @@ def subscribe(request):
     })
 
 
+def _finalize_checkout_session(org, session_id):
+    """Sync an org's subscription from a completed Stripe checkout session.
+
+    The webhook also does this, but the redirect back from Stripe usually
+    beats the webhook — without this, a customer who just paid gets bounced
+    to the "subscription required" page until the webhook lands (or forever,
+    if the webhook is misconfigured). Raises stripe.error.StripeError.
+    """
+    import stripe
+
+    session = stripe.checkout.Session.retrieve(session_id, expand=['subscription'])
+    sub = session.subscription
+    if not sub:
+        return False
+
+    org.stripe_subscription_id = sub.id if hasattr(sub, 'id') else sub
+    stripe_status = getattr(sub, 'status', 'trialing')
+    org.subscription_status = 'trial' if stripe_status == 'trialing' else 'active'
+    # Align local trial end with Stripe's trial end when available
+    trial_end_ts = getattr(sub, 'trial_end', None) if hasattr(sub, 'id') else None
+    if trial_end_ts:
+        from datetime import datetime, timezone as dt_timezone
+        org.trial_ends_at = datetime.fromtimestamp(trial_end_ts, tz=dt_timezone.utc)
+    org.subscription_started_at = timezone.now()
+    org.save()
+    return True
+
+
 @login_required
 def subscription_success(request):
     """
-    Handle successful subscription checkout.
+    Handle successful subscription checkout (re-subscribe / expired-trial flow).
 
-    The webhook will update the subscription status, but we show a success page.
+    Finalizes the checkout session immediately instead of relying solely on
+    the webhook, so the customer isn't bounced back to the expired page.
     """
+    import stripe
+    from django.contrib import messages
+    from .models import OrganizationMembership
+
+    stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
     session_id = request.GET.get('session_id')
 
-    # The webhook handles the actual subscription activation
-    # This page just shows a success message
+    membership = OrganizationMembership.objects.filter(
+        user=request.user,
+        is_active=True
+    ).select_related('organization').first()
+    org = membership.organization if membership else None
+
+    if session_id and org and stripe.api_key:
+        try:
+            _finalize_checkout_session(org, session_id)
+        except stripe.error.StripeError as e:
+            logger.error(
+                f"subscription_success: failed to finalize subscription for org "
+                f"{getattr(org, 'slug', '?')}: {e}"
+            )
+            messages.warning(
+                request,
+                "Your payment is processing. If you can't access your account in a "
+                "few minutes, contact support@aria.church."
+            )
+            return redirect('dashboard')
 
     messages.success(request, "Welcome! Your subscription is now active.")
     return redirect('dashboard')
@@ -5448,11 +5505,17 @@ def subscription_success(request):
 # Organization Onboarding Views
 # ============================================================================
 
-@ratelimit(key='ip', rate='5/h', method='POST', block=False)
+@ratelimit(key='core.ip.ratelimit_client_ip', rate='5/h', method='POST', block=False)
 def onboarding_signup(request):
     """
     Open self-serve signup. Creates a real User + Organization (trial)
     and starts the onboarding wizard at plan selection.
+
+    Authenticated users with an active organization are sent to their
+    dashboard. Authenticated users WITHOUT one (membership removed, org
+    deactivated, or a signup that never created an org) get a church-only
+    form that creates an organization for their existing account —
+    TenantMiddleware redirects them here, so this must not bounce them back.
     """
     from datetime import timedelta
     from django.contrib.auth import login
@@ -5471,8 +5534,50 @@ def onboarding_signup(request):
             'church_name': request.POST.get('church_name', ''),
         })
 
+    create_org_only = False
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        has_org = OrganizationMembership.objects.filter(
+            user=request.user, is_active=True, organization__is_active=True,
+        ).exists()
+        if has_org:
+            return redirect('dashboard')
+        create_org_only = True
+
+    if create_org_only and request.method == 'POST':
+        church_name = request.POST.get('church_name', '').strip()
+        if not church_name:
+            return render(request, 'core/onboarding/signup.html', {
+                'errors': ['Church name is required.'],
+                'create_org_only': True,
+            })
+
+        with transaction.atomic():
+            trial_days = getattr(settings, 'TRIAL_PERIOD_DAYS', 14)
+            org = Organization.objects.create(
+                name=church_name, email=request.user.email,
+                subscription_status='trial',
+                trial_ends_at=timezone.now() + timedelta(days=trial_days),
+            )
+            OrganizationMembership.objects.create(
+                user=request.user, organization=org, role='owner',
+                can_manage_users=True, can_manage_settings=True,
+                can_view_analytics=True, can_manage_billing=True,
+            )
+            request.user.default_organization = org
+            request.user.save()
+
+        try:
+            from .guide_seeder import seed_guide_document
+            seed_guide_document(org)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to seed guide for {org.name}: {e}")
+
+        request.session['onboarding_org_id'] = org.id
+        plan_slug = request.POST.get('plan') or request.GET.get('plan')
+        if plan_slug:
+            request.session['preselected_plan_slug'] = plan_slug
+        return redirect('onboarding_select_plan')
 
     if request.method == 'POST':
         first_name = request.POST.get('first_name', '').strip()
@@ -5546,7 +5651,9 @@ def onboarding_signup(request):
             request.session['preselected_plan_slug'] = plan_slug
         return redirect('onboarding_select_plan')
 
-    return render(request, 'core/onboarding/signup.html', {})
+    return render(request, 'core/onboarding/signup.html', {
+        'create_org_only': create_org_only,
+    })
 
 
 def beta_signup(request):
@@ -5633,9 +5740,12 @@ def beta_signup(request):
     })
 
 
-@login_required
 def _resolve_onboarding_org(request):
     """Resolve the organization for an onboarding-flow view.
+
+    NOT a view — must never be decorated with @login_required (the decorator
+    would return an HttpResponseRedirect, which callers would treat as a
+    truthy Organization and crash). Callers are @login_required views.
 
     /onboarding/* paths are TenantMiddleware PUBLIC_URLs, so request.organization is NOT set
     here. Resolve from the active signup wizard (onboarding_org_id), then the tenant-selected
@@ -5651,6 +5761,7 @@ def _resolve_onboarding_org(request):
     return org
 
 
+@login_required
 def onboarding_select_plan(request):
     """
     Plan selection page during onboarding.
@@ -5667,6 +5778,7 @@ def onboarding_select_plan(request):
     # Get all active plans (Enterprise excluded — no Stripe price, contact-sales only)
     plans = SubscriptionPlan.objects.filter(is_active=True).exclude(tier='enterprise').order_by('price_monthly_cents')
 
+    plan_error = None
     if request.method == 'POST':
         plan_id = request.POST.get('plan_id')
         billing_cycle = request.POST.get('billing_cycle', 'monthly')
@@ -5682,14 +5794,15 @@ def onboarding_select_plan(request):
             org.save()
 
             return redirect('onboarding_checkout')
-        except SubscriptionPlan.DoesNotExist:
-            pass
+        except (SubscriptionPlan.DoesNotExist, ValueError):
+            plan_error = "That plan is no longer available. Please choose another."
 
     context = {
         'plans': plans,
         'organization': org,
         'current_plan': org.subscription_plan,
         'preselected_plan_slug': request.session.get('preselected_plan_slug'),
+        'plan_error': plan_error,
     }
     return render(request, 'core/onboarding/select_plan.html', context)
 
@@ -5806,19 +5919,7 @@ def onboarding_checkout_success(request):
 
     if session_id and org and stripe.api_key:
         try:
-            session = stripe.checkout.Session.retrieve(session_id, expand=['subscription'])
-            sub = session.subscription
-            if sub:
-                org.stripe_subscription_id = sub.id if hasattr(sub, 'id') else sub
-                stripe_status = getattr(sub, 'status', 'trialing')
-                org.subscription_status = 'trial' if stripe_status == 'trialing' else 'active'
-                # Align local trial end with Stripe's trial end when available
-                trial_end_ts = getattr(sub, 'trial_end', None) if hasattr(sub, 'id') else None
-                if trial_end_ts:
-                    from datetime import datetime, timezone as dt_timezone
-                    org.trial_ends_at = datetime.fromtimestamp(trial_end_ts, tz=dt_timezone.utc)
-                org.subscription_started_at = timezone.now()
-                org.save()
+            _finalize_checkout_session(org, session_id)
         except stripe.error.StripeError as e:
             import logging
             logging.getLogger(__name__).error(
@@ -6131,8 +6232,11 @@ def stripe_webhook(request):
     stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
     webhook_secret = getattr(settings, 'STRIPE_WEBHOOK_SECRET', '')
 
-    if not stripe.api_key:
-        return HttpResponse(status=200)
+    if not stripe.api_key and not webhook_secret:
+        # Misconfiguration — return 503 so Stripe retries and the failure
+        # shows up in the Stripe dashboard instead of being silently dropped.
+        logger.error("Stripe webhook received but Stripe is not configured")
+        return HttpResponse(status=503)
 
     payload = request.body
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
@@ -6179,6 +6283,9 @@ def stripe_webhook(request):
                 'past_due': 'past_due',
                 'canceled': 'cancelled',
                 'unpaid': 'past_due',
+                'incomplete': 'past_due',
+                'incomplete_expired': 'cancelled',
+                'paused': 'cancelled',
             }
             org.subscription_status = status_map.get(status, org.subscription_status)
             org.save()

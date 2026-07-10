@@ -410,6 +410,9 @@ AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 0.5  # 30 minutes (in hours)
 AXES_LOCKOUT_PARAMETERS = [['username', 'ip_address']]
 AXES_RESET_ON_SUCCESS = True
+# Behind the Railway proxy REMOTE_ADDR is the proxy, shared by all visitors;
+# resolve the real client IP from X-Forwarded-For (see core/ip.py).
+AXES_CLIENT_IP_CALLABLE = 'core.ip.client_ip'
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesStandaloneBackend',
     'django.contrib.auth.backends.ModelBackend',

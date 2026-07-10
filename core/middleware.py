@@ -125,9 +125,10 @@ class TenantMiddleware(MiddlewareMixin):
             ).select_related('organization')
 
             if memberships.count() == 0:
-                # User has no organizations - redirect to onboarding
-                if not request.path.startswith('/onboarding/'):
-                    return redirect('/onboarding/')
+                # User has no organizations - send to signup, which lets an
+                # authenticated org-less user create one (/signup/ is a
+                # PUBLIC_URL, so this can't loop back here)
+                return redirect('onboarding_signup')
             elif memberships.count() == 1:
                 # User has exactly one org - use it automatically
                 membership = memberships.first()
@@ -529,7 +530,10 @@ class CapacitorCsrfExemptMiddleware(MiddlewareMixin):
         is_capacitor_origin = origin.startswith('capacitor://')
         is_app_cookie = request.COOKIES.get('aria_app') == '1'
 
-        if is_capacitor_origin or is_app_cookie:
+        # The aria_app cookie is settable by anyone via ?app=1, so it may only
+        # exempt requests with no usable Origin (the WebView case). Cross-site
+        # browser POSTs always carry a real Origin and must keep CSRF checks.
+        if is_capacitor_origin or (is_app_cookie and origin in ('', 'null')):
             request._dont_enforce_csrf_checks = True
 
 
