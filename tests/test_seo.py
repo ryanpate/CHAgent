@@ -171,3 +171,29 @@ def test_resource_hub_cross_links_the_cluster(client):
                  '/resources/planning-center-setup-guide/',
                  '/blog/ai-for-planning-center-worship-teams/']:
         assert link in body, f"resources hub missing link to {link}"
+
+
+@pytest.mark.django_db
+def test_tier3_posts_have_depth_and_cluster_links(client):
+    """Tier 3: the AI-for-Planning-Center post was deepened and two new cluster
+    posts added. Each must be substantial and linked into the topic cluster."""
+    checks = {
+        '/blog/ai-for-planning-center-worship-teams/': (1300, ['/resources/planning-center-setup-guide/', '/integrations/', '/signup/']),
+        '/blog/ai-tools-for-churches/': (900, ['/blog/ai-for-planning-center-worship-teams/', '/signup/']),
+        '/blog/ai-church-volunteer-management/': (900, ['/resources/volunteer-application-template/', '/signup/']),
+    }
+    for path, (floor, links) in checks.items():
+        body = client.get(path).content.decode()
+        words = len(re.sub(r'<[^>]+>', ' ', body).split())
+        assert words >= floor, f"{path} too thin ({words} words)"
+        for link in links:
+            assert link in body, f"{path} missing link to {link}"
+
+
+@pytest.mark.django_db
+def test_homepage_meta_description_is_bounded_and_leads_with_free(client):
+    """Homepage meta must front-load the free/no-card intent and stay <=160."""
+    body = client.get('/').content.decode()
+    desc = re.search(r'<meta name="description" content="([^"]*)"', body).group(1)
+    assert len(desc) <= 160, f"meta description too long ({len(desc)})"
+    assert 'no credit card' in desc.lower() or 'free' in desc.lower()

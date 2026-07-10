@@ -39,7 +39,9 @@
 {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
  {"@type":"Question","name":"Is Planning Center free?","acceptedAnswer":{"@type":"Answer","text":"Planning Center Services has a free tier for small teams; paid plans add more plans and people. Aria works with any PCO plan."}},
  {"@type":"Question","name":"How long does Planning Center setup take?","acceptedAnswer":{"@type":"Answer","text":"Most worship teams complete the core setup — service types, teams, and people — in under an hour by following the six steps above."}},
- {"@type":"Question","name":"Can AI answer questions about my Planning Center data?","acceptedAnswer":{"@type":"Answer","text":"Yes. Aria connects to Planning Center and answers questions about schedules, volunteers, blockouts, and songs in plain language. Start a free trial at aria.church."}}
+ {"@type":"Question","name":"Can AI answer questions about my Planning Center data?","acceptedAnswer":{"@type":"Answer","text":"Yes. Aria connects to Planning Center and answers questions about schedules, volunteers, blockouts, and songs in plain language. Start a free trial at aria.church."}},
+ {"@type":"Question","name":"What's the difference between a service type and a plan in Planning Center?","acceptedAnswer":{"@type":"Answer","text":"A service type is a recurring service you run, like Sunday Morning Worship. A plan is one specific date within that service type, with its own setlist and team. You create one service type and a new plan for each week."}},
+ {"@type":"Question","name":"Do volunteers need their own Planning Center login?","acceptedAnswer":{"@type":"Answer","text":"Yes. Each volunteer gets a free personal login to see their schedule, accept or decline requests, enter blockout dates, and access songs and chord charts. They don't need a paid subscription — only the account owner manages billing."}}
 ]}
 </script>
 {% endblock %}
@@ -74,6 +76,12 @@
         <li><strong>Services</strong> - For scheduling and setlist planning (required)</li>
         <li><strong>People</strong> - For managing contact information (highly recommended)</li>
     </ul>
+    <p>
+        Both have a free tier that's plenty for a small worship team getting started. You can add
+        paid plans later as you schedule more services and grow your roster. If you plan to connect
+        an AI assistant like <a href="{% url 'home' %}">Aria</a> later, having both Services and People
+        active from the start means every question — schedules <em>and</em> contact info — works on day one.
+    </p>
 
     <h2>Step 2: Set Up Service Types</h2>
     <p>
@@ -88,6 +96,13 @@
     </ul>
     <p>
         Go to <strong>Services &rarr; Settings &rarr; Service Types</strong> to create your service types.
+    </p>
+    <p>
+        <strong>Worship tip:</strong> Name service types clearly and consistently — "Sunday Morning
+        Worship," not "SM" or "AM." Clear names make schedules easier to read at a glance and, if you
+        later add an AI assistant, they're how you'll refer to each service ("who's on Sunday Morning
+        Worship this week?"). <strong>Common gotcha:</strong> don't create a separate service type for
+        every week; one per <em>recurring</em> service, with a new plan for each date.
     </p>
 
     <h2>Step 3: Add Team Positions</h2>
@@ -105,6 +120,12 @@
         <li><strong>Sound Engineer</strong> - Audio mixing</li>
         <li><strong>Projection/Media</strong> - Lyrics and video</li>
     </ul>
+    <p>
+        <strong>Worship tip:</strong> Group positions into teams (e.g. "Band," "Vocals," "Tech") so
+        you can schedule and view them together. Keep position names specific — "Electric Guitar" and
+        "Acoustic Guitar" rather than one generic "Guitar" — so the right players get the right
+        requests and your setlists match who's actually playing.
+    </p>
 
     <h2>Step 4: Import Your Team Members</h2>
     <p>
@@ -116,6 +137,13 @@
         <li>Click on a position and add people who can fill that role</li>
         <li>Set notification preferences for each person</li>
     </ol>
+    <p>
+        <strong>Common gotcha:</strong> a volunteer can only be scheduled for a position they've been
+        added to. If someone never shows up as available, check that they're listed under that
+        position — not just added to People. <strong>Worship tip:</strong> ask volunteers to enter
+        their own <strong>blockout dates</strong> right away (Step 6 covers why); it's the single
+        biggest time-saver for whoever builds the schedule.
+    </p>
 
     <h2>Step 5: Build Your Song Library</h2>
     <p>
@@ -128,6 +156,12 @@
         <li>Add lyrics for projection</li>
         <li>Tag songs by theme (praise, communion, offering, etc.)</li>
     </ul>
+    <p>
+        <strong>Worship tip:</strong> filling in the default <strong>key</strong> and <strong>tempo</strong>
+        for each song pays off every week — it speeds up rehearsal prep, keeps keys consistent for your
+        vocalists, and lets an AI assistant answer "what key is Goodness of God in?" instantly. Attach the
+        chord chart <em>once</em> and it travels with the song into every future plan.
+    </p>
 
     <h2>Step 6: Create Your First Plan</h2>
     <p>
@@ -141,12 +175,41 @@
         <li>Send scheduling requests to your team</li>
     </ol>
 
+    <p>
+        <strong>Worship tip:</strong> when you send scheduling requests, give your team a clear
+        response deadline. Planning Center chases up non-responders for you, but a stated deadline
+        ("please confirm by Wednesday") gets you a settled schedule faster.
+    </p>
+
+    <h2>Common Setup Mistakes to Avoid</h2>
+    <p>
+        A few pitfalls trip up almost every worship team's first Planning Center setup. Sidestep these
+        and you'll save yourself the most common do-overs:
+    </p>
+    <ul>
+        <li><strong>Creating a service type per week.</strong> Service types are for <em>recurring</em>
+            services (Sunday Morning, Wednesday Night). Each individual date is a <em>plan</em> inside
+            that service type — not a new type.</li>
+        <li><strong>Skipping blockout dates.</strong> If volunteers don't enter when they're away,
+            you'll schedule people who can't serve and spend Sunday mornings finding replacements.
+            Make blockouts part of onboarding, not an afterthought.</li>
+        <li><strong>Adding people to People but not to positions.</strong> A volunteer has to be listed
+            under a position to be schedulable there. "Why can't I schedule Sarah for keys?" is almost
+            always this.</li>
+        <li><strong>Inconsistent song titles.</strong> "Goodness of God" and "Goodness Of God (Bethel)"
+            become two songs, splitting your play history and chord charts. Pick one canonical title
+            per song.</li>
+        <li><strong>Leaving keys and tempos blank.</strong> They take seconds to fill in and power
+            everything downstream — rehearsal prep, transposition, and AI song lookups.</li>
+    </ul>
+
     <h2>Pro Tips</h2>
     <ul>
         <li><strong>Use blockout dates</strong> - Have volunteers enter their unavailable dates to avoid scheduling conflicts</li>
         <li><strong>Enable email notifications</strong> - Keep your team informed of schedule changes</li>
         <li><strong>Organize by folders</strong> - Group songs by theme or album in your library</li>
         <li><strong>Use the mobile app</strong> - Team members can access schedules and music on their phones</li>
+        <li><strong>Review before you publish</strong> - Do a quick pass for double-booked or over-scheduled volunteers before sending requests</li>
     </ul>
 
     <h2 class="text-2xl font-bold text-white mt-10 mb-4">Frequently asked questions</h2>
@@ -157,6 +220,10 @@
         <p class="text-gray-400">Most worship teams complete the core setup — service types, teams, and people — in under an hour by following the six steps above.</p></div>
       <div><h3 class="text-lg font-semibold text-white">Can AI answer questions about my Planning Center data?</h3>
         <p class="text-gray-400">Yes. Aria connects to Planning Center and answers questions about schedules, volunteers, blockouts, and songs in plain language. <a href="{% url 'onboarding_signup' %}" class="text-ch-gold hover:underline">Start a free trial</a>.</p></div>
+      <div><h3 class="text-lg font-semibold text-white">What's the difference between a service type and a plan in Planning Center?</h3>
+        <p class="text-gray-400">A service type is a recurring service you run, like Sunday Morning Worship. A plan is one specific date within that service type, with its own setlist and team. You create one service type and a new plan for each week.</p></div>
+      <div><h3 class="text-lg font-semibold text-white">Do volunteers need their own Planning Center login?</h3>
+        <p class="text-gray-400">Yes. Each volunteer gets a free personal login to see their schedule, accept or decline requests, enter blockout dates, and access songs and chord charts. They don't need a paid subscription — only the account owner manages billing.</p></div>
     </div>
 
     <h2>Want an AI-Powered Assistant for Planning Center?</h2>
