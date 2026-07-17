@@ -1,6 +1,6 @@
 // Service Worker for Cherry Hills Worship Arts PWA
-const CACHE_NAME = 'aria-wa-v1';
-const STATIC_CACHE = 'aria-static-v1';
+const CACHE_NAME = 'aria-wa-v2';
+const STATIC_CACHE = 'aria-static-v2';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
