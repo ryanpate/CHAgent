@@ -46,7 +46,7 @@ django-storages[s3]>=1.14.0
 boto3>=1.34.0
 
 # PDF Parsing (for chord chart extraction)
-pypdf>=4.0.0
+pypdf>=6.10.2
 
 # Audio Analysis (for BPM detection)
 librosa>=0.10.0
