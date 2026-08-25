@@ -214,23 +214,71 @@ class TestStripeWebhook:
         response = self._post(client, {'type': 'invoice.paid', 'data': {'object': {}}})
         assert response.status_code == 503
 
+    def test_missing_webhook_secret_is_not_a_signature_bypass(
+        self, client, org_alpha, settings,
+    ):
+        """A configured API key must not unlock unsigned payload parsing.
+
+        This endpoint mutates billing state, so an unverified request is an
+        auth bypass: anyone could POST crafted JSON to activate a subscription
+        or mark orgs past_due.
+        """
+        settings.STRIPE_SECRET_KEY = 'sk_test_x'
+        settings.STRIPE_WEBHOOK_SECRET = ''
+        org_alpha.stripe_subscription_id = 'sub_bypass'
+        org_alpha.subscription_status = 'trial'
+        org_alpha.save()
+
+        response = self._post(client, {
+            'type': 'customer.subscription.updated',
+            'data': {'object': {'id': 'sub_bypass', 'status': 'active'}},
+        })
+
+        assert response.status_code == 503
+        org_alpha.refresh_from_db()
+        assert org_alpha.subscription_status == 'trial'
+
+    def test_unsigned_payload_rejected_when_secret_configured(
+        self, client, org_alpha, settings,
+    ):
+        """With the secret set, an unsigned request must not mutate anything."""
+        settings.STRIPE_SECRET_KEY = 'sk_test_x'
+        settings.STRIPE_WEBHOOK_SECRET = 'whsec_test'
+        org_alpha.stripe_subscription_id = 'sub_unsigned'
+        org_alpha.subscription_status = 'trial'
+        org_alpha.save()
+
+        response = self._post(client, {
+            'type': 'customer.subscription.updated',
+            'data': {'object': {'id': 'sub_unsigned', 'status': 'active'}},
+        })
+
+        assert response.status_code == 400
+        org_alpha.refresh_from_db()
+        assert org_alpha.subscription_status == 'trial'
+
     @pytest.mark.parametrize('stripe_status,expected', [
         ('incomplete', 'past_due'),
         ('incomplete_expired', 'cancelled'),
         ('paused', 'cancelled'),
     ])
     def test_maps_additional_subscription_statuses(
-        self, client, org_alpha, settings, stripe_status, expected,
+        self, client, org_alpha, settings, monkeypatch, stripe_status, expected,
     ):
         settings.STRIPE_SECRET_KEY = 'sk_test_x'
-        settings.STRIPE_WEBHOOK_SECRET = ''
+        settings.STRIPE_WEBHOOK_SECRET = 'whsec_test'
         org_alpha.stripe_subscription_id = 'sub_map_1'
         org_alpha.save()
 
-        response = self._post(client, {
+        event = {
             'type': 'customer.subscription.updated',
             'data': {'object': {'id': 'sub_map_1', 'status': stripe_status}},
-        })
+        }
+        monkeypatch.setattr(
+            'stripe.Webhook.construct_event', lambda *a, **kw: event
+        )
+
+        response = self._post(client, event)
         assert response.status_code == 200
         org_alpha.refresh_from_db()
         assert org_alpha.subscription_status == expected

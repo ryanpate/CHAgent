@@ -6370,24 +6370,23 @@ def stripe_webhook(request):
     stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
     webhook_secret = getattr(settings, 'STRIPE_WEBHOOK_SECRET', '')
 
-    if not stripe.api_key and not webhook_secret:
+    if not webhook_secret:
         # Misconfiguration — return 503 so Stripe retries and the failure
         # shows up in the Stripe dashboard instead of being silently dropped.
-        logger.error("Stripe webhook received but Stripe is not configured")
+        # Never fall back to parsing unsigned payloads: this endpoint mutates
+        # billing state, so an unverified request is an auth bypass.
+        logger.error(
+            "Stripe webhook received but STRIPE_WEBHOOK_SECRET is not configured"
+        )
         return HttpResponse(status=503)
 
     payload = request.body
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
 
     try:
-        if webhook_secret:
-            event = stripe.Webhook.construct_event(
-                payload, sig_header, webhook_secret
-            )
-        else:
-            # For testing without webhook signature verification
-            import json
-            event = json.loads(payload)
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, webhook_secret
+        )
     except ValueError:
         return HttpResponse(status=400)
     except stripe.error.SignatureVerificationError:
