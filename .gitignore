@@ -139,3 +139,6 @@ Desktop.ini
 
 # Superpowers brainstorm sessions (local only)
 .superpowers/
+
+# Playwright MCP artifacts (local only)
+.playwright-mcp/
