@@ -30,6 +30,7 @@ class Command(BaseCommand):
         created = 0
         for rule in due_rules:
             try:
+                rule.skip_missed_occurrences(today)
                 if rule.source_task:
                     new_task = clone_task(rule.source_task, due_date=rule.next_due)
                     try:

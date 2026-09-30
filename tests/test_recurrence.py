@@ -170,6 +170,31 @@ def test_management_command_creates_task(user_alpha_owner, org_alpha):
 
 
 @pytest.mark.django_db
+def test_management_command_skips_missed_occurrences(user_alpha_owner, org_alpha):
+    """A long-overdue rule creates one copy for its latest occurrence, not one a day."""
+    user = user_alpha_owner
+    source = Task.objects.create(
+        organization=org_alpha, title='Overdue Weekly',
+        created_by=user, priority='medium',
+    )
+    rule = RecurrenceRule.objects.create(
+        organization=org_alpha, created_by=user,
+        source_task=source, frequency='weekly',
+        day_of_week=0, next_due=date.today() - timedelta(days=23),
+    )
+
+    call_command('create_recurring_tasks')
+
+    copies = Task.objects.filter(title='Overdue Weekly').exclude(pk=source.pk)
+    assert [t.due_date for t in copies] == [date.today() - timedelta(days=2)]
+    rule.refresh_from_db()
+    assert rule.next_due == date.today() + timedelta(days=5)
+
+    call_command('create_recurring_tasks')
+    assert copies.count() == 1
+
+
+@pytest.mark.django_db
 def test_management_command_skips_inactive(user_alpha_owner, org_alpha):
     """create_recurring_tasks skips inactive rules."""
     user = user_alpha_owner

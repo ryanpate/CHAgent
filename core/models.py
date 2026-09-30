@@ -4397,6 +4397,20 @@ class RecurrenceRule(models.Model):
         elif self.frequency == 'quarterly':
             self.next_due += relativedelta(months=3)
 
+    def skip_missed_occurrences(self, today):
+        """
+        Move next_due to the latest occurrence that is not after `today`.
+
+        If the cron missed runs, this stops it creating one stale copy per
+        day while it catches up: only the most recent occurrence is created.
+        """
+        while True:
+            current = self.next_due
+            self.advance_next_due()
+            if self.next_due > today or self.next_due == current:
+                self.next_due = current
+                return
+
 
 class MessageReaction(models.Model):
     """
