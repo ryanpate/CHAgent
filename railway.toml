@@ -9,6 +9,6 @@ restartPolicyMaxRetries = 3
 # Run migrations at runtime when DATABASE_URL is available.
 # Recurring task commands run in the `recurring-tasks-cron` Railway cron service
 # (schedule: 0 12 * * * — daily at 12:00 UTC, runs create_recurring_tasks + send_task_reminders).
-# NOTE: Railway's dashboard start command overrides this file. If you change this,
-# also update the web service's start command in the Railway dashboard to match.
+# NOTE: this file OVERRIDES the dashboard start command for every service that
+# reads it. The cron service therefore uses its own config, railway.cron.toml.
 startCommand = "python manage.py migrate --noinput && python manage.py create_superuser_from_env && python manage.py create_demo_account && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --timeout 120 --preload --access-logfile - --error-logfile -"

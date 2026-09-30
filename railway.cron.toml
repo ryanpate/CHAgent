@@ -1,0 +1,9 @@
+# Config for the `recurring-tasks-cron` Railway service (schedule: 0 12 * * *,
+# set in the dashboard). That service's "Config file path" setting points here,
+# so it does NOT inherit the web startCommand/healthcheck from railway.toml.
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python manage.py create_recurring_tasks && python manage.py send_task_reminders"
+restartPolicyType = "never"
