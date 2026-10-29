@@ -31,7 +31,7 @@ django-htmx>=1.17.0
 pywebpush>=1.14.0
 
 # Payment Processing
-stripe>=7.0.0
+stripe>=16.0.1,<17
 
 # REST API (for mobile app)
 djangorestframework>=3.14.0
