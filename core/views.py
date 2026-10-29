@@ -5493,7 +5493,8 @@ def _finalize_checkout_session(org, session_id):
     # session's metadata by `subscribe`/`onboarding_checkout` — so upgrades
     # and downgrades take effect instead of leaving the org on its old plan.
     meta = getattr(session, 'metadata', None) or {}
-    plan_id = meta.get('plan_id') if hasattr(meta, 'get') else None
+    # Newer stripe-python StripeObjects aren't dicts (no .get) — use attribute access.
+    plan_id = meta.get('plan_id') if isinstance(meta, dict) else getattr(meta, 'plan_id', None)
     if plan_id:
         from .models import SubscriptionPlan
         purchased = SubscriptionPlan.objects.filter(id=plan_id, is_active=True).first()
@@ -6384,9 +6385,11 @@ def stripe_webhook(request):
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
 
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, webhook_secret
-        )
+        # construct_event only verifies the signature; handle the verified
+        # payload as plain JSON. Newer stripe-python Events aren't dicts, so
+        # event.get() raised and every delivery 500'd.
+        stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        event = json.loads(payload)
     except ValueError:
         return HttpResponse(status=400)
     except stripe.error.SignatureVerificationError:

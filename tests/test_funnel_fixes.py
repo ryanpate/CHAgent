@@ -283,6 +283,71 @@ class TestStripeWebhook:
         org_alpha.refresh_from_db()
         assert org_alpha.subscription_status == expected
 
+    def test_handles_non_dict_stripe_event(
+        self, client, org_alpha, settings, monkeypatch,
+    ):
+        """Newer stripe-python returns an Event that is not a dict, so
+        event.get() raised and every delivery 500'd (Oct 2026 outage)."""
+        settings.STRIPE_SECRET_KEY = 'sk_test_x'
+        settings.STRIPE_WEBHOOK_SECRET = 'whsec_test'
+        org_alpha.stripe_subscription_id = 'sub_nondict'
+        org_alpha.subscription_status = 'trial'
+        org_alpha.save()
+
+        event = {
+            'type': 'customer.subscription.updated',
+            'data': {'object': {'id': 'sub_nondict', 'status': 'active'}},
+        }
+        monkeypatch.setattr(
+            'stripe.Webhook.construct_event', lambda *a, **kw: _NonDictStripeObject()
+        )
+
+        response = self._post(client, event)
+        assert response.status_code == 200
+        org_alpha.refresh_from_db()
+        assert org_alpha.subscription_status == 'active'
+
+
+class _NonDictStripeObject:
+    """Mimics newer stripe-python StripeObjects: attribute access only, no
+    dict methods like .get()."""
+
+    def __init__(self, **attrs):
+        self.__dict__.update(attrs)
+
+
+@pytest.mark.django_db
+def test_finalize_applies_plan_from_non_dict_metadata(
+    client, user_alpha_owner, org_alpha, settings,
+):
+    """Session metadata is a non-dict StripeObject on newer stripe-python;
+    the purchased plan must still be applied."""
+    from core.models import SubscriptionPlan
+    settings.STRIPE_SECRET_KEY = 'sk_test_x'
+    plan = SubscriptionPlan.objects.create(
+        slug='ministry-nondict', name='Ministry', tier='ministry',
+        price_monthly_cents=7999, is_active=True,
+    )
+    org_alpha.subscription_status = 'cancelled'
+    org_alpha.stripe_customer_id = 'cus_nondict'
+    org_alpha.save()
+
+    fake_sub = MagicMock()
+    fake_sub.id = 'sub_nondict_meta'
+    fake_sub.status = 'active'
+    fake_sub.trial_end = None
+    fake_session = MagicMock()
+    fake_session.subscription = fake_sub
+    fake_session.customer = 'cus_nondict'
+    fake_session.metadata = _NonDictStripeObject(plan_id=str(plan.id))
+
+    client.force_login(user_alpha_owner)
+    with patch('stripe.checkout.Session.retrieve', return_value=fake_session):
+        client.get(reverse('subscription_success') + '?session_id=cs_nondict')
+
+    org_alpha.refresh_from_db()
+    assert org_alpha.subscription_plan_id == plan.id
+
 
 # ---------------------------------------------------------------------------
 # Fix 6a: invalid plan selection must show an error, not silently re-render.
